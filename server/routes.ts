@@ -291,7 +291,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/guilds/:guildId/stocks", async (req, res) => {
     try {
       const { guildId } = req.params;
-      const stocks = await storage.getStocksByGuild(guildId);
+      let stocks = await storage.getStocksByGuild(guildId);
+      
+      // 주식이 없으면 샘플 데이터 생성
+      if (stocks.length === 0) {
+        const sampleStocks = [
+          { symbol: 'AAPL', name: '애플', price: '175000', status: 'active' as const },
+          { symbol: 'GOOGL', name: '구글', price: '2800000', status: 'active' as const },
+          { symbol: 'MSFT', name: '마이크로소프트', price: '380000', status: 'active' as const },
+          { symbol: 'TSLA', name: '테슬라', price: '240000', status: 'active' as const },
+          { symbol: 'NVDA', name: '엔비디아', price: '720000', status: 'active' as const },
+        ];
+        
+        for (const stockData of sampleStocks) {
+          try {
+            await storage.createStock({
+              id: `${guildId}-${stockData.symbol}`,
+              guildId,
+              symbol: stockData.symbol,
+              name: stockData.name,
+              price: stockData.price,
+              status: stockData.status
+            });
+          } catch (error) {
+            console.error(`Failed to create stock ${stockData.symbol}:`, error);
+          }
+        }
+        
+        stocks = await storage.getStocksByGuild(guildId);
+      }
+      
       res.json(stocks);
     } catch (error) {
       res.status(500).json({ message: "Failed to get stocks" });
@@ -345,14 +374,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { guildId, userId } = req.params;
       const holdings = await storage.getHoldingsByUser(guildId, userId);
+      const account = await storage.getAccountByUser(guildId, userId);
       const totalValue = await tradingEngine.calculatePortfolioValue(guildId, userId);
       
       res.json({
         holdings,
+        account,
         totalValue
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to get portfolio" });
+    }
+  });
+
+  // Web client portfolio (no auth required)
+  app.get("/api/guilds/users/web-client/portfolio", async (req, res) => {
+    try {
+      // Return sample portfolio with account data
+      const samplePortfolio = {
+        holdings: [],
+        account: {
+          id: 'web-client-account',
+          balance: '1000000', // 100만원
+          frozen: false
+        },
+        totalValue: 1000000
+      };
+      
+      res.json(samplePortfolio);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get web client portfolio" });
     }
   });
 
@@ -397,9 +448,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { guildId, symbol } = req.params;
       const { timeframe = '1h', limit = 100 } = req.query;
       
-      const data = await storage.getCandlestickData(guildId, symbol, timeframe as string, Number(limit));
+      let data = await storage.getCandlestickData(guildId, symbol, timeframe as string, Number(limit));
+      
+      // 데이터가 없으면 샘플 데이터 생성
+      if (data.length === 0) {
+        const stock = await storage.getStockBySymbol(guildId, symbol);
+        if (stock) {
+          const basePrice = Number(stock.price);
+          const sampleData = [];
+          
+          for (let i = 0; i < 20; i++) {
+            const variation = Math.random() * 0.1 - 0.05; // ±5% 변동
+            const open = basePrice * (1 + variation);
+            const close = open * (1 + (Math.random() * 0.04 - 0.02)); // ±2% 추가 변동
+            const high = Math.max(open, close) * (1 + Math.random() * 0.02); // 최대 2% 더 높게
+            const low = Math.min(open, close) * (1 - Math.random() * 0.02); // 최대 2% 더 낮게
+            
+            const candleData = {
+              open: String(Math.floor(open)),
+              high: String(Math.floor(high)),
+              low: String(Math.floor(low)),
+              close: String(Math.floor(close)),
+              volume: String(Math.floor(Math.random() * 10000 + 1000)),
+              timestamp: new Date(Date.now() - (19 - i) * 60 * 60 * 1000) // 1시간 간격
+            };
+            
+            sampleData.push(candleData);
+            
+            // DB에도 저장
+            await storage.addCandlestickData(guildId, symbol, candleData);
+          }
+          
+          data = sampleData;
+        }
+      }
+      
       res.json(data);
     } catch (error) {
+      console.error('Candlestick data error:', error);
       res.status(500).json({ message: "Failed to get candlestick data" });
     }
   });

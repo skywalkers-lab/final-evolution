@@ -6,6 +6,11 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "./hooks/use-auth";
 import Dashboard from "./pages/dashboard";
 import Login from "./pages/login";
+import BankPage from "./pages/bank";
+import TradingPage from "./pages/trading";
+import AuctionsPage from "./pages/auctions";
+import NewsPage from "./pages/news";
+import TaxPage from "./pages/tax";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -13,6 +18,11 @@ function Router() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/login" component={Login} />
+      <Route path="/bank" component={BankPage} />
+      <Route path="/trading" component={TradingPage} />
+      <Route path="/auctions" component={AuctionsPage} />
+      <Route path="/news" component={NewsPage} />
+      <Route path="/tax" component={TaxPage} />
       <Route component={NotFound} />
     </Switch>
   );

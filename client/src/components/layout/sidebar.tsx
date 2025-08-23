@@ -123,13 +123,16 @@ export default function Sidebar() {
       <div className="p-4 border-t border-discord-dark">
         <div className="flex items-center space-x-3">
           <img 
-            src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=64&h=64" 
+            src={user?.avatar 
+              ? `https://cdn.discordapp.com/avatars/${user.discordId}/${user.avatar}.png?size=64`
+              : `https://cdn.discordapp.com/embed/avatars/${parseInt(user?.discriminator || '0') % 5}.png`
+            }
             alt="User avatar" 
             className="w-10 h-10 rounded-full" 
           />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-white truncate" data-testid="text-user-info">
-              관리자#{user?.guildId?.slice(-4) || '1234'}
+              {user?.username}#{user?.discriminator}
             </p>
             <p className="text-xs text-gray-400">온라인</p>
           </div>

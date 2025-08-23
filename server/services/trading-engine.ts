@@ -15,7 +15,7 @@ export class TradingEngine {
     // Start price simulation every 5 seconds
     this.priceSimulationInterval = setInterval(() => {
       this.simulatePriceMovements();
-    }, 5000);
+    }, 1250); // 1.25초마다 업데이트
 
     console.log('Trading engine started');
   }
