@@ -21,6 +21,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
   const [currentPrice, setCurrentPrice] = useState<number>(0);
   const [priceChange, setPriceChange] = useState<number>(0);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [hoveredCandle, setHoveredCandle] = useState<{candle: any, x: number, y: number} | null>(null);
 
   const { data: candlestickData = [] } = useQuery({
     queryKey: ['/api/web-client/guilds', guildId, 'stocks', symbol, 'candlestick', timeframe],
@@ -64,6 +65,51 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     drawChart();
   }, [candlestickData, symbol]);
 
+  // 마우스 이벤트 처리
+  const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !candlestickData || candlestickData.length === 0) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+    
+    // Canvas 스케일링 고려
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const adjustedX = mouseX * scaleX;
+    const adjustedY = mouseY * scaleY;
+    
+    const padding = 60;
+    const chartWidth = canvas.width - 2 * padding;
+    const spacing = chartWidth / candlestickData.length;
+    
+    // 마우스 위치에 해당하는 캔들 찾기
+    const candleIndex = Math.floor((adjustedX - padding) / spacing);
+    
+    if (candleIndex >= 0 && candleIndex < candlestickData.length) {
+      const candle = candlestickData[candleIndex];
+      const candleX = padding + (candleIndex * spacing) + spacing / 2;
+      
+      // 해당 캔들 영역 내에 있는지 확인 (좌우 여백 고려)
+      if (Math.abs(adjustedX - candleX) <= spacing / 2) {
+        setHoveredCandle({ 
+          candle, 
+          x: mouseX, // 실제 화면 좌표 사용
+          y: mouseY 
+        });
+      } else {
+        setHoveredCandle(null);
+      }
+    } else {
+      setHoveredCandle(null);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setHoveredCandle(null);
+  };
+
   const drawChart = () => {
     const canvas = canvasRef.current;
     if (!canvas || !candlestickData || candlestickData.length === 0) {
@@ -94,7 +140,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     ctx.fillStyle = '#2c2f33';
     ctx.fillRect(0, 0, width, height);
 
-    const padding = 40;
+    const padding = 60; // 더 많은 여백으로 축 레이블 공간 확보
     const chartWidth = width - 2 * padding;
     const chartHeight = height - 2 * padding;
 
@@ -114,22 +160,41 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     const maxPrice = Math.max(...prices);
     const minPrice = Math.min(...prices);
     const priceRange = maxPrice - minPrice === 0 ? maxPrice * 0.1 : maxPrice - minPrice;
-
-    // Draw grid lines
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-    ctx.lineWidth = 1;
     
-    for (let i = 0; i <= 5; i++) {
-      const y = padding + (chartHeight * i / 5);
+    // 가격 범위에 여백 추가 (상하 5%씩)
+    const priceMargin = priceRange * 0.05;
+    const adjustedMaxPrice = maxPrice + priceMargin;
+    const adjustedMinPrice = Math.max(0, minPrice - priceMargin);
+    const adjustedPriceRange = adjustedMaxPrice - adjustedMinPrice;
+
+    // Draw horizontal grid lines (가격선)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 0.5;
+    
+    for (let i = 0; i <= 8; i++) { // 더 많은 그리드 라인
+      const y = padding + (chartHeight * i / 8);
       ctx.beginPath();
       ctx.moveTo(padding, y);
       ctx.lineTo(width - padding, y);
       ctx.stroke();
     }
+    
+    // Draw vertical grid lines (시간선)
+    const gridSpacing = Math.ceil(candlestickData.length / 8);
+    candlestickData.forEach((_, index) => {
+      if (index % gridSpacing === 0) {
+        const spacing = chartWidth / candlestickData.length;
+        const x = padding + (index * spacing);
+        ctx.beginPath();
+        ctx.moveTo(x, padding);
+        ctx.lineTo(x, height - padding);
+        ctx.stroke();
+      }
+    });
 
-    // Draw candlesticks with proper spacing (thinner candles)
-    const candleWidth = Math.max(2, Math.min(8, (chartWidth / candlestickData.length) * 0.6));
+    // Draw candlesticks with improved spacing
     const spacing = chartWidth / candlestickData.length;
+    const candleWidth = Math.max(1, Math.min(12, spacing * 0.7)); // 간격에 따라 적절한 캔들 두께
     
     candlestickData.forEach((candle, index) => {
       const x = padding + (index * spacing) + spacing / 2 - candleWidth / 2;
@@ -140,18 +205,20 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
 
       if (priceRange === 0) return; // Skip if no price variation
 
-      const openY = padding + ((maxPrice - open) / priceRange) * chartHeight;
-      const closeY = padding + ((maxPrice - close) / priceRange) * chartHeight;
-      const highY = padding + ((maxPrice - high) / priceRange) * chartHeight;
-      const lowY = padding + ((maxPrice - low) / priceRange) * chartHeight;
+      const openY = padding + ((adjustedMaxPrice - open) / adjustedPriceRange) * chartHeight;
+      const closeY = padding + ((adjustedMaxPrice - close) / adjustedPriceRange) * chartHeight;
+      const highY = padding + ((adjustedMaxPrice - high) / adjustedPriceRange) * chartHeight;
+      const lowY = padding + ((adjustedMaxPrice - low) / adjustedPriceRange) * chartHeight;
 
-      // Color based on price movement (Korean style: Red=Up, Blue=Down)
+      // Color based on price movement (Global style: Green=Up, Red=Down)
       const isPriceUp = close >= open;
-      const color = isPriceUp ? '#ef4444' : '#3b82f6'; // Red for up, Blue for down
+      const upColor = '#22c55e'; // 연한 초록색 (상승)
+      const downColor = '#dc2626'; // 진한 빨간색 (하락)
+      const color = isPriceUp ? upColor : downColor;
       
-      // Draw wick (high-low line)
+      // Draw wick (high-low line) - 더 얇게
       ctx.strokeStyle = color;
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 0.8;
       ctx.beginPath();
       ctx.moveTo(x + candleWidth / 2, highY);
       ctx.lineTo(x + candleWidth / 2, lowY);
@@ -162,22 +229,22 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       const bodyY = Math.min(openY, closeY);
       
       if (isPriceUp) {
-        // Bullish candle - hollow (outline only)
-        ctx.fillStyle = '#2c2f33'; // Fill with background color
-        ctx.fillRect(x, bodyY, candleWidth, Math.max(bodyHeight, 2));
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x, bodyY, candleWidth, Math.max(bodyHeight, 2));
+        // Bullish candle - hollow with green outline
+        ctx.fillStyle = 'rgba(34, 197, 94, 0.1)'; // 매우 연한 초록색 배경
+        ctx.fillRect(x, bodyY, candleWidth, Math.max(bodyHeight, 1));
+        ctx.strokeStyle = upColor;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, bodyY, candleWidth, Math.max(bodyHeight, 1));
       } else {
-        // Bearish candle - filled
-        ctx.fillStyle = color;
-        ctx.fillRect(x, bodyY, candleWidth, Math.max(bodyHeight, 2));
+        // Bearish candle - filled red
+        ctx.fillStyle = downColor;
+        ctx.fillRect(x, bodyY, candleWidth, Math.max(bodyHeight, 1));
       }
     });
 
     // Draw current price line if available
-    if (currentPrice > 0 && currentPrice >= minPrice && currentPrice <= maxPrice) {
-      const currentY = padding + ((maxPrice - currentPrice) / priceRange) * chartHeight;
+    if (currentPrice > 0 && currentPrice >= adjustedMinPrice && currentPrice <= adjustedMaxPrice) {
+      const currentY = padding + ((adjustedMaxPrice - currentPrice) / adjustedPriceRange) * chartHeight;
       
       ctx.strokeStyle = '#f39c12';
       ctx.lineWidth = 2;
@@ -203,15 +270,26 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       ctx.fillText(labelText, padding + 14, currentY - 8);
     }
 
-    // Draw price labels
+    // Draw price labels - 더 정확한 가격 레이블
     ctx.fillStyle = '#ffffff';
-    ctx.font = '12px Inter';
+    ctx.font = '11px Inter';
     ctx.textAlign = 'right';
     
-    for (let i = 0; i <= 5; i++) {
-      const price = maxPrice - (priceRange * i / 5);
-      const y = padding + (chartHeight * i / 5) + 4;
-      ctx.fillText(`₩${Math.round(price).toLocaleString()}`, padding - 10, y);
+    for (let i = 0; i <= 8; i++) {
+      const price = adjustedMaxPrice - (adjustedPriceRange * i / 8);
+      const y = padding + (chartHeight * i / 8) + 4;
+      
+      // 가격 단위에 따른 포맷팅
+      let priceText;
+      if (price >= 10000) {
+        priceText = `₩${Math.round(price).toLocaleString()}`;
+      } else if (price >= 1000) {
+        priceText = `₩${price.toFixed(0)}`;
+      } else {
+        priceText = `₩${price.toFixed(1)}`;
+      }
+      
+      ctx.fillText(priceText, padding - 5, y);
     }
 
     // Draw time labels for X-axis with timeframe-specific formatting
@@ -231,35 +309,36 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
           case 'realtime':
             timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
             break;
+          case '1m':
+          case '3m':
+          case '5m':
+          case '10m':
+          case '15m':
+          case '30m':
+            // 분 단위 집계 - 시:분 표시
+            timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+            break;
           case '1h':
-            // 1시간 집계 - 정시 표시 (예: 14:00)
+          case '2h':
+          case '4h':
+            // 시간 단위 집계 - 시간 표시
             timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit' }) + ':00';
             break;
-          case '6h':
-            // 6시간 집계 - 날짜와 집계 시간 표시
-            timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' ' + 
-                       date.toLocaleTimeString('ko-KR', { hour: '2-digit' }) + ':00';
-            break;
-          case '12h':
-            // 12시간 집계 - 날짜와 집계 시간 표시 (00:00 또는 12:00)
-            const hour12 = date.getHours() >= 12 ? '12:00' : '00:00';
-            timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' ' + hour12;
-            break;
           case '1d':
-            // 일간 집계 - 날짜 00:00 표시
-            timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' 00:00';
+            // 일간 집계 - 날짜 표시
+            timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
             break;
-          case '2w':
-            // 2주 집계 - 주 시작일 00:00 표시
-            timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' 00:00';
+          case '7d':
+            // 주간 집계 - 주 시작일 표시
+            timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' (주)';
             break;
-          case '1m':
-            // 월간 집계 - 월 시작일 00:00 표시
-            timeLabel = date.toLocaleDateString('ko-KR', { year: '2-digit', month: 'short' }) + '월 1일 00:00';
+          case '30d':
+            // 월간 집계 - 월 표시
+            timeLabel = date.toLocaleDateString('ko-KR', { year: 'numeric', month: 'short' });
             break;
-          case '6m':
-            // 6개월 집계 - 주 시작일 00:00 표시
-            timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' 00:00';
+          case '365d':
+            // 연간 집계 - 연도 표시
+            timeLabel = date.toLocaleDateString('ko-KR', { year: 'numeric' }) + '년';
             break;
           default:
             timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
@@ -284,7 +363,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     
     // Show price change if available
     if (priceChange !== 0) {
-      ctx.fillStyle = priceChange > 0 ? '#e74c3c' : '#3498db';
+      ctx.fillStyle = priceChange > 0 ? '#22c55e' : '#dc2626'; // 초록=상승, 빨강=하락
       ctx.font = 'bold 12px Inter';
       ctx.textAlign = 'right';
       const changeText = `${priceChange > 0 ? '+' : ''}${priceChange.toFixed(2)}%`;
@@ -347,16 +426,22 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                 ))}
               </SelectContent>
             </Select>
-            <div className="grid grid-cols-4 lg:grid-cols-8 gap-1 bg-discord-dark rounded-lg p-2">
+            <div className="grid grid-cols-7 lg:grid-cols-14 gap-1 bg-discord-dark rounded-lg p-2">
               {[
                 { value: 'realtime', label: '실시간' },
+                { value: '1m', label: '1분' },
+                { value: '3m', label: '3분' },
+                { value: '5m', label: '5분' },
+                { value: '10m', label: '10분' },
+                { value: '15m', label: '15분' },
+                { value: '30m', label: '30분' },
                 { value: '1h', label: '1시간' },
-                { value: '6h', label: '6시간' },
-                { value: '12h', label: '12시간' },
+                { value: '2h', label: '2시간' },
+                { value: '4h', label: '4시간' },
                 { value: '1d', label: '1일' },
-                { value: '2w', label: '2주' },
-                { value: '1m', label: '1달' },
-                { value: '6m', label: '6개월' }
+                { value: '7d', label: '7일' },
+                { value: '30d', label: '30일' },
+                { value: '365d', label: '365일' }
               ].map((tf) => (
                 <Button
                   key={tf.value}
@@ -388,7 +473,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                   ₩{currentPrice.toLocaleString()}
                 </p>
                 <div className="flex items-center space-x-2">
-                  <span className={`text-sm font-semibold ${priceChange >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                  <span className={`text-sm font-semibold ${priceChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                     {priceChange >= 0 ? '📈 +' : '📉 '}{priceChange.toFixed(2)}%
                   </span>
                   <span className="text-xs text-gray-500" data-testid="text-last-update">
@@ -447,20 +532,83 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                 </Button>
               </div>
               <div className="text-xs text-gray-500">
-                📈 상승: <span className="text-red-500">빨간색</span> | 📉 하락: <span className="text-blue-500">파란색</span>
+                📈 상승: <span className="text-green-500">초록색</span> | 📉 하락: <span className="text-red-500">빨간색</span>
               </div>
             </div>
 
             <div className="h-96 bg-discord-dark rounded-lg">
               {chartType === 'candlestick' ? (
-                <div className="w-full h-full flex items-center justify-center">
+                <div className="w-full h-full flex items-center justify-center relative">
                   <canvas 
                     ref={canvasRef} 
                     width={1200} 
                     height={600} 
-                    className="max-w-full max-h-full"
+                    className="max-w-full max-h-full cursor-crosshair"
                     data-testid="canvas-stock-chart"
+                    onMouseMove={handleMouseMove}
+                    onMouseLeave={handleMouseLeave}
                   />
+                  
+                  {/* 마우스 오버 툴팁 */}
+                  {hoveredCandle && (
+                    <div 
+                      className="absolute bg-discord-dark border border-discord-light rounded-lg p-3 shadow-lg pointer-events-none z-10 min-w-48"
+                      style={{
+                        left: `${Math.min(hoveredCandle.x + 10, window.innerWidth - 250)}px`,
+                        top: `${Math.max(hoveredCandle.y - 120, 10)}px`
+                      }}
+                    >
+                      <div className="text-xs space-y-1">
+                        <div className="text-white font-semibold border-b border-discord-light pb-1 mb-2">
+                          {new Date(hoveredCandle.candle.timestamp).toLocaleString('ko-KR', {
+                            year: 'numeric',
+                            month: 'short', 
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">시가:</span>
+                          <span className="text-white font-medium">₩{Number(hoveredCandle.candle.open).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">고가:</span>
+                          <span className="text-green-400 font-medium">₩{Number(hoveredCandle.candle.high).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">저가:</span>
+                          <span className="text-red-400 font-medium">₩{Number(hoveredCandle.candle.low).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">종가:</span>
+                          <span className={`font-medium ${
+                            Number(hoveredCandle.candle.close) >= Number(hoveredCandle.candle.open) 
+                              ? 'text-green-400' : 'text-red-400'
+                          }`}>
+                            ₩{Number(hoveredCandle.candle.close).toLocaleString()}
+                          </span>
+                        </div>
+                        {hoveredCandle.candle.volume && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">거래량:</span>
+                            <span className="text-blue-400 font-medium">{Number(hoveredCandle.candle.volume).toLocaleString()}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between pt-1 border-t border-discord-light">
+                          <span className="text-gray-400">변동:</span>
+                          <span className={`font-medium ${
+                            Number(hoveredCandle.candle.close) - Number(hoveredCandle.candle.open) >= 0
+                              ? 'text-green-400' : 'text-red-400'
+                          }`}>
+                            {Number(hoveredCandle.candle.close) - Number(hoveredCandle.candle.open) >= 0 ? '+' : ''}
+                            ₩{(Number(hoveredCandle.candle.close) - Number(hoveredCandle.candle.open)).toLocaleString()}
+                            ({((Number(hoveredCandle.candle.close) - Number(hoveredCandle.candle.open)) / Number(hoveredCandle.candle.open) * 100).toFixed(2)}%)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="w-full h-full p-4">
@@ -484,35 +632,36 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                               case 'realtime':
                                 timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
                                 break;
+                              case '1m':
+                              case '3m':
+                              case '5m':
+                              case '10m':
+                              case '15m':
+                              case '30m':
+                                // 분 단위 집계 - 시:분 표시
+                                timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+                                break;
                               case '1h':
-                                // 1시간 집계 - 정시 표시 (예: 14:00)
+                              case '2h':
+                              case '4h':
+                                // 시간 단위 집계 - 시간 표시
                                 timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit' }) + ':00';
                                 break;
-                              case '6h':
-                                // 6시간 집계 - 날짜와 집계 시간 표시
-                                timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' ' + 
-                                           date.toLocaleTimeString('ko-KR', { hour: '2-digit' }) + ':00';
-                                break;
-                              case '12h':
-                                // 12시간 집계 - 날짜와 집계 시간 표시 (00:00 또는 12:00)
-                                const hour12 = date.getHours() >= 12 ? '12:00' : '00:00';
-                                timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' ' + hour12;
-                                break;
                               case '1d':
-                                // 일간 집계 - 날짜 00:00 표시
-                                timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' 00:00';
+                                // 일간 집계 - 날짜 표시
+                                timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
                                 break;
-                              case '2w':
-                                // 2주 집계 - 주 시작일 00:00 표시
-                                timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' 00:00';
+                              case '7d':
+                                // 주간 집계 - 주 시작일 표시
+                                timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' (주)';
                                 break;
-                              case '1m':
-                                // 월간 집계 - 월 시작일 00:00 표시
-                                timeLabel = date.toLocaleDateString('ko-KR', { year: '2-digit', month: 'short' }) + '월 1일 00:00';
+                              case '30d':
+                                // 월간 집계 - 월 표시
+                                timeLabel = date.toLocaleDateString('ko-KR', { year: 'numeric', month: 'short' });
                                 break;
-                              case '6m':
-                                // 6개월 집계 - 주 시작일 00:00 표시
-                                timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' 00:00';
+                              case '365d':
+                                // 연간 집계 - 연도 표시
+                                timeLabel = date.toLocaleDateString('ko-KR', { year: 'numeric' }) + '년';
                                 break;
                               default:
                                 timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
