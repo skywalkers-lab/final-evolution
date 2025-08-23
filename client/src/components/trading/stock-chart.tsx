@@ -216,6 +216,61 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       const y = padding + (chartHeight * i / 5) + 4;
       ctx.fillText(`₩${Math.round(price).toLocaleString()}`, padding - 10, y);
     }
+
+    // Draw time labels for X-axis with timeframe-specific formatting
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '10px Inter';
+    ctx.textAlign = 'center';
+    
+    const showEveryNth = Math.ceil(candlestickData.length / 8); // Show max 8 labels
+    candlestickData.forEach((candle: any, index: number) => {
+      if (index % showEveryNth === 0 || index === candlestickData.length - 1) {
+        const x = padding + (index * spacing) + spacing / 2;
+        const date = new Date(candle.timestamp);
+        let timeLabel = '';
+        
+        // 시간대별 축 레이블 형식 설정 - 실제 집계된 시간 표시
+        switch(timeframe) {
+          case 'realtime':
+            timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+            break;
+          case '1h':
+            // 1시간 집계 - 정시 표시 (예: 14:00)
+            timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit' }) + ':00';
+            break;
+          case '6h':
+            // 6시간 집계 - 날짜와 집계 시간 표시
+            timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' ' + 
+                       date.toLocaleTimeString('ko-KR', { hour: '2-digit' }) + ':00';
+            break;
+          case '12h':
+            // 12시간 집계 - 날짜와 집계 시간 표시 (00:00 또는 12:00)
+            const hour12 = date.getHours() >= 12 ? '12:00' : '00:00';
+            timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' ' + hour12;
+            break;
+          case '1d':
+            // 일간 집계 - 날짜 00:00 표시
+            timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' 00:00';
+            break;
+          case '2w':
+            // 2주 집계 - 주 시작일 00:00 표시
+            timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' 00:00';
+            break;
+          case '1m':
+            // 월간 집계 - 월 시작일 00:00 표시
+            timeLabel = date.toLocaleDateString('ko-KR', { year: '2-digit', month: 'short' }) + '월 1일 00:00';
+            break;
+          case '6m':
+            // 6개월 집계 - 주 시작일 00:00 표시
+            timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' 00:00';
+            break;
+          default:
+            timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+        }
+        
+        ctx.fillText(timeLabel, x, height - 25); // Leave more space for legend
+      }
+    });
     
     // Add comprehensive legend at the bottom
     ctx.fillStyle = '#ffffff';
@@ -423,14 +478,58 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                     >
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart
-                          data={candlestickData && candlestickData.length > 0 ? candlestickData.map((item: any, index: number) => ({
-                            time: new Date(item.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-                            price: Number(item.close),
-                            open: Number(item.open),
-                            high: Number(item.high),
-                            low: Number(item.low),
-                            change: index > 0 ? Number(item.close) - Number(candlestickData[index - 1].close) : 0
-                          })) : []}
+                          data={candlestickData && candlestickData.length > 0 ? candlestickData.map((item: any, index: number) => {
+                            const date = new Date(item.timestamp);
+                            let timeLabel = '';
+                            
+                            // 시간대별 축 레이블 형식 설정 - 실제 집계된 시간 표시
+                            switch(timeframe) {
+                              case 'realtime':
+                                timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+                                break;
+                              case '1h':
+                                // 1시간 집계 - 정시 표시 (예: 14:00)
+                                timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit' }) + ':00';
+                                break;
+                              case '6h':
+                                // 6시간 집계 - 날짜와 집계 시간 표시
+                                timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' ' + 
+                                           date.toLocaleTimeString('ko-KR', { hour: '2-digit' }) + ':00';
+                                break;
+                              case '12h':
+                                // 12시간 집계 - 날짜와 집계 시간 표시 (00:00 또는 12:00)
+                                const hour12 = date.getHours() >= 12 ? '12:00' : '00:00';
+                                timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' ' + hour12;
+                                break;
+                              case '1d':
+                                // 일간 집계 - 날짜 00:00 표시
+                                timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' 00:00';
+                                break;
+                              case '2w':
+                                // 2주 집계 - 주 시작일 00:00 표시
+                                timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' 00:00';
+                                break;
+                              case '1m':
+                                // 월간 집계 - 월 시작일 00:00 표시
+                                timeLabel = date.toLocaleDateString('ko-KR', { year: '2-digit', month: 'short' }) + '월 1일 00:00';
+                                break;
+                              case '6m':
+                                // 6개월 집계 - 주 시작일 00:00 표시
+                                timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' 00:00';
+                                break;
+                              default:
+                                timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+                            }
+                            
+                            return {
+                              time: timeLabel,
+                              price: Number(item.close),
+                              open: Number(item.open),
+                              high: Number(item.high),
+                              low: Number(item.low),
+                              change: index > 0 ? Number(item.close) - Number(candlestickData[index - 1].close) : 0
+                            };
+                          }) : []}
                           margin={{
                             top: 20,
                             right: 30,
@@ -448,6 +547,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                             stroke="#9ca3af"
                             fontSize={12}
                             tickFormatter={(value) => `₩${value.toLocaleString()}`}
+                            domain={['dataMin - 1000', 'dataMax + 1000']}
                           />
                           <ChartTooltip 
                             content={<ChartTooltipContent 
