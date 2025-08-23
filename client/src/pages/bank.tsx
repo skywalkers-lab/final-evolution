@@ -4,17 +4,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
+import Sidebar from "@/components/layout/sidebar";
+import TopBar from "@/components/layout/top-bar";
+import GuildSelector from "@/components/guild/guild-selector";
 
 export default function BankPage() {
-  const { user, selectedGuildId } = useAuth();
+  const { user, selectedGuildId, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
   const [amount, setAmount] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [memo, setMemo] = useState('');
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!isLoading && !user) {
+      setLocation("/login");
+    }
+  }, [user, isLoading, setLocation]);
 
   const { data: accountData, refetch: refetchAccount } = useQuery({
     queryKey: ['/api/guilds', selectedGuildId, 'users', user?.id, 'account'],
@@ -83,18 +94,48 @@ export default function BankPage() {
     transferMutation.mutate({ accountNumber, amount: numAmount, memo });
   };
 
-  return (
-    <div className="flex-1 p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white">은행 & 계좌</h1>
-          <p className="text-gray-400 mt-1">가상 은행 서비스 및 계좌 관리</p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <i className="fas fa-university text-yellow-500 text-2xl"></i>
-          <span className="text-yellow-300 font-semibold">한국은행 서비스</span>
+  if (isLoading) {
+    return (
+      <div className="min-h-screen discord-bg-darkest flex items-center justify-center">
+        <div className="animate-pulse-discord text-gray-400">로딩 중...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  if (!selectedGuildId) {
+    return (
+      <div className="min-h-screen discord-bg-darkest flex">
+        <Sidebar />
+        <div className="flex-1 flex flex-col">
+          <TopBar />
+          <div className="flex-1 flex items-center justify-center">
+            <GuildSelector />
+          </div>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen discord-bg-darkest flex">
+      <Sidebar />
+      <div className="flex-1 flex flex-col">
+        <TopBar />
+        <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-white">은행 & 계좌</h1>
+              <p className="text-gray-400 mt-1">가상 은행 서비스 및 계좌 관리</p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <i className="fas fa-university text-yellow-500 text-2xl"></i>
+              <span className="text-yellow-300 font-semibold">한국은행 서비스</span>
+            </div>
+          </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 계좌 정보 */}
@@ -246,6 +287,8 @@ export default function BankPage() {
             </div>
           </CardContent>
         </Card>
+      </div>
+        </div>
       </div>
     </div>
   );

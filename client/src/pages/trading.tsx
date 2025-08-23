@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,12 +11,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import StockChart from "@/components/trading/stock-chart";
 import Portfolio from "@/components/trading/portfolio";
 import TradingPanel from "@/components/trading/trading-panel";
+import Sidebar from "@/components/layout/sidebar";
+import TopBar from "@/components/layout/top-bar";
+import GuildSelector from "@/components/guild/guild-selector";
+import { useWebSocket } from "@/hooks/use-websocket";
 
 export default function TradingPage() {
-  const { selectedGuildId } = useAuth();
+  const { user, selectedGuildId, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
   const [selectedStock, setSelectedStock] = useState('');
 
-  const { data: stocks = [] } = useQuery({
+  const { data: stocks = [], refetch: refetchStocks } = useQuery({
     queryKey: ['/api/guilds', selectedGuildId, 'stocks'],
     enabled: !!selectedGuildId,
   });
@@ -23,19 +29,67 @@ export default function TradingPage() {
   const { data: portfolio } = useQuery({
     queryKey: ['/api/guilds/users/web-client/portfolio'],
   });
+  
+  // WebSocket handler for real-time stock updates
+  useWebSocket((event: string, data: any) => {
+    switch (event) {
+      case 'stock_created':
+      case 'stock_deleted':
+      case 'stock_price_updated':
+        console.log(`Stock ${event}:`, data);
+        refetchStocks(); // Refresh stock list
+        break;
+    }
+  });
+  
+  useEffect(() => {
+    if (!isLoading && !user) {
+      setLocation("/login");
+    }
+  }, [user, isLoading, setLocation]);
 
-  return (
-    <div className="flex-1 p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white">주식 거래</h1>
-          <p className="text-gray-400 mt-1">실시간 주식 매매 및 포트폴리오 관리</p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <i className="fas fa-chart-line text-green-500 text-2xl"></i>
-          <span className="text-green-300 font-semibold">실시간 거래</span>
+  if (isLoading) {
+    return (
+      <div className="min-h-screen discord-bg-darkest flex items-center justify-center">
+        <div className="animate-pulse-discord text-gray-400">로딩 중...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  if (!selectedGuildId) {
+    return (
+      <div className="min-h-screen discord-bg-darkest flex">
+        <Sidebar />
+        <div className="flex-1 flex flex-col">
+          <TopBar />
+          <div className="flex-1 flex items-center justify-center">
+            <GuildSelector />
+          </div>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen discord-bg-darkest flex">
+      <Sidebar />
+      <div className="flex-1 flex flex-col">
+        <TopBar />
+        <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-white">주식 거래</h1>
+              <p className="text-gray-400 mt-1">실시간 주식 매매 및 포트폴리오 관리</p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <i className="fas fa-chart-line text-green-500 text-2xl"></i>
+              <span className="text-green-300 font-semibold">실시간 거래</span>
+            </div>
+          </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* 차트 영역 */}
@@ -100,6 +154,8 @@ export default function TradingPage() {
               ))}
             </CardContent>
           </Card>
+        </div>
+      </div>
         </div>
       </div>
     </div>

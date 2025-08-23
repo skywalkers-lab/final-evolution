@@ -48,6 +48,18 @@ export default function Dashboard() {
       case 'auction_settled':
         refetchOverview();
         break;
+      case 'stock_created':
+        console.log('Stock created:', data);
+        // Refetch stocks and overview to show the new stock
+        refetchOverview();
+        window.location.reload(); // Reload to update stock list
+        break;
+      case 'stock_deleted':
+        console.log('Stock deleted:', data);
+        // Refetch stocks and overview to remove the deleted stock
+        refetchOverview();
+        window.location.reload(); // Reload to update stock list
+        break;
     }
   });
 

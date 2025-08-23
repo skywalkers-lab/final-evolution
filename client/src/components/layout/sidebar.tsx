@@ -99,7 +99,7 @@ export default function Sidebar() {
         ))}
         
         {/* Admin Section */}
-        {user?.isAdmin && (
+        {false && (
           <div className="pt-6">
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
               관리자 기능
