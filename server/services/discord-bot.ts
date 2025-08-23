@@ -396,41 +396,6 @@ export class DiscordBot {
             )
         ),
 
-      // Auction password command
-      new SlashCommandBuilder()
-        .setName('경매비밀번호')
-        .setDescription('경매 생성용 비밀번호 관리')
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('생성')
-            .setDescription('경매 생성을 위한 임시 비밀번호를 생성합니다')
-            .addStringOption(option =>
-              option.setName('아이템명')
-                .setDescription('경매할 아이템명')
-                .setRequired(true)
-            )
-            .addIntegerOption(option =>
-              option.setName('시작가')
-                .setDescription('시작 입찰가')
-                .setRequired(true)
-            )
-            .addIntegerOption(option =>
-              option.setName('시간')
-                .setDescription('경매 진행 시간 (시간 단위, 기본 24시간)')
-                .setRequired(false)
-            )
-            .addIntegerOption(option =>
-              option.setName('즉시구매가')
-                .setDescription('즉시 구매 가능한 가격 (선택사항)')
-                .setRequired(false)
-            )
-            .addStringOption(option =>
-              option.setName('설명')
-                .setDescription('아이템 설명 (선택사항)')
-                .setRequired(false)
-            )
-        ),
-
       // News analysis
       new SlashCommandBuilder()
         .setName('뉴스분석')
@@ -587,9 +552,6 @@ export class DiscordBot {
           break;
         case '경매':
           await this.handleAuctionCommand(interaction, guildId, user.id);
-          break;
-        case '경매비밀번호':
-          await this.handleAuctionPasswordCommand(interaction, guildId, user.id);
           break;
         case '뉴스분석':
           await this.handleNewsAnalysisCommand(interaction, guildId, user.id);
@@ -1335,147 +1297,6 @@ export class DiscordBot {
       this.wsManager.broadcast('auction_bid', result);
     } catch (error: any) {
       await interaction.reply(`입찰 실패: ${error.message}`);
-    }
-  }
-
-  private async handleAuctionPasswordCommand(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
-    const isAdmin = await this.isAdmin(guildId, userId);
-    if (!isAdmin) {
-      await interaction.reply('이 명령은 관리자만 사용할 수 있습니다.');
-      return;
-    }
-
-    const subcommand = interaction.options.getSubcommand();
-    
-    switch (subcommand) {
-      case '생성':
-        await this.createAuctionPassword(interaction, guildId, userId);
-        break;
-    }
-  }
-
-  private async createAuctionPassword(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
-    const itemName = interaction.options.getString('아이템명', true);
-    const startPrice = interaction.options.getInteger('시작가', true);
-    const duration = interaction.options.getInteger('시간') || 24;
-    const buyoutPrice = interaction.options.getInteger('즉시구매가');
-    const description = interaction.options.getString('설명');
-
-    if (startPrice <= 0) {
-      await interaction.reply('시작가는 0보다 커야 합니다.');
-      return;
-    }
-
-    if (buyoutPrice && buyoutPrice <= startPrice) {
-      await interaction.reply('즉시구매가는 시작가보다 커야 합니다.');
-      return;
-    }
-
-    if (duration < 1 || duration > 168) { // 1시간 ~ 1주일
-      await interaction.reply('경매 시간은 1시간부터 168시간(1주일) 사이로 설정해주세요.');
-      return;
-    }
-
-    try {
-      // Generate 6-digit password
-      const password = Math.random().toString(36).substring(2, 8).toUpperCase();
-      
-      // Set expiration to 30 minutes from now
-      const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-
-      await this.storage.createAuctionPassword({
-        guildId,
-        createdBy: userId,
-        password,
-        itemName,
-        startPrice: startPrice.toString(),
-        duration,
-        buyoutPrice: buyoutPrice?.toString(),
-        description,
-        used: false,
-        expiresAt
-      });
-
-      // Clean up expired passwords
-      await this.storage.cleanupExpiredAuctionPasswords();
-
-      const embed = {
-        title: '🔐 경매 비밀번호 생성 완료',
-        description: `웹 대시보드에서 이 비밀번호를 입력하여 경매를 생성하세요.`,
-        color: 0xFFD700, // Gold color
-        fields: [
-          {
-            name: '비밀번호',
-            value: `\`${password}\``,
-            inline: true
-          },
-          {
-            name: '아이템명',
-            value: itemName,
-            inline: true
-          },
-          {
-            name: '시작가',
-            value: `₩${startPrice.toLocaleString()}`,
-            inline: true
-          },
-          {
-            name: '진행 시간',
-            value: `${duration}시간`,
-            inline: true
-          }
-        ],
-        footer: {
-          text: '⚠️ 이 비밀번호는 30분 후 만료되며, 한 번만 사용할 수 있습니다.'
-        },
-        timestamp: new Date().toISOString()
-      };
-
-      if (buyoutPrice) {
-        embed.fields.push({
-          name: '즉시구매가',
-          value: `₩${buyoutPrice.toLocaleString()}`,
-          inline: true
-        });
-      }
-
-      if (description) {
-        embed.fields.push({
-          name: '설명',
-          value: description,
-          inline: false
-        });
-      }
-
-      await interaction.reply({ 
-        embeds: [embed],
-        ephemeral: true // Only visible to the command user
-      });
-
-      // Broadcast to web clients that a new auction password was created
-      this.wsManager.broadcast('auction_password_created', {
-        guildId,
-        itemName,
-        createdBy: userId
-      });
-
-      // Log the action
-      await this.storage.addAuditLog({
-        guildId,
-        action: '경매 비밀번호 생성',
-        actorId: userId,
-        details: {
-          itemName,
-          startPrice,
-          duration,
-          buyoutPrice,
-          password: password.substring(0, 2) + '****' // Partial logging for security
-        }
-      });
-
-    } catch (error: any) {
-      console.error('Error creating auction password:', error);
-      await interaction.reply('경매 비밀번호 생성 중 오류가 발생했습니다.');
     }
   }
 

@@ -1,7 +1,7 @@
 import { 
   users, accounts, transactions, stocks, holdings, stockTransactions, 
   candlestickData, newsAnalyses, auctions, auctionBids, escrows, 
-  auditLogs, guildSettings, guildAdmins, auctionPasswords,
+  auditLogs, guildSettings, guildAdmins, auctionPasswords, limitOrders,
   type User, type InsertUser, type Account, type InsertAccount,
   type Transaction, type InsertTransaction, type Stock, type InsertStock,
   type Holding, type InsertHolding, type StockTransaction, type InsertStockTransaction,
@@ -9,7 +9,7 @@ import {
   type Auction, type InsertAuction, type AuctionBid, type InsertAuctionBid,
   type Escrow, type InsertEscrow, type AuditLog, type InsertAuditLog,
   type GuildSettings, type InsertGuildSettings, type GuildAdmin, type InsertGuildAdmin,
-  type AuctionPassword, type InsertAuctionPassword
+  type AuctionPassword, type InsertAuctionPassword, type LimitOrder, type InsertLimitOrder
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql, gt, lt, asc } from "drizzle-orm";
@@ -111,6 +111,15 @@ export interface IStorage {
 
   // Audit logs
   addAuditLog(log: InsertAuditLog): Promise<AuditLog>;
+
+  // Limit orders
+  createLimitOrder(limitOrder: InsertLimitOrder): Promise<LimitOrder>;
+  getLimitOrder(id: string): Promise<LimitOrder | undefined>;
+  getUserLimitOrders(guildId: string, userId: string, status?: string): Promise<LimitOrder[]>;
+  cancelLimitOrder(id: string): Promise<void>;
+  executeLimitOrder(id: string, executedPrice: number, executedShares: number): Promise<LimitOrder>;
+  checkPendingOrdersForSymbol(guildId: string, symbol: string, currentPrice: number): Promise<LimitOrder[]>;
+  expireLimitOrders(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -893,6 +902,85 @@ export class DatabaseStorage implements IStorage {
   async addAuditLog(log: InsertAuditLog): Promise<AuditLog> {
     const [result] = await db.insert(auditLogs).values(log).returning();
     return result;
+  }
+
+  // Limit order methods
+  async createLimitOrder(limitOrder: InsertLimitOrder): Promise<LimitOrder> {
+    const [result] = await db.insert(limitOrders).values(limitOrder).returning();
+    return result;
+  }
+
+  async getLimitOrder(id: string): Promise<LimitOrder | undefined> {
+    const [result] = await db.select().from(limitOrders).where(eq(limitOrders.id, id));
+    return result || undefined;
+  }
+
+  async getUserLimitOrders(guildId: string, userId: string, status?: string): Promise<LimitOrder[]> {
+    const conditions = [
+      eq(limitOrders.guildId, guildId),
+      eq(limitOrders.userId, userId)
+    ];
+    
+    if (status) {
+      conditions.push(eq(limitOrders.status, status as any));
+    }
+    
+    return await db.select().from(limitOrders)
+      .where(and(...conditions))
+      .orderBy(desc(limitOrders.createdAt));
+  }
+
+  async cancelLimitOrder(id: string): Promise<void> {
+    await db.update(limitOrders)
+      .set({ 
+        status: 'cancelled',
+        executedAt: new Date()
+      })
+      .where(eq(limitOrders.id, id));
+  }
+
+  async executeLimitOrder(id: string, executedPrice: number, executedShares: number): Promise<LimitOrder> {
+    const [result] = await db.update(limitOrders)
+      .set({ 
+        status: 'executed',
+        executedAt: new Date(),
+        executedPrice: executedPrice.toString(),
+        executedShares
+      })
+      .where(eq(limitOrders.id, id))
+      .returning();
+    
+    return result;
+  }
+
+  async checkPendingOrdersForSymbol(guildId: string, symbol: string, currentPrice: number): Promise<LimitOrder[]> {
+    return await db.select().from(limitOrders)
+      .where(and(
+        eq(limitOrders.guildId, guildId),
+        eq(limitOrders.symbol, symbol),
+        eq(limitOrders.status, 'pending'),
+        or(
+          // Buy orders: execute when current price <= target price
+          and(
+            eq(limitOrders.type, 'buy'),
+            lt(sql`${currentPrice}`, limitOrders.targetPrice)
+          ),
+          // Sell orders: execute when current price >= target price
+          and(
+            eq(limitOrders.type, 'sell'),
+            gt(sql`${currentPrice}`, limitOrders.targetPrice)
+          )
+        )
+      ));
+  }
+
+  async expireLimitOrders(): Promise<void> {
+    await db.update(limitOrders)
+      .set({ status: 'expired' })
+      .where(and(
+        eq(limitOrders.status, 'pending'),
+        lt(limitOrders.expiresAt, sql`now()`)
+      ));
   }
 }
 

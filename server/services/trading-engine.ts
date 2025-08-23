@@ -149,6 +149,9 @@ export class TradingEngine {
           if (newPrice !== currentPrice) {
             await this.storage.updateStockPrice(stock.guildId, stock.symbol, newPrice);
             
+            // Check and execute limit orders after price update
+            await this.checkAndExecuteLimitOrders(stock.guildId, stock.symbol, newPrice);
+            
             // Broadcast price update
             this.wsManager.broadcast('stock_price_updated', {
               guildId: stock.guildId,
@@ -291,6 +294,186 @@ export class TradingEngine {
 
     } catch (error) {
       console.error('Error applying market impact:', error);
+    }
+  }
+
+  // Limit order execution methods
+  async createLimitOrder(guildId: string, userId: string, symbol: string, type: 'buy' | 'sell', shares: number, targetPrice: number, expiresAt?: Date): Promise<any> {
+    const stock = await this.storage.getStockBySymbol(guildId, symbol);
+    if (!stock) {
+      throw new Error('종목을 찾을 수 없습니다');
+    }
+
+    if (stock.status !== 'active') {
+      throw new Error(`${stock.status === 'halted' ? '거래가 중지된' : '상장폐지된'} 종목입니다`);
+    }
+
+    const account = await this.storage.getAccountByUser(guildId, userId);
+    if (!account) {
+      throw new Error('계좌를 찾을 수 없습니다');
+    }
+
+    if (account.frozen) {
+      throw new Error('계좌가 동결되어 거래할 수 없습니다');
+    }
+
+    if (account.tradingSuspended) {
+      throw new Error('관리자에 의해 거래가 중지된 계좌입니다');
+    }
+
+    const totalAmount = targetPrice * shares;
+
+    if (type === 'buy') {
+      // Check balance for buy orders
+      const currentBalance = Number(account.balance);
+      if (currentBalance - totalAmount < 1) {
+        throw new Error('잔액이 부족합니다 (거래 후 최소 1원이 남아있어야 합니다)');
+      }
+
+      // Reserve balance for the limit order
+      await this.storage.updateBalance(account.id, -totalAmount);
+      
+      // Create limit order
+      const limitOrder = await this.storage.createLimitOrder({
+        guildId,
+        userId,
+        symbol,
+        type,
+        shares,
+        targetPrice: targetPrice.toString(),
+        totalAmount: totalAmount.toString(),
+        reservedAmount: totalAmount.toString(),
+        expiresAt: expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // Default 30 days
+      });
+
+      // Add transaction log for reserving money
+      await this.storage.addTransaction({
+        guildId,
+        fromUserId: userId,
+        type: 'admin_freeze', // Temporary freeze for limit order
+        amount: totalAmount,
+        description: `지정가 매수 주문 예약: ${symbol} ${shares}주 @ ${targetPrice}원`
+      });
+
+      return limitOrder;
+    } else {
+      // Check holdings for sell orders
+      const holding = await this.storage.getHolding(guildId, userId, symbol);
+      if (!holding || holding.shares < shares) {
+        throw new Error('보유 수량이 부족합니다');
+      }
+
+      // Reserve shares for the limit order (by reducing available shares)
+      await this.storage.updateHolding(guildId, userId, symbol, holding.shares - shares, Number(holding.avgPrice));
+
+      // Create limit order
+      const limitOrder = await this.storage.createLimitOrder({
+        guildId,
+        userId,
+        symbol,
+        type,
+        shares,
+        targetPrice: targetPrice.toString(),
+        totalAmount: totalAmount.toString(),
+        reservedAmount: shares.toString(), // For sell orders, reserve shares not money
+        expiresAt: expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // Default 30 days
+      });
+
+      return limitOrder;
+    }
+  }
+
+  private async checkAndExecuteLimitOrders(guildId: string, symbol: string, currentPrice: number): Promise<void> {
+    try {
+      const pendingOrders = await this.storage.checkPendingOrdersForSymbol(guildId, symbol, currentPrice);
+      
+      for (const order of pendingOrders) {
+        const targetPrice = Number(order.targetPrice);
+        let shouldExecute = false;
+
+        if (order.type === 'buy' && currentPrice <= targetPrice) {
+          shouldExecute = true;
+        } else if (order.type === 'sell' && currentPrice >= targetPrice) {
+          shouldExecute = true;
+        }
+
+        if (shouldExecute) {
+          // Execute the limit order at current market price
+          await this.executeLimitOrderAtMarketPrice(order, currentPrice);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking and executing limit orders:', error);
+    }
+  }
+
+  private async executeLimitOrderAtMarketPrice(order: any, executionPrice: number): Promise<void> {
+    try {
+      const shares = order.shares;
+      const totalExecutionAmount = executionPrice * shares;
+
+      if (order.type === 'buy') {
+        // For buy orders: user already had money reserved, now execute the trade
+        const holding = await this.storage.getHolding(order.guildId, order.userId, order.symbol);
+        
+        if (holding) {
+          const totalShares = holding.shares + shares;
+          const totalValue = (holding.shares * Number(holding.avgPrice)) + totalExecutionAmount;
+          const newAvgPrice = totalValue / totalShares;
+          
+          await this.storage.updateHolding(order.guildId, order.userId, order.symbol, totalShares, newAvgPrice);
+        } else {
+          await this.storage.updateHolding(order.guildId, order.userId, order.symbol, shares, executionPrice);
+        }
+
+        // If execution price was lower than target price, refund the difference
+        const targetAmount = Number(order.totalAmount);
+        if (totalExecutionAmount < targetAmount) {
+          const account = await this.storage.getAccountByUser(order.guildId, order.userId);
+          if (account) {
+            await this.storage.updateBalance(account.id, targetAmount - totalExecutionAmount);
+          }
+        }
+      } else {
+        // For sell orders: user already had shares reserved, now add money to balance
+        const account = await this.storage.getAccountByUser(order.guildId, order.userId);
+        if (account) {
+          await this.storage.updateBalance(account.id, totalExecutionAmount);
+        }
+      }
+
+      // Mark order as executed
+      await this.storage.executeLimitOrder(order.id, executionPrice, shares);
+
+      // Log the stock transaction
+      await this.storage.addStockTransaction({
+        guildId: order.guildId,
+        userId: order.userId,
+        symbol: order.symbol,
+        type: order.type,
+        shares,
+        price: executionPrice.toString(),
+        totalAmount: totalExecutionAmount.toString()
+      });
+
+      // Update candlestick data for the execution
+      await this.updateCandlestickData(order.guildId, order.symbol, executionPrice, shares);
+
+      // Broadcast limit order execution
+      this.wsManager.broadcast('limit_order_executed', {
+        guildId: order.guildId,
+        orderId: order.id,
+        symbol: order.symbol,
+        type: order.type,
+        shares,
+        targetPrice: Number(order.targetPrice),
+        executionPrice,
+        userId: order.userId
+      });
+
+      console.log(`Limit order executed: ${order.type} ${shares} shares of ${order.symbol} at ${executionPrice} (target: ${order.targetPrice})`);
+    } catch (error) {
+      console.error('Error executing limit order:', error);
     }
   }
 }

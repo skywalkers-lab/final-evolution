@@ -16,6 +16,7 @@ export const auctionStatusEnum = pgEnum('auction_status', ['scheduled', 'live', 
 export const auctionItemTypeEnum = pgEnum('auction_item_type', ['text', 'stock']);
 export const stockTransactionTypeEnum = pgEnum('stock_transaction_type', ['buy', 'sell']);
 export const escrowStatusEnum = pgEnum('escrow_status', ['held', 'released', 'captured']);
+export const limitOrderStatusEnum = pgEnum('limit_order_status', ['pending', 'executed', 'cancelled', 'expired']);
 
 // Users table
 export const users = pgTable("users", {
@@ -238,12 +239,32 @@ export const auditLogs = pgTable("audit_logs", {
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
 });
 
+// Limit Orders table
+export const limitOrders = pgTable("limit_orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  guildId: varchar("guild_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  symbol: varchar("symbol").notNull(),
+  type: stockTransactionTypeEnum("type").notNull(),
+  shares: integer("shares").notNull(),
+  targetPrice: decimal("target_price", { precision: 15, scale: 2 }).notNull(),
+  status: limitOrderStatusEnum("status").default("pending").notNull(),
+  totalAmount: decimal("total_amount", { precision: 15, scale: 2 }).notNull(),
+  reservedAmount: decimal("reserved_amount", { precision: 15, scale: 2 }).notNull(),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+  executedAt: timestamp("executed_at"),
+  executedPrice: decimal("executed_price", { precision: 15, scale: 2 }),
+  executedShares: integer("executed_shares"),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   accounts: many(accounts),
   transactions: many(transactions),
   holdings: many(holdings),
   stockTransactions: many(stockTransactions),
+  limitOrders: many(limitOrders),
   newsAnalyses: many(newsAnalyses),
   auctions: many(auctions),
   auctionBids: many(auctionBids),
@@ -260,6 +281,7 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
 export const stocksRelations = relations(stocks, ({ many }) => ({
   holdings: many(holdings),
   stockTransactions: many(stockTransactions),
+  limitOrders: many(limitOrders),
   candlestickData: many(candlestickData),
   newsAnalyses: many(newsAnalyses),
 }));
@@ -287,6 +309,7 @@ export const insertAuctionPasswordSchema = createInsertSchema(auctionPasswords).
 export const insertTaxCollectionSchema = createInsertSchema(taxCollections).omit({ id: true, createdAt: true });
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
 export const insertGuildAdminSchema = createInsertSchema(guildAdmins).omit({ id: true, grantedAt: true });
+export const insertLimitOrderSchema = createInsertSchema(limitOrders).omit({ id: true, createdAt: true });
 
 // Types
 export type User = typeof users.$inferSelect;
@@ -321,3 +344,5 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type GuildAdmin = typeof guildAdmins.$inferSelect;
 export type InsertGuildAdmin = z.infer<typeof insertGuildAdminSchema>;
+export type LimitOrder = typeof limitOrders.$inferSelect;
+export type InsertLimitOrder = z.infer<typeof insertLimitOrderSchema>;

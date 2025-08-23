@@ -23,6 +23,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [hoveredCandle, setHoveredCandle] = useState<{candle: any, x: number, y: number} | null>(null);
   const [isRealTimeMode, setIsRealTimeMode] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1); // 1 = 기본, 2 = 2배 확대, 0.5 = 2배 축소
 
   const { data: candlestickData = [] } = useQuery({
     queryKey: ['/api/web-client/guilds', guildId, 'stocks', symbol, 'candlestick', timeframe],
@@ -71,7 +72,38 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
 
   useEffect(() => {
     drawChart();
-  }, [candlestickData, symbol]);
+  }, [candlestickData, symbol, zoomLevel]);
+
+  // 마우스 휠 줌 기능
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.1 : 0.1; // 휠 아래로 굴리면 축소, 위로 굴리면 확대
+      setZoomLevel(prev => Math.max(0.1, Math.min(5, prev + delta))); // 0.1배 ~ 5배 제한
+    };
+
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    
+    return () => {
+      canvas.removeEventListener('wheel', handleWheel);
+    };
+  }, []);
+
+  // 줌 조작 함수들
+  const handleZoomIn = () => {
+    setZoomLevel(prev => Math.min(5, prev + 0.2));
+  };
+
+  const handleZoomOut = () => {
+    setZoomLevel(prev => Math.max(0.1, prev - 0.2));
+  };
+
+  const handleZoomReset = () => {
+    setZoomLevel(1);
+  };
 
   // 실시간 모드에서 주기적 업데이트
   useEffect(() => {
@@ -167,9 +199,12 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     // 실시간 모드에서는 최대 100개 캔들만 표시 (오른쪽으로 밀리는 효과)
     // 데이터는 시간 순서대로 정렬 (오래된 것부터 최신 것까지)
     const sortedData = candlestickData.slice().sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-    const displayData = isRealTimeMode 
-      ? sortedData.slice(-100) // 최근 100개만 표시
-      : sortedData;
+    
+    // 줌 레벨에 따라 표시할 데이터 개수 조정
+    const baseItemCount = isRealTimeMode ? 100 : sortedData.length;
+    const itemsToShow = Math.max(10, Math.floor(baseItemCount / zoomLevel)); // 최소 10개는 표시
+    
+    const displayData = sortedData.slice(-itemsToShow); // 최신 데이터부터 표시
     
     const dataToUse = displayData;
 
@@ -582,7 +617,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
               </div>
             </div>
             
-            {/* Chart Type Selection */}
+            {/* Chart Type Selection and Zoom Controls */}
             <div className="flex justify-between items-center mb-4">
               <div className="flex bg-discord-dark rounded-lg p-1 gap-1">
                 <Button
@@ -606,6 +641,43 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                   꺾은선
                 </Button>
               </div>
+              
+              {/* Zoom Controls */}
+              <div className="flex items-center space-x-2 bg-discord-dark rounded-lg p-1">
+                <span className="text-xs text-gray-400 px-2">줌:</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleZoomOut}
+                  className="text-gray-400 hover:text-white hover:bg-discord-light px-2 py-1"
+                  data-testid="button-zoom-out"
+                  title="축소 (마우스 휠 아래로)"
+                >
+                  −
+                </Button>
+                <span className="text-xs text-white min-w-12 text-center">{(zoomLevel).toFixed(1)}x</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleZoomIn}
+                  className="text-gray-400 hover:text-white hover:bg-discord-light px-2 py-1"
+                  data-testid="button-zoom-in"
+                  title="확대 (마우스 휠 위로)"
+                >
+                  +
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleZoomReset}
+                  className="text-xs text-gray-400 hover:text-white hover:bg-discord-light px-2 py-1"
+                  data-testid="button-zoom-reset"
+                  title="기본 크기로 복원"
+                >
+                  리셋
+                </Button>
+              </div>
+              
               <div className="text-xs text-gray-500">
                 📈 상승: <span className="text-red-500">빨간색</span> | 📉 하락: <span className="text-blue-500">파란색</span>
               </div>
