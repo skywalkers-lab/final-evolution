@@ -460,15 +460,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { guildId } = req.params;
       console.log(`Web client transactions request for guild: ${guildId}`);
-      // First ensure web-client user exists
-      let user = await storage.getUserByDiscordId('web-client');
+      
+      // Get all accounts for this guild to show the most recent one (same logic as portfolio)
+      const accounts = await storage.getAccountsByGuild(guildId);
+      let user = null;
+      
+      if (accounts.length > 0) {
+        // Get the most recently created account (latest user) - same as portfolio
+        const account = accounts[accounts.length - 1];
+        user = await storage.getUser(account.userId);
+      }
+      
+      // If no accounts exist, create a demo web-client account (fallback)
       if (!user) {
-        user = await storage.createUser({
-          discordId: 'web-client',
-          username: 'Web Client',
-          discriminator: '0000',
-          avatar: null
-        });
+        user = await storage.getUserByDiscordId('web-client');
+        if (!user) {
+          user = await storage.createUser({
+            discordId: 'web-client',
+            username: 'Web Client',
+            discriminator: '0000',
+            avatar: null
+          });
+        }
       }
       
       const transactions = await storage.getTransactionsByUser(guildId, user.id, 20);
@@ -588,15 +601,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { guildId } = req.params;
       const { status } = req.query;
       
-      // Get or create web-client user
-      let user = await storage.getUserByDiscordId('web-client');
+      // Get all accounts for this guild to show the most recent one (same logic as portfolio)
+      const accounts = await storage.getAccountsByGuild(guildId);
+      let user = null;
+      
+      if (accounts.length > 0) {
+        // Get the most recently created account (latest user) - same as portfolio
+        const account = accounts[accounts.length - 1];
+        user = await storage.getUser(account.userId);
+      }
+      
+      // If no accounts exist, create a demo web-client account (fallback)
       if (!user) {
-        user = await storage.createUser({
-          discordId: 'web-client',
-          username: 'Web Client',
-          discriminator: '0000',
-          avatar: null
-        });
+        user = await storage.getUserByDiscordId('web-client');
+        if (!user) {
+          user = await storage.createUser({
+            discordId: 'web-client',
+            username: 'Web Client',
+            discriminator: '0000',
+            avatar: null
+          });
+        }
       }
       
       const limitOrders = await storage.getUserLimitOrders(guildId, user.id, status as string);
@@ -614,15 +639,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log('Web client limit order request:', { guildId, symbol, type, shares, targetPrice, expiresAt });
       
-      // Get or create web-client user
-      let user = await storage.getUserByDiscordId('web-client');
+      // Get all accounts for this guild to show the most recent one (same logic as portfolio)
+      const accounts = await storage.getAccountsByGuild(guildId);
+      let user = null;
+      
+      if (accounts.length > 0) {
+        // Get the most recently created account (latest user) - same as portfolio
+        const account = accounts[accounts.length - 1];
+        user = await storage.getUser(account.userId);
+      }
+      
+      // If no accounts exist, create a demo web-client account (fallback)
       if (!user) {
-        user = await storage.createUser({
-          discordId: 'web-client',
-          username: 'Web Client',
-          discriminator: '0000',
-          avatar: null
-        });
+        user = await storage.getUserByDiscordId('web-client');
+        if (!user) {
+          user = await storage.createUser({
+            discordId: 'web-client',
+            username: 'Web Client',
+            discriminator: '0000',
+            avatar: null
+          });
+        }
       }
       
       const limitOrder = await tradingEngine.createLimitOrder(guildId, user.id, symbol, type, shares, Number(targetPrice), expiresAt);
@@ -637,10 +674,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { guildId, orderId } = req.params;
       
-      // Get or create web-client user
-      let user = await storage.getUserByDiscordId('web-client');
+      // Get all accounts for this guild to show the most recent one (same logic as portfolio)
+      const accounts = await storage.getAccountsByGuild(guildId);
+      let user = null;
+      
+      if (accounts.length > 0) {
+        // Get the most recently created account (latest user) - same as portfolio
+        const account = accounts[accounts.length - 1];
+        user = await storage.getUser(account.userId);
+      }
+      
+      // If no accounts exist, create a demo web-client account (fallback)
       if (!user) {
-        return res.status(404).json({ message: "사용자를 찾을 수 없습니다" });
+        user = await storage.getUserByDiscordId('web-client');
+        if (!user) {
+          return res.status(404).json({ message: "사용자를 찾을 수 없습니다" });
+        }
       }
       
       // Get limit order and check ownership
@@ -725,15 +774,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log('Web client trade request:', { guildId, symbol, type, shares, price });
       
-      // Get or create web-client user
-      let user = await storage.getUserByDiscordId('web-client');
+      // Get all accounts for this guild to show the most recent one (same logic as portfolio)
+      const accounts = await storage.getAccountsByGuild(guildId);
+      let user = null;
+      
+      if (accounts.length > 0) {
+        // Get the most recently created account (latest user) - same as portfolio
+        const account = accounts[accounts.length - 1];
+        user = await storage.getUser(account.userId);
+      }
+      
+      // If no accounts exist, create a demo web-client account (fallback)
       if (!user) {
-        user = await storage.createUser({
-          discordId: 'web-client',
-          username: 'Web Client',
-          discriminator: '0000',
-          avatar: null
-        });
+        user = await storage.getUserByDiscordId('web-client');
+        if (!user) {
+          user = await storage.createUser({
+            discordId: 'web-client',
+            username: 'Web Client',
+            discriminator: '0000',
+            avatar: null
+          });
+        }
       }
       
       const result = await tradingEngine.executeTrade(guildId, user.id, symbol, type, shares, Number(price));
