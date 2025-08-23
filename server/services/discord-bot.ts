@@ -1597,40 +1597,43 @@ export class DiscordBot {
 
   private async deleteUserAccount(interaction: ChatInputCommandInteraction, guildId: string, adminUserId: string) {
     try {
+      // Defer the reply to get more time for processing
+      await interaction.deferReply();
+      
       const targetUser = interaction.options.getUser('사용자', true);
       const confirmText = interaction.options.getString('확인', true);
 
       // Check confirmation text
       if (confirmText !== '삭제확인') {
-        await interaction.reply('계좌 삭제를 위해서는 "삭제확인"을 정확히 입력해야 합니다.');
+        await interaction.editReply('계좌 삭제를 위해서는 "삭제확인"을 정확히 입력해야 합니다.');
         return;
       }
 
       // Get target user from database
       const dbUser = await this.storage.getUserByDiscordId(targetUser.id);
       if (!dbUser) {
-        await interaction.reply('해당 사용자는 시스템에 등록되지 않았습니다.');
+        await interaction.editReply('해당 사용자는 시스템에 등록되지 않았습니다.');
         return;
       }
 
       // Check if user has an active account
       const hasAccount = await this.storage.hasActiveAccount(guildId, dbUser.id);
       if (!hasAccount) {
-        await interaction.reply(`${targetUser.username}님은 현재 계좌가 없습니다.`);
+        await interaction.editReply(`${targetUser.username}님은 현재 계좌가 없습니다.`);
         return;
       }
 
       // Get account info for confirmation
       const account = await this.storage.getAccountByUser(guildId, dbUser.id);
       if (!account) {
-        await interaction.reply('계좌 정보를 찾을 수 없습니다.');
+        await interaction.editReply('계좌 정보를 찾을 수 없습니다.');
         return;
       }
 
       // Delete the account and all related data
       await this.storage.deleteUserAccount(guildId, dbUser.id);
 
-      await interaction.reply(
+      await interaction.editReply(
         `✅ **계좌 삭제 완료**\n` +
         `**사용자**: ${targetUser.username}\n` +
         `**계좌번호**: ${account.uniqueCode}\n` +
@@ -1648,13 +1651,15 @@ export class DiscordBot {
 
     } catch (error: any) {
       console.error('Account deletion error:', error);
-      // Only reply if interaction hasn't been handled yet
-      if (!interaction.replied && !interaction.deferred) {
-        try {
+      // Try to send error message using editReply if deferred, or reply if not
+      try {
+        if (interaction.deferred) {
+          await interaction.editReply(`계좌 삭제 실패: ${error.message}`);
+        } else if (!interaction.replied) {
           await interaction.reply(`계좌 삭제 실패: ${error.message}`);
-        } catch (replyError) {
-          console.error('Failed to send deletion error reply:', replyError);
         }
+      } catch (replyError) {
+        console.error('Failed to send deletion error reply:', replyError);
       }
     }
   }
