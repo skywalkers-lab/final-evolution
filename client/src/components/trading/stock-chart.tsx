@@ -295,7 +295,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                 ))}
               </SelectContent>
             </Select>
-            <div className="flex bg-discord-dark rounded-lg p-1 flex-wrap gap-1">
+            <div className="grid grid-cols-4 lg:grid-cols-8 gap-1 bg-discord-dark rounded-lg p-2">
               {[
                 { value: 'realtime', label: '실시간' },
                 { value: '1h', label: '1시간' },
@@ -311,10 +311,10 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                   variant={timeframe === tf.value ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setTimeframe(tf.value)}
-                  className={`text-xs px-2 py-1 ${
+                  className={`text-xs px-3 py-2 min-w-0 whitespace-nowrap ${
                     timeframe === tf.value 
                       ? 'bg-discord-blue text-white' 
-                      : 'text-gray-400 hover:text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-discord-light'
                   }`}
                   data-testid={`button-timeframe-${tf.value}`}
                 >
@@ -329,46 +329,55 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       <div className="p-6">
         {selectedStock ? (
           <>
-            <div className="flex items-center space-x-6 mb-6">
-              <div>
-                <p className="text-2xl font-bold text-white" data-testid="text-current-price">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              <div className="bg-discord-dark rounded-lg p-4">
+                <h4 className="text-sm text-gray-400 mb-2">현재가</h4>
+                <p className="text-2xl font-bold text-white mb-2" data-testid="text-current-price">
                   ₩{currentPrice.toLocaleString()}
                 </p>
                 <div className="flex items-center space-x-2">
-                  <span className={priceChange >= 0 ? 'text-red-500' : 'text-blue-500'}>
+                  <span className={`text-sm font-semibold ${priceChange >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
                     {priceChange >= 0 ? '📈 +' : '📉 '}{priceChange.toFixed(2)}%
                   </span>
-                  <span className="text-xs text-gray-400" data-testid="text-last-update">
+                  <span className="text-xs text-gray-500" data-testid="text-last-update">
                     {formatTimeRemaining()}
                   </span>
                 </div>
               </div>
-              <div className="text-sm text-gray-400">
-                <p>고가: ₩{candlestickData.length > 0 
-                  ? Math.max(...candlestickData.map(d => Number(d.high))).toLocaleString() 
-                  : currentPrice.toLocaleString()}</p>
-                <p>저가: ₩{candlestickData.length > 0 
-                  ? Math.min(...candlestickData.map(d => Number(d.low))).toLocaleString() 
-                  : Number(selectedStock.price).toLocaleString()}</p>
+              
+              <div className="bg-discord-dark rounded-lg p-4">
+                <h4 className="text-sm text-gray-400 mb-2">가격 범위</h4>
+                <div className="space-y-1">
+                  <p className="text-sm">고가: <span className="text-white font-semibold">₩{candlestickData.length > 0 
+                    ? Math.max(...candlestickData.map(d => Number(d.high))).toLocaleString() 
+                    : currentPrice.toLocaleString()}</span></p>
+                  <p className="text-sm">저가: <span className="text-white font-semibold">₩{candlestickData.length > 0 
+                    ? Math.min(...candlestickData.map(d => Number(d.low))).toLocaleString() 
+                    : currentPrice.toLocaleString()}</span></p>
+                </div>
               </div>
-              <div className="text-sm text-gray-400">
-                <p>거래량: {candlestickData.length > 0 
-                  ? candlestickData.reduce((sum, d) => sum + Number(d.volume || 0), 0).toLocaleString()
-                  : '0'}</p>
-                <p>거래대금: ₩{candlestickData.length > 0 
-                  ? (candlestickData.reduce((sum, d) => sum + (Number(d.close) * Number(d.volume || 0)), 0) / 1000000000).toFixed(1)
-                  : '0.0'}B</p>
+              
+              <div className="bg-discord-dark rounded-lg p-4">
+                <h4 className="text-sm text-gray-400 mb-2">거래 정보</h4>
+                <div className="space-y-1">
+                  <p className="text-sm">거래량: <span className="text-white font-semibold">{candlestickData.length > 0 
+                    ? candlestickData.reduce((sum, d) => sum + Number(d.volume || 0), 0).toLocaleString()
+                    : '0'}</span></p>
+                  <p className="text-sm">거래대금: <span className="text-white font-semibold">₩{candlestickData.length > 0 
+                    ? (candlestickData.reduce((sum, d) => sum + (Number(d.close) * Number(d.volume || 0)), 0) / 1000000000).toFixed(1)
+                    : '0.0'}B</span></p>
+                </div>
               </div>
             </div>
             
             {/* Chart Type Selection */}
             <div className="flex justify-between items-center mb-4">
-              <div className="flex bg-discord-dark rounded-lg p-1">
+              <div className="flex bg-discord-dark rounded-lg p-1 gap-1">
                 <Button
                   variant={chartType === 'candlestick' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setChartType('candlestick')}
-                  className={chartType === 'candlestick' ? 'bg-discord-blue text-white' : 'text-gray-400 hover:text-white'}
+                  className={`px-4 py-2 ${chartType === 'candlestick' ? 'bg-discord-blue text-white' : 'text-gray-400 hover:text-white hover:bg-discord-light'}`}
                   data-testid="button-chart-candlestick"
                 >
                   <i className="fas fa-chart-candlestick mr-2"></i>
@@ -378,7 +387,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                   variant={chartType === 'line' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setChartType('line')}
-                  className={chartType === 'line' ? 'bg-discord-blue text-white' : 'text-gray-400 hover:text-white'}
+                  className={`px-4 py-2 ${chartType === 'line' ? 'bg-discord-blue text-white' : 'text-gray-400 hover:text-white hover:bg-discord-light'}`}
                   data-testid="button-chart-line"
                 >
                   <i className="fas fa-chart-line mr-2"></i>

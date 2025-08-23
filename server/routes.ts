@@ -297,16 +297,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Try to get actual web-client account from database
       let account;
       try {
-        account = await storage.getUserAccount(guildId, 'web-client');
+        // First ensure web-client user exists
+        let user = await storage.getUserByDiscordId('web-client');
+        if (!user) {
+          user = await storage.createUser({
+            discordId: 'web-client',
+            username: 'Web Client',
+            discriminator: '0000',
+            avatar: null
+          });
+        }
+        
+        account = await storage.getAccountByUser(guildId, user.id);
+        if (!account) {
+          account = await storage.createAccount({
+            guildId,
+            userId: user.id,
+            balance: '1000000', // 100만원 시작 잔고
+            uniqueCode: Math.floor(1000 + Math.random() * 9000).toString() // 4자리 계좌번호
+          });
+        }
       } catch (error) {
-        console.log('Creating new web client account');
-        // If no account exists, create one
-        account = await storage.createAccount({
-          guildId,
-          userId: 'web-client',
-          balance: '1000000', // 100만원 시작 잔고
-          uniqueCode: Math.floor(1000 + Math.random() * 9000).toString() // 4자리 계좌번호
-        });
+        console.error('Error getting web client account:', error);
+        throw error;
       }
       
       console.log('Web client account response:', { balance: account.balance });
@@ -324,20 +337,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get actual account data
       let account;
+      let user;
       try {
-        account = await storage.getUserAccount(guildId, 'web-client');
+        // First ensure web-client user exists
+        user = await storage.getUserByDiscordId('web-client');
+        if (!user) {
+          user = await storage.createUser({
+            discordId: 'web-client',
+            username: 'Web Client',
+            discriminator: '0000',
+            avatar: null
+          });
+        }
+        
+        account = await storage.getAccountByUser(guildId, user.id);
+        if (!account) {
+          account = await storage.createAccount({
+            guildId,
+            userId: user.id,
+            balance: '1000000',
+            uniqueCode: Math.floor(1000 + Math.random() * 9000).toString()
+          });
+        }
       } catch (error) {
-        console.log('Creating new web client account for portfolio');
-        account = await storage.createAccount({
-          guildId,
-          userId: 'web-client',
-          balance: '1000000',
-          uniqueCode: Math.floor(1000 + Math.random() * 9000).toString()
-        });
+        console.error('Error getting web client portfolio:', error);
+        throw error;
       }
       
       // Get holdings from database
-      const holdings = await storage.getUserHoldings(guildId, 'web-client');
+      const holdings = await storage.getHoldingsByUser(guildId, user.id);
       
       const portfolio = {
         holdings: holdings || [],
@@ -364,7 +392,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { guildId } = req.params;
       console.log(`Web client transactions request for guild: ${guildId}`);
-      const transactions = await storage.getTransactionsByUser(guildId, 'web-client', 20);
+      // First ensure web-client user exists
+      let user = await storage.getUserByDiscordId('web-client');
+      if (!user) {
+        user = await storage.createUser({
+          discordId: 'web-client',
+          username: 'Web Client',
+          discriminator: '0000',
+          avatar: null
+        });
+      }
+      
+      const transactions = await storage.getTransactionsByUser(guildId, user.id, 20);
       res.json(transactions);
     } catch (error) {
       console.error('Web client transactions error:', error);
