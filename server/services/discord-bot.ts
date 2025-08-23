@@ -1417,6 +1417,7 @@ export class DiscordBot {
 
   private async handleAdminManagementCommand(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
     const subcommand = interaction.options.getSubcommand();
+    console.log(`[관리자설정] Received subcommand: "${subcommand}"`);
     
     // 세율설정은 일반 관리자도 가능, 나머지는 최고관리자만 가능
     if (subcommand === '세율설정') {
@@ -1449,10 +1450,12 @@ export class DiscordBot {
           await this.setTaxRate(interaction, guildId, userId);
           break;
         case '계좌삭제':
+          console.log('[관리자설정] Processing 계좌삭제 command');
           await this.deleteUserAccount(interaction, guildId, userId);
           break;
         default:
-          await interaction.reply('알 수 없는 하위 명령입니다.');
+          console.log(`[관리자설정] Unknown subcommand: "${subcommand}"`);
+          await interaction.reply(`알 수 없는 하위 명령입니다: "${subcommand}"`);
       }
     } catch (error: any) {
       console.error('Admin management command error:', error);
@@ -1593,16 +1596,16 @@ export class DiscordBot {
   }
 
   private async deleteUserAccount(interaction: ChatInputCommandInteraction, guildId: string, adminUserId: string) {
-    const targetUser = interaction.options.getUser('사용자', true);
-    const confirmText = interaction.options.getString('확인', true);
-
-    // Check confirmation text
-    if (confirmText !== '삭제확인') {
-      await interaction.reply('계좌 삭제를 위해서는 "삭제확인"을 정확히 입력해야 합니다.');
-      return;
-    }
-
     try {
+      const targetUser = interaction.options.getUser('사용자', true);
+      const confirmText = interaction.options.getString('확인', true);
+
+      // Check confirmation text
+      if (confirmText !== '삭제확인') {
+        await interaction.reply('계좌 삭제를 위해서는 "삭제확인"을 정확히 입력해야 합니다.');
+        return;
+      }
+
       // Get target user from database
       const dbUser = await this.storage.getUserByDiscordId(targetUser.id);
       if (!dbUser) {
@@ -1645,8 +1648,13 @@ export class DiscordBot {
 
     } catch (error: any) {
       console.error('Account deletion error:', error);
+      // Only reply if interaction hasn't been handled yet
       if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply(`계좌 삭제 실패: ${error.message}`);
+        try {
+          await interaction.reply(`계좌 삭제 실패: ${error.message}`);
+        } catch (replyError) {
+          console.error('Failed to send deletion error reply:', replyError);
+        }
       }
     }
   }
