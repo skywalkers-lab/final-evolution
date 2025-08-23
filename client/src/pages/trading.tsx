@@ -27,7 +27,8 @@ export default function TradingPage() {
   });
 
   const { data: portfolio } = useQuery({
-    queryKey: ['/api/guilds/users/web-client/portfolio'],
+    queryKey: ['/api/web-client/guilds', selectedGuildId, 'portfolio'],
+    enabled: !!selectedGuildId,
   });
   
   // WebSocket handler for real-time stock updates

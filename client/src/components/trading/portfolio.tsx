@@ -13,13 +13,13 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
   const [profitLoss, setProfitLoss] = useState(0);
 
   const { data: portfolio, refetch } = useQuery({
-    queryKey: ['/api/guilds', guildId, 'users', userId, 'portfolio'],
-    enabled: !!guildId && !!userId,
+    queryKey: ['/api/web-client/guilds', guildId, 'portfolio'],
+    enabled: !!guildId,
   });
 
   const { data: accountData } = useQuery({
-    queryKey: ['/api/guilds', guildId, 'users', userId, 'account'],
-    enabled: !!guildId && !!userId,
+    queryKey: ['/api/web-client/guilds', guildId, 'account'],
+    enabled: !!guildId,
   });
 
   // WebSocket handler for real-time portfolio updates

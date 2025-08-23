@@ -48,6 +48,7 @@ export interface IStorage {
   updateStock(id: string, updates: Partial<Stock>): Promise<Stock | undefined>;
   updateStockPrice(guildId: string, symbol: string, price: number): Promise<Stock | undefined>;
   updateStockStatus(guildId: string, symbol: string, status: 'active' | 'halted' | 'delisted'): Promise<Stock | undefined>;
+  updateStockVolatility(guildId: string, symbol: string, volatility: number): Promise<Stock | undefined>;
   deleteStock(id: string): Promise<void>;
   getAllActiveStocks(): Promise<Stock[]>;
 
@@ -304,6 +305,14 @@ export class DatabaseStorage implements IStorage {
   async updateStockStatus(guildId: string, symbol: string, status: 'active' | 'halted' | 'delisted'): Promise<Stock | undefined> {
     const [result] = await db.update(stocks)
       .set({ status })
+      .where(and(eq(stocks.guildId, guildId), eq(stocks.symbol, symbol)))
+      .returning();
+    return result || undefined;
+  }
+
+  async updateStockVolatility(guildId: string, symbol: string, volatility: number): Promise<Stock | undefined> {
+    const [result] = await db.update(stocks)
+      .set({ volatility: volatility.toString() })
       .where(and(eq(stocks.guildId, guildId), eq(stocks.symbol, symbol)))
       .returning();
     return result || undefined;

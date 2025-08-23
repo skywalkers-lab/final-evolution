@@ -37,6 +37,8 @@ export const guildSettings = pgTable("guild_settings", {
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("0"),
   newsMaxImpactPct: decimal("news_max_impact_pct", { precision: 5, scale: 2 }).default("15"),
   auctionFeePct: decimal("auction_fee_pct", { precision: 5, scale: 2 }).default("0"),
+  priceVolatilityPct: decimal("price_volatility_pct", { precision: 5, scale: 2 }).default("3.0"),
+  tradingFeePct: decimal("trading_fee_pct", { precision: 5, scale: 2 }).default("0.1"),
   adminPassword: text("admin_password"),
 });
 
@@ -83,6 +85,7 @@ export const stocks = pgTable("stocks", {
   name: text("name").notNull(),
   price: decimal("price", { precision: 15, scale: 2 }).notNull(),
   totalShares: integer("total_shares").default(1000000),
+  volatility: decimal("volatility", { precision: 5, scale: 2 }).default("3.00"), // Default ±3%
   status: stockStatusEnum("status").default("active"),
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
 });

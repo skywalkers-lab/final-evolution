@@ -234,6 +234,23 @@ export class DiscordBot {
                 .setDescription('종목코드')
                 .setRequired(true)
             )
+        )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('변동률설정')
+            .setDescription('특정 주식의 주가 변동률을 설정합니다 (관리자 전용)')
+            .addStringOption(option =>
+              option.setName('종목코드')
+                .setDescription('변동률을 설정할 종목코드')
+                .setRequired(true)
+            )
+            .addNumberOption(option =>
+              option.setName('변동률')
+                .setDescription('주가 변동률 (예: 3.0은 ±3%)')
+                .setRequired(true)
+                .setMinValue(0.1)
+                .setMaxValue(10.0)
+            )
         ),
 
       // Admin account management
@@ -289,6 +306,21 @@ export class DiscordBot {
           option.setName('종목코드')
             .setDescription('조회할 종목코드')
             .setRequired(true)
+        ),
+
+      // Tax summary command
+      new SlashCommandBuilder()
+        .setName('세금집계')
+        .setDescription('세금 징수 현황을 조회합니다 (관리자 전용)')
+        .addStringOption(option =>
+          option.setName('기간')
+            .setDescription('집계 기간 선택')
+            .setRequired(false)
+            .addChoices(
+              { name: '이번 달', value: 'current_month' },
+              { name: '지난 달', value: 'last_month' },
+              { name: '전체', value: 'all_time' }
+            )
         ),
 
       // Auction commands
@@ -481,6 +513,9 @@ export class DiscordBot {
           break;
         case '관리자계좌':
           await this.handleAdminAccountCommand(interaction, guildId, user.id);
+          break;
+        case '세금집계':
+          await this.handleTaxSummaryCommand(interaction, guildId, user.id);
           break;
         default:
           await interaction.reply('알 수 없는 명령입니다.');
@@ -918,6 +953,9 @@ export class DiscordBot {
         case '거래재개':
           await this.resumeStock(interaction, guildId);
           break;
+        case '변동률설정':
+          await this.setVolatility(interaction, guildId);
+          break;
       }
     } catch (error: any) {
       await interaction.reply(`관리 작업 실패: ${error.message}`);
@@ -947,6 +985,7 @@ export class DiscordBot {
         name,
         price: price.toString(),
         totalShares: 1000000,
+        volatility: '1',
         status: 'active'
       });
 
@@ -1038,6 +1077,31 @@ export class DiscordBot {
       });
     } catch (error: any) {
       await interaction.reply(`거래 재개 실패: ${error.message}`);
+    }
+  }
+
+  private async setVolatility(interaction: ChatInputCommandInteraction, guildId: string) {
+    const symbol = interaction.options.getString('종목코드', true).toUpperCase();
+    const volatility = interaction.options.getNumber('변동률', true);
+
+    try {
+      const stock = await this.storage.updateStockVolatility(guildId, symbol, volatility);
+      if (!stock) {
+        await interaction.reply('해당 종목을 찾을 수 없습니다.');
+        return;
+      }
+
+      await interaction.reply(`✅ ${stock.name} (${symbol}) 변동률이 ±${volatility}%로 설정되었습니다.`);
+      
+      // WebSocket으로 변동률 변경 알림
+      this.wsManager.broadcast('stock_volatility_changed', {
+        guildId,
+        symbol,
+        volatility,
+        name: stock.name
+      });
+    } catch (error: any) {
+      await interaction.reply(`변동률 설정 실패: ${error.message}`);
     }
   }
 
@@ -1472,6 +1536,49 @@ export class DiscordBot {
     }
 
     await interaction.reply(content);
+  }
+
+  private async handleTaxSummaryCommand(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
+    const isAdmin = await this.isAdmin(guildId, userId);
+    if (!isAdmin) {
+      await interaction.reply('이 명령은 관리자만 사용할 수 있습니다.');
+      return;
+    }
+
+    try {
+      // Get all accounts and their balances
+      const accounts = await this.storage.getAccountsByGuild(guildId);
+      const totalUsers = accounts.length;
+      const totalBalance = accounts.reduce((sum, acc) => sum + Number(acc.balance), 0);
+
+      // Get tax rate from guild settings  
+      const settings = await this.storage.getGuildSettings(guildId);
+      const taxRate = Number(settings?.taxRate || 0);
+
+      // Calculate potential tax collection
+      const potentialTax = totalBalance * (taxRate / 100);
+
+      let response = '💰 **세금 집계 현황**\n\n';
+      response += `📊 **기본 정보**\n`;
+      response += `• 총 사용자 수: ${totalUsers}명\n`;
+      response += `• 현재 세율: ${taxRate}%\n`;
+      response += `• 총 자산: ₩${totalBalance.toLocaleString()}\n\n`;
+      
+      response += `💸 **세금 징수 예상**\n`;
+      response += `• 징수 예상액: ₩${Math.floor(potentialTax).toLocaleString()}\n`;
+      response += `• 평균 1인당 세금: ₩${Math.floor(potentialTax / totalUsers).toLocaleString()}\n\n`;
+
+      if (taxRate > 0) {
+        response += `⏰ **다음 세금 징수**: 매월 1일 자동 징수\n`;
+        response += `📝 세금은 각 계좌 잔액의 ${taxRate}%가 부과됩니다.`;
+      } else {
+        response += `⚠️ **현재 세율이 0%로 설정되어 있어 세금이 징수되지 않습니다.**`;
+      }
+
+      await interaction.reply(response);
+    } catch (error: any) {
+      await interaction.reply(`세금집계 조회 실패: ${error.message}`);
+    }
   }
 
   private async listAdmins(interaction: ChatInputCommandInteraction, guildId: string) {
