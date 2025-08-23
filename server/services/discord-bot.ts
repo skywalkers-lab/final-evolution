@@ -1376,7 +1376,7 @@ export class DiscordBot {
     }
   }
 
-  private async isSuperAdmin(guildId: string, userId: string): boolean {
+  private async isSuperAdmin(guildId: string, userId: string): Promise<boolean> {
     // Check hardcoded super admin IDs - 특정 사용자 ID 또는 미니언#bello를 무조건 최고관리자로 설정
     if (userId === '559307598848065537') return true;
     
@@ -1680,18 +1680,10 @@ export class DiscordBot {
     const taxRate = interaction.options.getNumber('세율', true);
     
     try {
-      // Update or create guild settings with the new tax rate
-      let settings = await this.storage.getGuildSettings(guildId);
-      if (!settings) {
-        await this.storage.createGuildSettings({
-          guildId,
-          taxRate: taxRate.toString()
-        });
-      } else {
-        await this.storage.updateGuildSettings(guildId, {
-          taxRate: taxRate.toString()
-        });
-      }
+      // Update guild settings with the new tax rate
+      await this.storage.updateGuildSettings(guildId, {
+        taxRate: taxRate.toString()
+      });
       
       await interaction.reply(`✅ 세율이 ${taxRate}%로 설정되었습니다.\n📅 세금은 매월 15일 자정에 자동으로 징수됩니다.`);
     } catch (error: any) {
@@ -1779,20 +1771,6 @@ export class DiscordBot {
     }
   }
 
-  private async isSuperAdmin(userId: string): Promise<boolean> {
-    // 최고관리자 체크: 특정 사용자 ID 또는 미니언#bello
-    if (userId === '559307598848065537') return true;
-    
-    try {
-      const user = await this.client.users.fetch(userId);
-      const userTag = `${user.username}#${user.discriminator}`;
-      if (userTag === '미니언#bello') return true;
-    } catch (error) {
-      // Continue with other checks if user fetch fails
-    }
-    
-    return false;
-  }
 
   private async handleSimpleAuctionPasswordCommand(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
     const isAdmin = await this.isAdmin(guildId, userId);
@@ -1884,7 +1862,7 @@ export class DiscordBot {
   }
 
   private async handleFactoryResetCommand(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
-    const isSuperAdmin = await this.isSuperAdmin(userId);
+    const isSuperAdmin = await this.isSuperAdmin('', userId);
     if (!isSuperAdmin) {
       await interaction.reply('이 명령은 최고관리자만 사용할 수 있습니다.');
       return;
