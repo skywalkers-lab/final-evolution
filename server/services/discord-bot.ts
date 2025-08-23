@@ -1430,7 +1430,11 @@ export class DiscordBot {
           await interaction.reply('알 수 없는 하위 명령입니다.');
       }
     } catch (error: any) {
-      await interaction.reply(`관리자 설정 실패: ${error.message}`);
+      console.error('Admin management command error:', error);
+      // Check if interaction is already replied to avoid 40060 error
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply(`관리자 설정 실패: ${error.message}`);
+      }
     }
   }
 
