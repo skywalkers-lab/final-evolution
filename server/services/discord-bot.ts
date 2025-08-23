@@ -1491,7 +1491,7 @@ export class DiscordBot {
     return false;
   }
 
-  private async grantAdminPermission(interaction: ChatInputCommandInteraction, guildId: string, grantedBy: string) {
+  private async grantAdminPermission(interaction: ChatInputCommandInteraction, guildId: string, grantedByDiscordId: string) {
     const targetUser = interaction.options.getUser('사용자', true);
     
     // Check if user already has admin permissions
@@ -1501,10 +1501,10 @@ export class DiscordBot {
       return;
     }
 
-    // Check if user exists in our database, create if not
-    let user = await this.storage.getUserByDiscordId(targetUser.id);
-    if (!user) {
-      user = await this.storage.createUser({
+    // Check if target user exists in our database, create if not
+    let targetDbUser = await this.storage.getUserByDiscordId(targetUser.id);
+    if (!targetDbUser) {
+      targetDbUser = await this.storage.createUser({
         discordId: targetUser.id,
         username: targetUser.username,
         discriminator: targetUser.discriminator || '0',
@@ -1512,8 +1512,26 @@ export class DiscordBot {
       });
     }
 
+    // Check if the user granting permission exists in our database, create if not
+    let grantingDbUser = await this.storage.getUserByDiscordId(grantedByDiscordId);
+    if (!grantingDbUser) {
+      // Get Discord user info for the granting user
+      try {
+        const discordGrantingUser = await this.client.users.fetch(grantedByDiscordId);
+        grantingDbUser = await this.storage.createUser({
+          discordId: grantedByDiscordId,
+          username: discordGrantingUser.username,
+          discriminator: discordGrantingUser.discriminator || '0',
+          avatar: discordGrantingUser.avatar,
+        });
+      } catch (error) {
+        await interaction.reply('권한 부여 실패: 관리자 사용자 정보를 가져올 수 없습니다.');
+        return;
+      }
+    }
+
     // Grant admin permission
-    await this.storage.grantGuildAdmin(guildId, user.id, targetUser.id, grantedBy);
+    await this.storage.grantGuildAdmin(guildId, targetDbUser.id, targetUser.id, grantingDbUser.id);
     
     await interaction.reply(`✅ ${targetUser.username}님에게 이 서버에서의 관리자 권한을 부여했습니다.`);
   }
