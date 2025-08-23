@@ -12,7 +12,7 @@ export class TradingEngine {
   }
 
   start() {
-    // Start price simulation every 5 seconds
+    // Start price simulation every 1.25 seconds
     this.priceSimulationInterval = setInterval(() => {
       this.simulatePriceMovements();
     }, 1250); // 1.25초마다 업데이트
@@ -46,6 +46,10 @@ export class TradingEngine {
       throw new Error('계좌가 동결되어 거래할 수 없습니다');
     }
 
+    if (account.tradingSuspended) {
+      throw new Error('관리자에 의해 거래가 중지된 계좌입니다');
+    }
+
     const totalAmount = price * shares;
 
     if (type === 'buy') {
@@ -60,6 +64,9 @@ export class TradingEngine {
       
       // Update candlestick data
       await this.updateCandlestickData(guildId, symbol, price, shares);
+      
+      // Apply market impact - individual trades affect stock price
+      await this.applyMarketImpact(guildId, symbol, type, shares, price);
       
       // Broadcast to websocket clients
       this.wsManager.broadcast('trade_executed', result);
@@ -77,6 +84,9 @@ export class TradingEngine {
       
       // Update candlestick data
       await this.updateCandlestickData(guildId, symbol, price, shares);
+      
+      // Apply market impact - individual trades affect stock price
+      await this.applyMarketImpact(guildId, symbol, type, shares, price);
       
       // Broadcast to websocket clients
       this.wsManager.broadcast('trade_executed', result);
@@ -168,6 +178,42 @@ export class TradingEngine {
       }
     } catch (error) {
       console.error('Error updating candlestick data:', error);
+    }
+  }
+
+  private async applyMarketImpact(guildId: string, symbol: string, type: 'buy' | 'sell', shares: number, tradePrice: number) {
+    try {
+      const stock = await this.storage.getStockBySymbol(guildId, symbol);
+      if (!stock) return;
+
+      const currentPrice = Number(stock.price);
+      
+      // Calculate impact based on trade size and direction
+      // Base impact: 0.01% to 0.5% depending on trade size
+      const baseImpact = Math.min(shares / 10000, 0.005); // Max 0.5% impact for very large trades
+      const impactMultiplier = type === 'buy' ? 1 : -1; // Buy pushes price up, sell pushes down
+      
+      // Add small random factor for realism
+      const randomFactor = (Math.random() - 0.5) * 0.001; // ±0.05% random
+      
+      const totalImpact = (baseImpact + randomFactor) * impactMultiplier;
+      const newPrice = Math.max(1, currentPrice * (1 + totalImpact)); // Minimum price of 1 won
+      
+      // Update stock price
+      await this.storage.updateStockPrice(guildId, symbol, newPrice);
+      
+      // Broadcast price change
+      this.wsManager.broadcast('stock_price_updated', {
+        guildId,
+        symbol,
+        oldPrice: currentPrice,
+        newPrice,
+        changePercent: (totalImpact * 100).toFixed(4),
+        reason: `개인거래 영향 (${type === 'buy' ? '매수' : '매도'} ${shares}주)`
+      });
+
+    } catch (error) {
+      console.error('Error applying market impact:', error);
     }
   }
 }

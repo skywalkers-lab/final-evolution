@@ -728,6 +728,11 @@ export class DiscordBot {
         return;
       }
 
+      if (account.tradingSuspended) {
+        await interaction.reply('관리자에 의해 거래가 중지된 계좌입니다.');
+        return;
+      }
+
       const totalCost = Number(stock.price) * shares;
       const currentBalance = Number(account.balance);
 
@@ -1317,9 +1322,20 @@ export class DiscordBot {
     }
   }
 
-  private async suspendUserTrading(interaction: ChatInputCommandInteraction, guildId: string, adminUserId: string) {
+  private async suspendUserTrading(interaction: ChatInputCommandInteraction, guildId: string, adminDiscordId: string) {
     const targetUser = interaction.options.getUser('사용자', true);
     const reason = interaction.options.getString('사유') || '관리자 조치';
+
+    // Get admin user from database
+    let adminUser = await this.storage.getUserByDiscordId(adminDiscordId);
+    if (!adminUser) {
+      adminUser = await this.storage.createUser({
+        discordId: adminDiscordId,
+        username: interaction.user.username,
+        discriminator: interaction.user.discriminator || '0',
+        avatar: interaction.user.avatar,
+      });
+    }
 
     // Get target user from database
     let user = await this.storage.getUserByDiscordId(targetUser.id);
@@ -1345,7 +1361,7 @@ export class DiscordBot {
     // Add audit log
     await this.storage.addAuditLog({
       guildId,
-      actorId: adminUserId,
+      actorId: adminUser.id, // Use actual user ID from database
       action: 'suspend_trading',
       targetType: 'user',
       targetId: user.id,
@@ -1355,8 +1371,19 @@ export class DiscordBot {
     await interaction.reply(`✅ ${targetUser.username}님의 거래가 중지되었습니다.\n사유: ${reason}`);
   }
 
-  private async resumeUserTrading(interaction: ChatInputCommandInteraction, guildId: string, adminUserId: string) {
+  private async resumeUserTrading(interaction: ChatInputCommandInteraction, guildId: string, adminDiscordId: string) {
     const targetUser = interaction.options.getUser('사용자', true);
+
+    // Get admin user from database
+    let adminUser = await this.storage.getUserByDiscordId(adminDiscordId);
+    if (!adminUser) {
+      adminUser = await this.storage.createUser({
+        discordId: adminDiscordId,
+        username: interaction.user.username,
+        discriminator: interaction.user.discriminator || '0',
+        avatar: interaction.user.avatar,
+      });
+    }
 
     // Get target user from database
     const user = await this.storage.getUserByDiscordId(targetUser.id);
@@ -1378,7 +1405,7 @@ export class DiscordBot {
     // Add audit log
     await this.storage.addAuditLog({
       guildId,
-      actorId: adminUserId,
+      actorId: adminUser.id, // Use actual user ID from database
       action: 'resume_trading',
       targetType: 'user',
       targetId: user.id,

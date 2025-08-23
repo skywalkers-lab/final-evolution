@@ -492,6 +492,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Web client specific trade endpoint
+  app.post("/api/web-client/guilds/:guildId/trades", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const { symbol, type, shares, price } = req.body;
+      
+      console.log('Web client trade request:', { guildId, symbol, type, shares, price });
+      
+      // Get or create web-client user
+      let user = await storage.getUserByDiscordId('web-client');
+      if (!user) {
+        user = await storage.createUser({
+          discordId: 'web-client',
+          username: 'Web Client',
+          discriminator: '0000',
+          avatar: null
+        });
+      }
+      
+      const result = await tradingEngine.executeTrade(guildId, user.id, symbol, type, shares, Number(price));
+      res.json(result);
+    } catch (error: any) {
+      console.error('Web client trade error:', error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   // Portfolio routes
   app.get("/api/guilds/:guildId/users/:userId/portfolio", requireAuth, async (req, res) => {
     try {

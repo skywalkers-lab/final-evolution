@@ -62,7 +62,7 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
 
   const tradeMutation = useMutation({
     mutationFn: async (tradeData: any) => {
-      return await apiRequest('POST', `/api/guilds/${guildId}/trades`, tradeData);
+      return await apiRequest('POST', `/api/web-client/guilds/${guildId}/trades`, tradeData);
     },
     onSuccess: () => {
       toast({
@@ -106,7 +106,6 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
     }
 
     tradeMutation.mutate({
-      userId: 'web-client',
       symbol: selectedStock,
       type: tradeType,
       shares: quantityNum,
