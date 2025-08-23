@@ -1,0 +1,152 @@
+import { useEffect, useState } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import { useWebSocket } from "@/hooks/use-websocket";
+import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import Sidebar from "@/components/layout/sidebar";
+import TopBar from "@/components/layout/top-bar";
+import OverviewCards from "@/components/dashboard/overview-cards";
+import StockChart from "@/components/trading/stock-chart";
+import TradingPanel from "@/components/trading/trading-panel";
+import MarketOverview from "@/components/dashboard/market-overview";
+import Portfolio from "@/components/trading/portfolio";
+import RecentActivity from "@/components/dashboard/recent-activity";
+import AuctionCard from "@/components/auctions/auction-card";
+
+export default function Dashboard() {
+  const { user, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
+  const [selectedStock, setSelectedStock] = useState<string>('');
+
+  const { data: overview, refetch: refetchOverview } = useQuery({
+    queryKey: ['/api/guilds', user?.guildId, 'overview'],
+    enabled: !!user?.guildId,
+  });
+
+  const { data: stocks } = useQuery({
+    queryKey: ['/api/guilds', user?.guildId, 'stocks'],
+    enabled: !!user?.guildId,
+  });
+
+  const { data: auctions } = useQuery({
+    queryKey: ['/api/guilds', user?.guildId, 'auctions'],
+    enabled: !!user?.guildId,
+  });
+
+  // WebSocket handler for real-time updates
+  useWebSocket((event: string, data: any) => {
+    switch (event) {
+      case 'stock_price_updated':
+      case 'trade_executed':
+      case 'auction_bid':
+      case 'auction_settled':
+        refetchOverview();
+        break;
+    }
+  });
+
+  useEffect(() => {
+    if (!isLoading && !user) {
+      setLocation("/login");
+    }
+  }, [user, isLoading, setLocation]);
+
+  useEffect(() => {
+    // Set default selected stock
+    if (stocks && stocks.length > 0 && !selectedStock) {
+      setSelectedStock(stocks[0].symbol);
+    }
+  }, [stocks, selectedStock]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen discord-bg-darkest flex items-center justify-center">
+        <div className="animate-pulse-discord text-gray-400">로딩 중...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <div className="flex h-screen overflow-hidden discord-bg-darkest text-gray-100 font-inter">
+      <Sidebar />
+      
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <TopBar />
+        
+        <main className="flex-1 overflow-y-auto p-6" data-testid="dashboard-main">
+          {/* Overview Cards */}
+          <OverviewCards data={overview} />
+
+          {/* Main Dashboard Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            {/* Stock Chart */}
+            <div className="lg:col-span-2">
+              <StockChart 
+                symbol={selectedStock} 
+                guildId={user.guildId}
+                onSymbolChange={setSelectedStock}
+                stocks={stocks || []}
+              />
+            </div>
+
+            {/* Trading Panel */}
+            <div>
+              <TradingPanel 
+                selectedStock={selectedStock}
+                guildId={user.guildId}
+                stocks={stocks || []}
+              />
+            </div>
+          </div>
+
+          {/* Market Overview & Live Auctions */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <MarketOverview stocks={stocks || []} />
+            
+            <div className="discord-bg-darker rounded-xl border border-discord-dark">
+              <div className="p-6 border-b border-discord-dark">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-white">실시간 경매</h3>
+                  <button 
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                    data-testid="button-create-auction"
+                  >
+                    <i className="fas fa-plus mr-2"></i>경매 생성
+                  </button>
+                </div>
+              </div>
+              <div className="p-6">
+                <div className="space-y-4">
+                  {auctions && auctions.length > 0 ? (
+                    auctions.slice(0, 3).map((auction: any) => (
+                      <AuctionCard key={auction.id} auction={auction} />
+                    ))
+                  ) : (
+                    <div className="text-center text-gray-400 py-8">
+                      진행중인 경매가 없습니다
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Portfolio & Recent Activity */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <Portfolio guildId={user.guildId} userId="web-client" />
+            </div>
+            
+            <div>
+              <RecentActivity guildId={user.guildId} />
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
