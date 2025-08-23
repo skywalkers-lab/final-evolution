@@ -665,7 +665,12 @@ export class DiscordBot {
         memo: '계좌 개설 보너스'
       });
 
-      await interaction.reply(`✅ 계좌가 성공적으로 개설되었습니다!\n계좌번호: ${uniqueCode}\n초기 잔액: ₩1,000,000`);
+      // Get dashboard URL
+      const dashboardUrl = process.env.REPLIT_DOMAINS 
+        ? `https://${process.env.REPLIT_DOMAINS}` 
+        : 'https://bankofkorea.replit.app';
+
+      await interaction.reply(`✅ 계좌가 성공적으로 개설되었습니다!\n계좌번호: ${uniqueCode}\n초기 잔액: ₩1,000,000\n\n📊 **웹 대시보드**: ${dashboardUrl}\n💡 대시보드에서 실시간 거래현황과 포트폴리오를 확인하실 수 있습니다!`);
     } catch (error) {
       await interaction.reply('계좌 개설 중 오류가 발생했습니다.');
     }
