@@ -27,19 +27,27 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
 
   const selectedStockData = stocks.find(s => s.symbol === selectedStock);
 
-  const { data: portfolio } = useQuery({
-    queryKey: ['/api/guilds', guildId, 'users', 'web-client', 'portfolio'],
+  const { data: portfolio, refetch: refetchPortfolio } = useQuery({
+    queryKey: ['/api/web-client/guilds', guildId, 'portfolio'],
     enabled: !!guildId,
   });
 
-  // WebSocket handler for real-time price updates
+  // WebSocket handler for real-time updates
   useWebSocket((event: string, data: any) => {
-    if (event === 'stock_price_updated' && data.symbol === selectedStock) {
-      setRealtimePrice(data.newPrice);
-      // Update price input for limit orders
-      if (orderType === 'limit') {
-        setPrice(data.newPrice.toString());
-      }
+    switch (event) {
+      case 'stock_price_updated':
+        if (data.symbol === selectedStock) {
+          setRealtimePrice(data.newPrice);
+          if (orderType === 'limit') {
+            setPrice(data.newPrice.toString());
+          }
+        }
+        break;
+      case 'trade_executed':
+      case 'account_updated':
+        // Refetch portfolio when trades are executed or account is updated
+        refetchPortfolio();
+        break;
     }
   });
   

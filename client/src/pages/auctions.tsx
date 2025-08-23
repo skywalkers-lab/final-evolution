@@ -22,6 +22,7 @@ export default function AuctionsPage() {
   const { data: auctions = [] } = useQuery({
     queryKey: ['/api/guilds', selectedGuildId, 'auctions'],
     enabled: !!selectedGuildId,
+    select: (data: any) => data || [],
   });
 
   const handleCreateAuction = async () => {
@@ -175,7 +176,7 @@ export default function AuctionsPage() {
 
       {/* 진행 중인 경매 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {auctions.length > 0 ? auctions.map((auction: any) => (
+        {auctions.map((auction: any) => (
           <Card key={auction.id} className="discord-bg-darker border-discord-dark">
             <CardHeader>
               <CardTitle className="text-white flex items-center justify-between">
@@ -205,44 +206,7 @@ export default function AuctionsPage() {
               </Button>
             </CardContent>
           </Card>
-        )) : (
-          // 샘플 경매 표시
-          [
-            { id: 1, item: '한정판 디지털 아이템', description: '희귀한 수집품', currentBid: 50000, bidder: '미니언#bello', timeLeft: '2시간 15분' },
-            { id: 2, item: '프리미엄 역할 배지', description: '특별한 서버 권한', currentBid: 25000, bidder: 'User123', timeLeft: '5시간 30분' },
-            { id: 3, item: '가상 부동산', description: '메타버스 토지', currentBid: 100000, bidder: 'Investor99', timeLeft: '1일 3시간' },
-          ].map((auction) => (
-            <Card key={auction.id} className="discord-bg-darker border-discord-dark">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center justify-between">
-                  <span>{auction.item}</span>
-                  <Badge variant="outline" className="border-green-500 text-green-400">
-                    진행중
-                  </Badge>
-                </CardTitle>
-                <CardDescription>{auction.description}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">현재 최고가</span>
-                  <span className="text-white font-bold">₩{auction.currentBid.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">입찰자</span>
-                  <span className="text-blue-400">{auction.bidder}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">남은 시간</span>
-                  <span className="text-yellow-400">{auction.timeLeft}</span>
-                </div>
-                <Button className="w-full bg-discord-blue hover:bg-discord-blue/80" data-testid={`button-bid-${auction.id}`}>
-                  <i className="fas fa-hand-paper mr-2"></i>
-                  입찰하기
-                </Button>
-              </CardContent>
-            </Card>
-          ))
-        )}
+        ))}
       </div>
 
       {auctions.length === 0 && (

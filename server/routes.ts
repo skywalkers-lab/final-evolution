@@ -288,6 +288,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Stock routes
+  // Web client routes (no auth required) - placed early to avoid conflicts
+  app.get("/api/web-client/guilds/:guildId/account", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      console.log(`Web client account request for guild: ${guildId}`);
+      
+      // Try to get actual web-client account from database
+      let account;
+      try {
+        account = await storage.getUserAccount(guildId, 'web-client');
+      } catch (error) {
+        console.log('Creating new web client account');
+        // If no account exists, create one
+        account = await storage.createAccount({
+          guildId,
+          userId: 'web-client',
+          balance: '1000000', // 100만원 시작 잔고
+          uniqueCode: Math.floor(1000 + Math.random() * 9000).toString() // 4자리 계좌번호
+        });
+      }
+      
+      console.log('Web client account response:', { balance: account.balance });
+      res.json({ account });
+    } catch (error) {
+      console.error('Web client account error:', error);
+      res.status(500).json({ message: "Failed to get web client account" });
+    }
+  });
+
+  app.get("/api/web-client/guilds/:guildId/portfolio", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      console.log(`Web client portfolio request for guild: ${guildId}`);
+      
+      // Get actual account data
+      let account;
+      try {
+        account = await storage.getUserAccount(guildId, 'web-client');
+      } catch (error) {
+        console.log('Creating new web client account for portfolio');
+        account = await storage.createAccount({
+          guildId,
+          userId: 'web-client',
+          balance: '1000000',
+          uniqueCode: Math.floor(1000 + Math.random() * 9000).toString()
+        });
+      }
+      
+      // Get holdings from database
+      const holdings = await storage.getUserHoldings(guildId, 'web-client');
+      
+      const portfolio = {
+        holdings: holdings || [],
+        account: {
+          id: account.id,
+          balance: account.balance,
+          frozen: account.frozen || false,
+          uniqueCode: account.uniqueCode
+        },
+        totalValue: Number(account.balance) + (holdings?.reduce((sum: number, holding: any) => {
+          return sum + (Number(holding.shares) * Number(holding.avgPrice || 0));
+        }, 0) || 0)
+      };
+      
+      console.log('Web client portfolio response:', { balance: account.balance, totalValue: portfolio.totalValue });
+      res.json(portfolio);
+    } catch (error) {
+      console.error('Web client portfolio error:', error);
+      res.status(500).json({ message: "Failed to get web client portfolio" });
+    }
+  });
+
+  app.get("/api/web-client/guilds/:guildId/transactions", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      console.log(`Web client transactions request for guild: ${guildId}`);
+      const transactions = await storage.getTransactionsByUser(guildId, 'web-client', 20);
+      res.json(transactions);
+    } catch (error) {
+      console.error('Web client transactions error:', error);
+      res.json([]); // Return empty array if no transactions
+    }
+  });
+
   app.get("/api/guilds/:guildId/stocks", async (req, res) => {
     try {
       const { guildId } = req.params;
@@ -443,25 +527,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Web client portfolio (no auth required)
-  app.get("/api/guilds/users/web-client/portfolio", async (req, res) => {
-    try {
-      // Return sample portfolio with account data
-      const samplePortfolio = {
-        holdings: [],
-        account: {
-          id: 'web-client-account',
-          balance: '1000000', // 100만원
-          frozen: false
-        },
-        totalValue: 1000000
-      };
-      
-      res.json(samplePortfolio);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to get web client portfolio" });
-    }
-  });
 
   // Auction routes
   app.get("/api/guilds/:guildId/auctions", async (req, res) => {

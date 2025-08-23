@@ -28,13 +28,13 @@ export default function BankPage() {
   }, [user, isLoading, setLocation]);
 
   const { data: accountData, refetch: refetchAccount } = useQuery({
-    queryKey: ['/api/guilds', selectedGuildId, 'users', user?.id, 'account'],
-    enabled: !!selectedGuildId && !!user?.id,
+    queryKey: ['/api/web-client/guilds', selectedGuildId, 'account'],
+    enabled: !!selectedGuildId,
   });
 
   const { data: transactionHistory } = useQuery({
-    queryKey: ['/api/guilds', selectedGuildId, 'users', user?.id, 'transactions'],
-    enabled: !!selectedGuildId && !!user?.id,
+    queryKey: ['/api/web-client/guilds', selectedGuildId, 'transactions'],
+    enabled: !!selectedGuildId,
   });
 
   const transferMutation = useMutation({

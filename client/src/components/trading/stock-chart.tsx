@@ -22,9 +22,10 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
   const [priceChange, setPriceChange] = useState<number>(0);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
-  const { data: candlestickData } = useQuery({
-    queryKey: ['/api/guilds', guildId, 'stocks', symbol, 'candlestick'],
+  const { data: candlestickData = [] } = useQuery({
+    queryKey: ['/api/guilds', guildId, 'stocks', symbol, 'candlestick', timeframe],
     enabled: !!symbol && !!guildId,
+    select: (data: any[]) => data || [],
   });
 
   const selectedStock = stocks.find(s => s.symbol === symbol);
@@ -32,17 +33,24 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
   // WebSocket handler for real-time updates
   useWebSocket((event: string, data: any) => {
     if (event === 'stock_price_updated' && data.symbol === symbol) {
-      setCurrentPrice(data.newPrice);
-      setPriceChange(data.changePercent);
+      // 실시간 가격 업데이트 시 캔들스틱 데이터와 동기화
+      if (candlestickData.length > 0) {
+        const lastCandle = candlestickData[candlestickData.length - 1];
+        setCurrentPrice(data.newPrice);
+        // 변동률을 직전 캔들의 종가 기준으로 재계산
+        const prevClose = Number(lastCandle.close);
+        const change = ((data.newPrice - prevClose) / prevClose) * 100;
+        setPriceChange(change);
+      } else {
+        setCurrentPrice(data.newPrice);
+        setPriceChange(data.changePercent || 0);
+      }
       setLastUpdate(new Date());
       drawChart();
     } else if (event === 'stock_created' && data.guildId === guildId) {
-      // 주식이 새로 생성되면 목록을 새로고침
       queryClient.invalidateQueries({ queryKey: ['/api/guilds', guildId, 'stocks'] });
     } else if (event === 'stock_deleted' && data.guildId === guildId) {
-      // 주식이 삭제되면 목록을 새로고침
       queryClient.invalidateQueries({ queryKey: ['/api/guilds', guildId, 'stocks'] });
-      // 현재 선택된 주식이 삭제되면 선택을 해제
       if (data.symbol === symbol) {
         onSymbolChange('');
       }
@@ -93,13 +101,19 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     const chartWidth = width - 2 * padding;
     const chartHeight = height - 2 * padding;
 
-    // Calculate price range including current price
+    // Calculate price range - use consistent data source
     const prices = candlestickData.flatMap(d => [
       Number(d.high), Number(d.low), Number(d.open), Number(d.close)
     ]);
-    if (currentPrice > 0) {
-      prices.push(currentPrice);
+    
+    // Include current price only if it's from live data and within reasonable range
+    if (currentPrice > 0 && candlestickData.length > 0) {
+      const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
+      if (Math.abs(currentPrice - avgPrice) / avgPrice < 0.5) { // 50% 이내 변동만 포함
+        prices.push(currentPrice);
+      }
     }
+    
     const maxPrice = Math.max(...prices);
     const minPrice = Math.min(...prices);
     const priceRange = maxPrice - minPrice === 0 ? maxPrice * 0.1 : maxPrice - minPrice;
@@ -116,8 +130,8 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       ctx.stroke();
     }
 
-    // Draw candlesticks with proper spacing
-    const candleWidth = Math.max(6, (chartWidth / candlestickData.length) * 0.8);
+    // Draw candlesticks with proper spacing (thinner candles)
+    const candleWidth = Math.max(2, Math.min(8, (chartWidth / candlestickData.length) * 0.6));
     const spacing = chartWidth / candlestickData.length;
     
     candlestickData.forEach((candle, index) => {
@@ -281,25 +295,32 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                 ))}
               </SelectContent>
             </Select>
-            <div className="flex bg-discord-dark rounded-lg p-1">
-              <Button
-                variant={timeframe === '1h' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setTimeframe('1h')}
-                className={timeframe === '1h' ? 'bg-discord-blue text-white' : 'text-gray-400 hover:text-white'}
-                data-testid="button-timeframe-1h"
-              >
-                1시간
-              </Button>
-              <Button
-                variant={timeframe === '1d' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setTimeframe('1d')}
-                className={timeframe === '1d' ? 'bg-discord-blue text-white' : 'text-gray-400 hover:text-white'}
-                data-testid="button-timeframe-1d"
-              >
-                1일
-              </Button>
+            <div className="flex bg-discord-dark rounded-lg p-1 flex-wrap gap-1">
+              {[
+                { value: 'realtime', label: '실시간' },
+                { value: '1h', label: '1시간' },
+                { value: '6h', label: '6시간' },
+                { value: '12h', label: '12시간' },
+                { value: '1d', label: '1일' },
+                { value: '2w', label: '2주' },
+                { value: '1m', label: '1달' },
+                { value: '6m', label: '6개월' }
+              ].map((tf) => (
+                <Button
+                  key={tf.value}
+                  variant={timeframe === tf.value ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setTimeframe(tf.value)}
+                  className={`text-xs px-2 py-1 ${
+                    timeframe === tf.value 
+                      ? 'bg-discord-blue text-white' 
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                  data-testid={`button-timeframe-${tf.value}`}
+                >
+                  {tf.label}
+                </Button>
+              ))}
             </div>
           </div>
         </div>
@@ -323,16 +344,20 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                 </div>
               </div>
               <div className="text-sm text-gray-400">
-                <p>고가: ₩{candlestickData && candlestickData.length > 0 
+                <p>고가: ₩{candlestickData.length > 0 
                   ? Math.max(...candlestickData.map(d => Number(d.high))).toLocaleString() 
-                  : Number(selectedStock.price).toLocaleString()}</p>
-                <p>저가: ₩{candlestickData && candlestickData.length > 0 
+                  : currentPrice.toLocaleString()}</p>
+                <p>저가: ₩{candlestickData.length > 0 
                   ? Math.min(...candlestickData.map(d => Number(d.low))).toLocaleString() 
                   : Number(selectedStock.price).toLocaleString()}</p>
               </div>
               <div className="text-sm text-gray-400">
-                <p>거래량: 1,245,678</p>
-                <p>거래대금: ₩15.6B</p>
+                <p>거래량: {candlestickData.length > 0 
+                  ? candlestickData.reduce((sum, d) => sum + Number(d.volume || 0), 0).toLocaleString()
+                  : '0'}</p>
+                <p>거래대금: ₩{candlestickData.length > 0 
+                  ? (candlestickData.reduce((sum, d) => sum + (Number(d.close) * Number(d.volume || 0)), 0) / 1000000000).toFixed(1)
+                  : '0.0'}B</p>
               </div>
             </div>
             
