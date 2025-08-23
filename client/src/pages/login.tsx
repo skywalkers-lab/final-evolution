@@ -31,7 +31,8 @@ export default function Login() {
       <Card className="w-full max-w-md discord-card">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-gray-100 mb-2">
-            한국은행 종합 서비스센터(Bank of Korea Service Center)
+            한국은행 종합 서비스센터<br />
+            (Bank of Korea Service Center)
           </CardTitle>
           <p className="text-gray-400">
             Discord 계정으로 로그인해서 가상 경제 시스템을 이용하세요
