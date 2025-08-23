@@ -14,6 +14,7 @@ import TradingPanel from "@/components/trading/trading-panel";
 import Sidebar from "@/components/layout/sidebar";
 import TopBar from "@/components/layout/top-bar";
 import GuildSelector from "@/components/guild/guild-selector";
+import OverviewCards from "@/components/dashboard/overview-cards";
 import { useWebSocket } from "@/hooks/use-websocket";
 
 export default function TradingPage() {
@@ -28,6 +29,11 @@ export default function TradingPage() {
 
   const { data: portfolio } = useQuery({
     queryKey: ['/api/web-client/guilds', selectedGuildId, 'portfolio'],
+    enabled: !!selectedGuildId,
+  });
+
+  const { data: overview } = useQuery({
+    queryKey: ['/api/web-client/guilds', selectedGuildId, 'overview'],
     enabled: !!selectedGuildId,
   });
   
@@ -91,6 +97,9 @@ export default function TradingPage() {
               <span className="text-green-300 font-semibold">실시간 거래</span>
             </div>
           </div>
+
+          {/* Overview Statistics */}
+          <OverviewCards data={overview} portfolio={portfolio} />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* 차트 영역 */}

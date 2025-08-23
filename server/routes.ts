@@ -506,6 +506,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Web client API - Guild overview
+  app.get("/api/web-client/guilds/:guildId/overview", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      
+      console.log(`Web client overview request for guild: ${guildId}`);
+      
+      const guildSettings = await storage.getGuildSettings(guildId);
+      if (!guildSettings) {
+        return res.status(404).json({ error: "Guild not found" });
+      }
+
+      // Get portfolio total assets
+      const account = await storage.getAccountBalance(guildId, guildId);
+      const holdings = await storage.getHoldings(guildId);
+      
+      let totalAssets = Number(account?.balance || 0);
+      if (holdings && holdings.length > 0) {
+        for (const holding of holdings) {
+          const stock = await storage.getStock(holding.stockId);
+          if (stock) {
+            totalAssets += holding.quantity * Number(stock.price);
+          }
+        }
+      }
+
+      // Get transaction count (as active trades approximation)
+      const transactions = await storage.getTransactions(guildId);
+      const activeTrades = transactions ? transactions.length : 0;
+
+      // Get active auctions count
+      const auctions = await storage.getAuctions(guildId);
+      const liveAuctions = auctions ? auctions.filter(auction => auction.status === 'active').length : 0;
+
+      // Calculate tax collected (sum of all tax transactions)
+      const taxCollected = transactions 
+        ? transactions
+            .filter(t => t.type === 'tax')
+            .reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0)
+        : 0;
+
+      const response = {
+        totalAssets,
+        activeTrades,
+        liveAuctions,
+        taxCollected
+      };
+      
+      console.log(`Web client overview response:`, response);
+      
+      res.json(response);
+    } catch (error) {
+      console.error("Error fetching web client overview:", error);
+      res.status(500).json({ error: "Failed to fetch overview" });
+    }
+  });
+
   // Web client specific trade endpoint
   app.post("/api/web-client/guilds/:guildId/trades", async (req, res) => {
     try {

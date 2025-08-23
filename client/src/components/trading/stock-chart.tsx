@@ -22,6 +22,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
   const [priceChange, setPriceChange] = useState<number>(0);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [hoveredCandle, setHoveredCandle] = useState<{candle: any, x: number, y: number} | null>(null);
+  const [isRealTimeMode, setIsRealTimeMode] = useState(false);
 
   const { data: candlestickData = [] } = useQuery({
     queryKey: ['/api/web-client/guilds', guildId, 'stocks', symbol, 'candlestick', timeframe],
@@ -39,10 +40,12 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       setPriceChange(data.changePercent || 0);
       setLastUpdate(new Date());
       
-      // 캔들스틱 데이터 새로고침 (실시간 업데이트)
-      queryClient.invalidateQueries({ 
-        queryKey: ['/api/web-client/guilds', guildId, 'stocks', symbol, 'candlestick', timeframe] 
-      });
+      // 실시간 모드에서만 즉시 업데이트
+      if (isRealTimeMode) {
+        queryClient.invalidateQueries({ 
+          queryKey: ['/api/web-client/guilds', guildId, 'stocks', symbol, 'candlestick', timeframe] 
+        });
+      }
       
       drawChart();
     } else if (event === 'stock_created' && data.guildId === guildId) {
@@ -61,9 +64,31 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     }
   }, [selectedStock]);
 
+  // 실시간 모드 감지
+  useEffect(() => {
+    setIsRealTimeMode(timeframe === 'realtime' || timeframe === '1m' || timeframe === '3m' || timeframe === '5m');
+  }, [timeframe]);
+
   useEffect(() => {
     drawChart();
   }, [candlestickData, symbol]);
+
+  // 실시간 모드에서 주기적 업데이트
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (isRealTimeMode && symbol && guildId) {
+      interval = setInterval(() => {
+        queryClient.invalidateQueries({ 
+          queryKey: ['/api/web-client/guilds', guildId, 'stocks', symbol, 'candlestick', timeframe] 
+        });
+      }, timeframe === 'realtime' ? 2000 : 5000); // 실시간: 2초, 기타: 5초
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRealTimeMode, timeframe, symbol, guildId, queryClient]);
 
   // 마우스 이벤트 처리 - 수정된 버전
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -72,6 +97,12 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       setHoveredCandle(null);
       return;
     }
+    
+    // 데이터 정렬 로직을 마우스 핸들러에도 적용
+    const sortedData = candlestickData.slice().sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    const displayData = isRealTimeMode 
+      ? sortedData.slice(-100) // 최근 100개만 표시
+      : sortedData;
     
     const rect = canvas.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
@@ -94,11 +125,11 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       return;
     }
     
-    const spacing = chartWidth / candlestickData.length;
+    const spacing = chartWidth / displayData.length;
     const candleIndex = Math.floor((adjustedX - padding) / spacing);
     
-    if (candleIndex >= 0 && candleIndex < candlestickData.length) {
-      const candle = candlestickData[candleIndex];
+    if (candleIndex >= 0 && candleIndex < displayData.length) {
+      const candle = displayData[candleIndex];
       setHoveredCandle({ 
         candle, 
         x: mouseX,
@@ -132,6 +163,15 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       }
       return;
     }
+    
+    // 실시간 모드에서는 최대 100개 캔들만 표시 (오른쪽으로 밀리는 효과)
+    // 데이터는 시간 순서대로 정렬 (오래된 것부터 최신 것까지)
+    const sortedData = candlestickData.slice().sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    const displayData = isRealTimeMode 
+      ? sortedData.slice(-100) // 최근 100개만 표시
+      : sortedData;
+    
+    const dataToUse = displayData;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -148,12 +188,12 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     const chartHeight = height - 2 * padding;
 
     // Calculate price range - use consistent data source
-    const prices = candlestickData.flatMap(d => [
+    const prices = dataToUse.flatMap(d => [
       Number(d.high), Number(d.low), Number(d.open), Number(d.close)
     ]);
     
     // Include current price only if it's from live data and within reasonable range
-    if (currentPrice > 0 && candlestickData.length > 0) {
+    if (currentPrice > 0 && dataToUse.length > 0) {
       const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
       if (Math.abs(currentPrice - avgPrice) / avgPrice < 0.5) { // 50% 이내 변동만 포함
         prices.push(currentPrice);
@@ -183,10 +223,10 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     }
     
     // Draw vertical grid lines (시간선)
-    const gridSpacing = Math.ceil(candlestickData.length / 8);
-    candlestickData.forEach((_, index) => {
+    const gridSpacing = Math.ceil(dataToUse.length / 8);
+    dataToUse.forEach((_, index) => {
       if (index % gridSpacing === 0) {
-        const spacing = chartWidth / candlestickData.length;
+        const spacing = chartWidth / dataToUse.length;
         const x = padding + (index * spacing);
         ctx.beginPath();
         ctx.moveTo(x, padding);
@@ -196,10 +236,10 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     });
 
     // Draw candlesticks with improved spacing
-    const spacing = chartWidth / candlestickData.length;
-    const candleWidth = Math.max(1, Math.min(12, spacing * 0.7)); // 간격에 따라 적절한 캔들 두께
+    const spacing = chartWidth / dataToUse.length;
+    const candleWidth = Math.max(2, Math.min(16, spacing * 0.9)); // 캔들 두께를 더 두껍게 하고 간격을 좁혀서 더 촘촘하게
     
-    candlestickData.forEach((candle, index) => {
+    dataToUse.forEach((candle, index) => {
       const x = padding + (index * spacing) + spacing / 2 - candleWidth / 2;
       const open = Number(candle.open);
       const close = Number(candle.close);
@@ -300,9 +340,9 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     ctx.font = '10px Inter';
     ctx.textAlign = 'center';
     
-    const showEveryNth = Math.ceil(candlestickData.length / 8); // Show max 8 labels
-    candlestickData.forEach((candle: any, index: number) => {
-      if (index % showEveryNth === 0 || index === candlestickData.length - 1) {
+    const showEveryNth = Math.ceil(dataToUse.length / 8); // Show max 8 labels
+    dataToUse.forEach((candle: any, index: number) => {
+      if (index % showEveryNth === 0 || index === dataToUse.length - 1) {
         const x = padding + (index * spacing) + spacing / 2;
         const date = new Date(candle.timestamp);
         let timeLabel = '';
