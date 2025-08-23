@@ -3,9 +3,10 @@ import { useState, useEffect } from "react";
 
 interface OverviewCardsProps {
   data?: any;
+  portfolio?: any;
 }
 
-export default function OverviewCards({ data }: OverviewCardsProps) {
+export default function OverviewCards({ data, portfolio }: OverviewCardsProps) {
   const [stats, setStats] = useState({
     totalAssets: 0,
     activeTrades: 0,
@@ -14,15 +15,15 @@ export default function OverviewCards({ data }: OverviewCardsProps) {
   });
 
   useEffect(() => {
-    if (data) {
+    if (data || portfolio) {
       setStats({
-        totalAssets: data.totalAssets || 0,
-        activeTrades: data.activeTrades || 0,
-        liveAuctions: data.liveAuctions || 0,
-        taxCollected: data.taxCollected || 0,
+        totalAssets: portfolio?.totalValue || data?.totalAssets || 0,
+        activeTrades: data?.activeTrades || 0,
+        liveAuctions: data?.liveAuctions || 0,
+        taxCollected: data?.taxCollected || 0,
       });
     }
-  }, [data]);
+  }, [data, portfolio]);
 
   // WebSocket handler for real-time updates
   useWebSocket((event: string, data: any) => {

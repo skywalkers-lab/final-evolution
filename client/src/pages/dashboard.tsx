@@ -24,6 +24,11 @@ export default function Dashboard() {
     enabled: !!selectedGuildId,
   });
 
+  const { data: portfolio } = useQuery({
+    queryKey: ['/api/guilds', 'users', 'web-client', 'portfolio'],
+    enabled: true,
+  });
+
   const { data: stocks = [] } = useQuery({
     queryKey: ['/api/guilds', selectedGuildId, 'stocks'],
     enabled: !!selectedGuildId,
@@ -54,7 +59,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     // Set default selected stock
-    if (stocks && stocks.length > 0 && !selectedStock) {
+    if (stocks && Array.isArray(stocks) && stocks.length > 0 && !selectedStock) {
       setSelectedStock(stocks[0].symbol);
     }
   }, [stocks, selectedStock]);
@@ -85,7 +90,7 @@ export default function Dashboard() {
         
         <main className="flex-1 overflow-y-auto p-6" data-testid="dashboard-main">
           {/* Overview Cards */}
-          <OverviewCards data={overview} />
+          <OverviewCards data={overview} portfolio={portfolio} />
 
           {/* Main Dashboard Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
@@ -93,9 +98,9 @@ export default function Dashboard() {
             <div className="lg:col-span-2">
               <StockChart 
                 symbol={selectedStock} 
-                guildId={user.guildId}
+                guildId={selectedGuildId || ''}
                 onSymbolChange={setSelectedStock}
-                stocks={stocks || []}
+                stocks={Array.isArray(stocks) ? stocks : []}
               />
             </div>
 
@@ -103,15 +108,15 @@ export default function Dashboard() {
             <div>
               <TradingPanel 
                 selectedStock={selectedStock}
-                guildId={user.guildId}
-                stocks={stocks || []}
+                guildId={selectedGuildId || ''}
+                stocks={Array.isArray(stocks) ? stocks : []}
               />
             </div>
           </div>
 
           {/* Market Overview & Live Auctions */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-            <MarketOverview stocks={stocks || []} />
+            <MarketOverview stocks={Array.isArray(stocks) ? stocks : []} />
             
             <div className="discord-bg-darker rounded-xl border border-discord-dark">
               <div className="p-6 border-b border-discord-dark">
@@ -127,7 +132,7 @@ export default function Dashboard() {
               </div>
               <div className="p-6">
                 <div className="space-y-4">
-                  {auctions && auctions.length > 0 ? (
+                  {Array.isArray(auctions) && auctions.length > 0 ? (
                     auctions.slice(0, 3).map((auction: any) => (
                       <AuctionCard key={auction.id} auction={auction} />
                     ))
@@ -144,11 +149,11 @@ export default function Dashboard() {
           {/* Portfolio & Recent Activity */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2">
-              <Portfolio guildId={user.guildId} userId="web-client" />
+              <Portfolio guildId={selectedGuildId || ''} userId="web-client" />
             </div>
             
             <div>
-              <RecentActivity guildId={user.guildId} />
+              <RecentActivity guildId={selectedGuildId || ''} />
             </div>
           </div>
         </main>
