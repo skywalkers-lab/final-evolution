@@ -457,6 +457,21 @@ export class DiscordBot {
                 .setMaxValue(50)
             )
         )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('계좌삭제')
+            .setDescription('특정 사용자의 계좌를 삭제합니다 (최고관리자 전용)')
+            .addUserOption(option =>
+              option.setName('사용자')
+                .setDescription('계좌를 삭제할 사용자')
+                .setRequired(true)
+            )
+            .addStringOption(option =>
+              option.setName('확인')
+                .setDescription('"삭제확인"을 입력하세요')
+                .setRequired(true)
+            )
+        )
     ];
 
     if (this.client.application) {
@@ -1426,6 +1441,9 @@ export class DiscordBot {
         case '세율설정':
           await this.setTaxRate(interaction, guildId, userId);
           break;
+        case '계좌삭제':
+          await this.deleteUserAccount(interaction, guildId, userId);
+          break;
         default:
           await interaction.reply('알 수 없는 하위 명령입니다.');
       }
@@ -1561,6 +1579,65 @@ export class DiscordBot {
     await this.storage.removeGuildAdmin(guildId, user.id);
     
     await interaction.reply(`✅ ${targetUser.username}님의 관리자 권한을 제거했습니다.`);
+  }
+
+  private async deleteUserAccount(interaction: ChatInputCommandInteraction, guildId: string, adminUserId: string) {
+    const targetUser = interaction.options.getUser('사용자', true);
+    const confirmText = interaction.options.getString('확인', true);
+
+    // Check confirmation text
+    if (confirmText !== '삭제확인') {
+      await interaction.reply('계좌 삭제를 위해서는 "삭제확인"을 정확히 입력해야 합니다.');
+      return;
+    }
+
+    try {
+      // Get target user from database
+      const dbUser = await this.storage.getUserByDiscordId(targetUser.id);
+      if (!dbUser) {
+        await interaction.reply('해당 사용자는 시스템에 등록되지 않았습니다.');
+        return;
+      }
+
+      // Check if user has an active account
+      const hasAccount = await this.storage.hasActiveAccount(guildId, dbUser.id);
+      if (!hasAccount) {
+        await interaction.reply(`${targetUser.username}님은 현재 계좌가 없습니다.`);
+        return;
+      }
+
+      // Get account info for confirmation
+      const account = await this.storage.getAccountByUser(guildId, dbUser.id);
+      if (!account) {
+        await interaction.reply('계좌 정보를 찾을 수 없습니다.');
+        return;
+      }
+
+      // Delete the account and all related data
+      await this.storage.deleteUserAccount(guildId, dbUser.id);
+
+      await interaction.reply(
+        `✅ **계좌 삭제 완료**\n` +
+        `**사용자**: ${targetUser.username}\n` +
+        `**계좌번호**: ${account.uniqueCode}\n` +
+        `**삭제된 잔액**: ₩${Number(account.balance).toLocaleString()}\n\n` +
+        `⚠️ 이 사용자는 이제 /은행 계좌개설 명령으로 새 계좌를 다시 개설할 수 있습니다.`
+      );
+
+      // Broadcast account deletion
+      this.wsManager.broadcast('account_deleted', {
+        userId: targetUser.id,
+        username: targetUser.username,
+        accountCode: account.uniqueCode,
+        balance: account.balance
+      });
+
+    } catch (error: any) {
+      console.error('Account deletion error:', error);
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply(`계좌 삭제 실패: ${error.message}`);
+      }
+    }
   }
 
   private async handleAdminAccountCommand(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {

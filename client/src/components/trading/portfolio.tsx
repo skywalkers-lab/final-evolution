@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useWebSocket } from "@/hooks/use-websocket";
+import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 
 interface PortfolioProps {
@@ -9,6 +10,7 @@ interface PortfolioProps {
 }
 
 export default function Portfolio({ guildId, userId }: PortfolioProps) {
+  const { toast } = useToast();
   const [totalValue, setTotalValue] = useState(0);
   const [profitLoss, setProfitLoss] = useState(0);
 
@@ -17,7 +19,7 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
     enabled: !!guildId,
   });
 
-  const { data: accountData } = useQuery({
+  const { data: accountData, refetch: refetchAccount } = useQuery({
     queryKey: ['/api/web-client/guilds', guildId, 'account'],
     enabled: !!guildId,
   });
@@ -26,6 +28,19 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
   useWebSocket((event: string, data: any) => {
     if (event === 'stock_price_updated' || event === 'trade_executed') {
       refetch();
+    } else if (event === 'account_deleted') {
+      // Refetch both portfolio and account data
+      refetch();
+      refetchAccount();
+      
+      // Show notification about account deletion
+      toast({
+        title: "계좌 삭제됨",
+        description: `${data.username}님의 계좌(${data.accountCode})가 관리자에 의해 삭제되었습니다.`,
+        variant: "destructive",
+      });
+      
+      console.log('계좌가 삭제되었습니다:', data);
     }
   });
 

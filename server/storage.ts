@@ -684,6 +684,56 @@ export class DatabaseStorage implements IStorage {
       ));
   }
 
+  // Account deletion methods
+  async deleteUserAccount(guildId: string, userId: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      // Delete related data first (due to foreign keys)
+      // 1. Delete holdings
+      await tx.delete(holdings).where(
+        and(
+          eq(holdings.guildId, guildId),
+          eq(holdings.userId, userId)
+        )
+      );
+
+      // 2. Delete transactions
+      await tx.delete(transactions).where(
+        and(
+          eq(transactions.guildId, guildId),
+          or(
+            eq(transactions.fromUserId, userId),
+            eq(transactions.toUserId, userId)
+          )
+        )
+      );
+
+      // 3. Delete limit orders
+      await tx.delete(limitOrders).where(
+        and(
+          eq(limitOrders.guildId, guildId),
+          eq(limitOrders.userId, userId)
+        )
+      );
+
+      // 4. Delete the account itself
+      await tx.delete(accounts).where(
+        and(
+          eq(accounts.guildId, guildId),
+          eq(accounts.userId, userId)
+        )
+      );
+    });
+  }
+
+  async hasActiveAccount(guildId: string, userId: string): Promise<boolean> {
+    const [account] = await db.select().from(accounts)
+      .where(and(
+        eq(accounts.guildId, guildId),
+        eq(accounts.userId, userId)
+      ));
+    return !!account;
+  }
+
   async isGuildAdmin(guildId: string, discordUserId: string): Promise<boolean> {
     const [admin] = await db.select().from(guildAdmins)
       .where(and(

@@ -16,7 +16,7 @@ export default function RecentActivity({ guildId }: RecentActivityProps) {
 
   // WebSocket handler for real-time activity updates
   useWebSocket((event: string, data: any) => {
-    if (event === 'trade_executed' || event === 'transaction_completed' || event === 'auction_bid') {
+    if (event === 'trade_executed' || event === 'transaction_completed' || event === 'auction_bid' || event === 'account_deleted') {
       refetch();
       // Add to recent activities list for immediate UI update
       const newActivity = {
@@ -45,6 +45,8 @@ export default function RecentActivity({ guildId }: RecentActivityProps) {
         return { icon: 'fas fa-coins', color: 'bg-yellow-500', textColor: 'text-yellow-400' };
       case 'payroll_in':
         return { icon: 'fas fa-money-bill-wave', color: 'bg-green-500', textColor: 'text-green-400' };
+      case 'account_deleted':
+        return { icon: 'fas fa-trash-alt', color: 'bg-red-500', textColor: 'text-red-400' };
       default:
         return { icon: 'fas fa-circle', color: 'bg-gray-500', textColor: 'text-gray-400' };
     }
@@ -66,6 +68,8 @@ export default function RecentActivity({ guildId }: RecentActivityProps) {
         return '세금 납부';
       case 'payroll_in':
         return '급여 수령';
+      case 'account_deleted':
+        return '계좌 삭제됨';
       default:
         return transaction.memo || '거래';
     }

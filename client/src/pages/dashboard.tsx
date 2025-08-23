@@ -60,6 +60,11 @@ export default function Dashboard() {
         refetchOverview();
         window.location.reload(); // Reload to update stock list
         break;
+      case 'account_deleted':
+        console.log('Account deleted:', data);
+        // Refetch overview to update statistics
+        refetchOverview();
+        break;
     }
   });
 
