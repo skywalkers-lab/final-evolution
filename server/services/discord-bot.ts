@@ -815,7 +815,11 @@ export class DiscordBot {
 
       await interaction.reply(`✅ 새 주식이 생성되었습니다!\n종목코드: ${symbol}\n회사명: ${name}\n초기가격: ₩${price.toLocaleString()}`);
       
-      this.wsManager.broadcast('stock_created', stock);
+      // WebSocket으로 주식 생성 알림
+      this.wsManager.broadcast('stock_created', {
+        guildId,
+        stock
+      });
     } catch (error: any) {
       await interaction.reply(`주식 생성 실패: ${error.message}`);
     }
@@ -924,7 +928,9 @@ export class DiscordBot {
 
       await interaction.reply(`🗑️ ${stock.name} (${symbol}) 주식이 삭제되었습니다.`);
       
+      // WebSocket으로 주식 삭제 알림
       this.wsManager.broadcast('stock_deleted', {
+        guildId,
         symbol,
         name: stock.name
       });

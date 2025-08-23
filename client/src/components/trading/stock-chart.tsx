@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ interface StockChartProps {
 
 export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: StockChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const queryClient = useQueryClient();
   const [timeframe, setTimeframe] = useState('1h');
   const [chartType, setChartType] = useState<'candlestick' | 'line'>('candlestick');
   const [currentPrice, setCurrentPrice] = useState<number>(0);
@@ -28,13 +29,23 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
 
   const selectedStock = stocks.find(s => s.symbol === symbol);
 
-  // WebSocket handler for real-time price updates
+  // WebSocket handler for real-time updates
   useWebSocket((event: string, data: any) => {
     if (event === 'stock_price_updated' && data.symbol === symbol) {
       setCurrentPrice(data.newPrice);
       setPriceChange(data.changePercent);
       setLastUpdate(new Date());
       drawChart();
+    } else if (event === 'stock_created' && data.guildId === guildId) {
+      // 주식이 새로 생성되면 목록을 새로고침
+      queryClient.invalidateQueries({ queryKey: ['/api/guilds', guildId, 'stocks'] });
+    } else if (event === 'stock_deleted' && data.guildId === guildId) {
+      // 주식이 삭제되면 목록을 새로고침
+      queryClient.invalidateQueries({ queryKey: ['/api/guilds', guildId, 'stocks'] });
+      // 현재 선택된 주식이 삭제되면 선택을 해제
+      if (data.symbol === symbol) {
+        onSymbolChange('');
+      }
     }
   });
 
@@ -324,11 +335,14 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                     >
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart
-                          data={candlestickData.map((item: any, index: number) => ({
-                            time: `${index + 1}`,
+                          data={candlestickData && candlestickData.length > 0 ? candlestickData.map((item: any, index: number) => ({
+                            time: new Date(item.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
                             price: Number(item.close),
+                            open: Number(item.open),
+                            high: Number(item.high),
+                            low: Number(item.low),
                             change: index > 0 ? Number(item.close) - Number(candlestickData[index - 1].close) : 0
-                          }))}
+                          })) : []}
                           margin={{
                             top: 20,
                             right: 30,
@@ -360,14 +374,18 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                             dataKey="price" 
                             stroke={priceChange >= 0 ? '#ef4444' : '#3b82f6'}
                             strokeWidth={2}
+                            connectNulls={true}
                             dot={{
                               fill: priceChange >= 0 ? '#ef4444' : '#3b82f6',
-                              strokeWidth: 0,
-                              r: 3
+                              strokeWidth: 1,
+                              r: 4,
+                              stroke: '#ffffff'
                             }}
                             activeDot={{ 
-                              r: 5, 
-                              fill: priceChange >= 0 ? '#ef4444' : '#3b82f6'
+                              r: 6, 
+                              fill: priceChange >= 0 ? '#ef4444' : '#3b82f6',
+                              stroke: '#ffffff',
+                              strokeWidth: 2
                             }}
                           />
                         </LineChart>
