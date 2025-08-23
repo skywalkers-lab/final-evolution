@@ -1,31 +1,85 @@
 import { useAuth } from "@/hooks/use-auth";
+import { useLocation } from "wouter";
+import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import Sidebar from "@/components/layout/sidebar";
+import TopBar from "@/components/layout/top-bar";
 
 export default function TaxPage() {
-  const { user, selectedGuildId } = useAuth();
+  const { user, selectedGuildId, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
 
-  const taxData = {
+  // 실제 길드 설정 데이터 가져오기
+  const { data: guildSettings } = useQuery({
+    queryKey: ['/api/guilds', selectedGuildId, 'settings'],
+    enabled: !!selectedGuildId,
+  });
+
+  // 실제 계좌 데이터 가져오기
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['/api/guilds', selectedGuildId, 'accounts'],
+    enabled: !!selectedGuildId,
+  });
+
+  // 실제 거래 내역 데이터 가져오기
+  const { data: transactions = [] } = useQuery({
+    queryKey: ['/api/guilds', selectedGuildId, 'transactions'],
+    enabled: !!selectedGuildId,
+  });
+
+  useEffect(() => {
+    if (!isLoading && !user) {
+      setLocation("/login");
+    }
+  }, [user, isLoading, setLocation]);
+
+  // 실제 데이터를 기반으로 세금 계산
+  const calculateTaxData = () => {
+    const accountList = Array.isArray(accounts) ? accounts : [];
+    const totalBalance = accountList.reduce((sum: number, acc: any) => sum + Number(acc.balance || 0), 0);
+    const taxRate = Number((guildSettings as any)?.taxRate || 15);
+    const estimatedTax = Math.floor(totalBalance * (taxRate / 100));
+
+    return {
+      currentMonth: {
+        totalIncome: totalBalance,
+        taxableIncome: totalBalance,
+        taxRate,
+        estimatedTax,
+        paidTax: 0,
+        dueDate: "매월 말일"
+      },
+      previousMonths: [
+        { month: "이전 징수 기록", income: 0, tax: 0, status: "없음" },
+      ],
+      yearlyStats: {
+        totalIncome: totalBalance,
+        totalTax: estimatedTax,
+        averageRate: taxRate,
+        nextDue: estimatedTax
+      }
+    };
+  };
+
+  const taxData = selectedGuildId ? calculateTaxData() : {
     currentMonth: {
-      totalIncome: 1500000,
-      taxableIncome: 1200000,
-      taxRate: 15,
-      estimatedTax: 180000,
+      totalIncome: 0,
+      taxableIncome: 0,
+      taxRate: 0,
+      estimatedTax: 0,
       paidTax: 0,
-      dueDate: "2025년 2월 말"
+      dueDate: "서버를 선택하세요"
     },
-    previousMonths: [
-      { month: "2024년 12월", income: 2000000, tax: 300000, status: "완납" },
-      { month: "2024년 11월", income: 1800000, tax: 270000, status: "완납" },
-      { month: "2024년 10월", income: 1600000, tax: 240000, status: "완납" },
-    ],
+    previousMonths: [],
     yearlyStats: {
-      totalIncome: 18000000,
-      totalTax: 2700000,
-      averageRate: 15,
-      nextDue: 180000
+      totalIncome: 0,
+      totalTax: 0,
+      averageRate: 0,
+      nextDue: 0
     }
   };
 
@@ -37,8 +91,33 @@ export default function TaxPage() {
     }
   };
 
+  if (isLoading) {
+    return <div className="flex items-center justify-center min-h-screen">로딩 중...</div>;
+  }
+
+  if (!selectedGuildId) {
+    return (
+      <div className="flex min-h-screen discord-bg">
+        <Sidebar />
+        <div className="flex-1 flex flex-col">
+          <TopBar />
+          <div className="flex-1 p-6 flex items-center justify-center">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-white mb-4">서버를 선택하세요</h2>
+              <p className="text-gray-400">좌측 사이드바에서 서버를 선택하여 세금 관리를 시작하세요.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex-1 p-6 space-y-6">
+    <div className="flex min-h-screen discord-bg">
+      <Sidebar />
+      <div className="flex-1 flex flex-col">
+        <TopBar />
+        <div className="flex-1 p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white">세금 관리</h1>
@@ -126,7 +205,7 @@ export default function TaxPage() {
                   </div>
                   <div className="text-right">
                     <div className="text-white font-medium">₩{record.tax.toLocaleString()}</div>
-                    <Badge variant="outline" className={getStatusColor(record.status)} size="sm">
+                    <Badge variant="outline" className={getStatusColor(record.status)}>
                       {record.status}
                     </Badge>
                   </div>
@@ -221,6 +300,8 @@ export default function TaxPage() {
           </div>
         </CardContent>
       </Card>
+        </div>
+      </div>
     </div>
   );
 }

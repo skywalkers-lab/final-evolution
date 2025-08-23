@@ -219,6 +219,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ message: "Logged out successfully" });
   });
 
+  // Get all accounts for a guild (for tax calculations)
+  app.get("/api/guilds/:guildId/accounts", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const accounts = await storage.getAccountsByGuild(guildId);
+      res.json(accounts);
+    } catch (error) {
+      console.error('Error fetching guild accounts:', error);
+      res.status(500).json({ message: "Failed to fetch accounts" });
+    }
+  });
+
   // Admin auth routes (guild password)
   app.post("/api/auth/admin-login", async (req, res) => {
     try {

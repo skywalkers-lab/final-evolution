@@ -356,6 +356,16 @@ export class DiscordBot {
             )
         ),
 
+      // Factory reset command
+      new SlashCommandBuilder()
+        .setName('공장초기화')
+        .setDescription('모든 사용자 데이터를 초기화합니다 (관리자 전용)')
+        .addStringOption(option =>
+          option.setName('확인')
+            .setDescription('"초기화확인"을 입력하세요')
+            .setRequired(true)
+        ),
+
       // Auction commands
       new SlashCommandBuilder()
         .setName('경매')
@@ -587,6 +597,9 @@ export class DiscordBot {
           break;
         case '세금집계':
           await this.handleTaxSummaryCommand(interaction, guildId, user.id);
+          break;
+        case '공장초기화':
+          await this.handleFactoryResetCommand(interaction, guildId, user.id);
           break;
         default:
           await interaction.reply('알 수 없는 명령입니다.');
@@ -1925,5 +1938,49 @@ export class DiscordBot {
       owner: guildId,
       visibility: 'public' // 로고는 공개적으로 접근 가능
     });
+  }
+
+  private async handleFactoryResetCommand(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
+    const isAdmin = await this.isAdmin(guildId, userId);
+    if (!isAdmin) {
+      await interaction.reply('이 명령은 관리자만 사용할 수 있습니다.');
+      return;
+    }
+
+    const confirmation = interaction.options.getString('확인', true);
+    if (confirmation !== '초기화확인') {
+      await interaction.reply('⚠️ 확인 문구가 올바르지 않습니다. "초기화확인"을 정확히 입력해주세요.');
+      return;
+    }
+
+    try {
+      // 모든 데이터 초기화 - 순서가 중요 (외래 키 제약조건 때문)
+      await this.storage.resetAllAccounts(guildId);
+      
+      let reply = '🏭 **공장 초기화 완료!**\n\n';
+      reply += '✅ 초기화된 항목:\n';
+      reply += '• 모든 사용자 계좌 및 잔액\n';
+      reply += '• 모든 주식 보유량\n';
+      reply += '• 모든 거래 내역\n';
+      reply += '• 모든 경매 데이터\n';
+      reply += '• 모든 뉴스 분석 데이터\n';
+      reply += '• 모든 캔들스틱 차트 데이터\n\n';
+      reply += '⚡ **새로운 시작을 위해 모든 데이터가 초기화되었습니다!**\n';
+      reply += '🏦 **한국은행 종합서비스센터**';
+
+      await interaction.reply(reply);
+
+      // WebSocket으로 초기화 알림
+      this.wsManager.broadcast('factory_reset', {
+        guildId,
+        resetBy: userId,
+        timestamp: new Date()
+      });
+
+      console.log(`Factory reset performed in guild ${guildId} by user ${userId}`);
+    } catch (error: any) {
+      await interaction.reply(`공장 초기화 실패: ${error.message}`);
+      console.error('Factory reset error:', error);
+    }
   }
 }
