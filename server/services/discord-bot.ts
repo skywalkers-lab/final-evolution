@@ -20,6 +20,10 @@ export class DiscordBot {
     return Array.from(this.botGuildIds);
   }
 
+  isReady(): boolean {
+    return this.client.isReady();
+  }
+
   async start() {
     const token = process.env.DISCORD_BOT_TOKEN;
     if (!token) {

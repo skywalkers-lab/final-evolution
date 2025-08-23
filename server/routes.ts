@@ -186,6 +186,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Filter to only include guilds where bot is present
       const botGuildIds = global.discordBot ? global.discordBot.getBotGuildIds() : [];
+      console.log('User guilds:', userGuilds.map((g: any) => ({ id: g.id, name: g.name })));
+      console.log('Bot guild IDs:', botGuildIds);
+      
       const commonGuilds = userGuilds.filter((guild: any) => botGuildIds.includes(guild.id));
       
       res.json(commonGuilds.map((guild: any) => ({
@@ -199,6 +202,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error fetching guilds:', error);
       res.status(500).json({ message: "Failed to fetch guilds" });
     }
+  });
+
+  // Debug endpoint to check bot guilds
+  app.get("/api/debug/bot-guilds", (req, res) => {
+    const botGuildIds = global.discordBot ? global.discordBot.getBotGuildIds() : [];
+    res.json({
+      botGuildIds,
+      botConnected: !!global.discordBot,
+      clientReady: global.discordBot?.isReady() || false
+    });
   });
 
   app.post("/auth/logout", (req, res) => {
