@@ -501,7 +501,7 @@ export class DiscordBot {
           if (guilds.size === 0) {
             console.log('No guilds in cache, fetching from API...');
             try {
-              guilds = await this.client.guilds.fetch();
+              guilds = await this.client.guilds.fetch() as any;
             } catch (fetchError) {
               console.error('Error fetching guilds from API:', fetchError);
               guilds = this.client.guilds.cache; // Fallback to cache
@@ -513,7 +513,7 @@ export class DiscordBot {
           });
           
           console.log(`Bot is in ${this.botGuildIds.size} guilds:`);
-          for (const guildId of this.botGuildIds) {
+          for (const guildId of Array.from(this.botGuildIds)) {
             try {
               const guild = this.client.guilds.cache.get(guildId);
               if (guild) {
@@ -1249,7 +1249,7 @@ export class DiscordBot {
       }
 
       // Check if anyone holds this stock
-      const holdings = await this.storage.getHoldingsByStock?.(guildId, symbol);
+      const holdings = await this.storage.getHoldingsByStock(guildId, symbol);
       if (holdings && holdings.length > 0) {
         const totalHolders = holdings.filter(h => h.shares > 0).length;
         if (totalHolders > 0) {
@@ -1286,7 +1286,7 @@ export class DiscordBot {
       const statusIcon = stock.status === 'active' ? '🟢' : 
                         stock.status === 'halted' ? '🟡' : '🔴';
       
-      await interaction.reply(`${statusIcon} **${stock.name} (${symbol})**\n가격: ₩${Number(stock.price).toLocaleString()}\n상태: ${this.getStatusText(stock.status)}`);
+      await interaction.reply(`${statusIcon} **${stock.name} (${symbol})**\n가격: ₩${Number(stock.price).toLocaleString()}\n상태: ${this.getStatusText(stock.status || 'active')}`);
     } catch (error) {
       await interaction.reply('주가 조회 중 오류가 발생했습니다.');
     }

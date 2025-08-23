@@ -56,6 +56,7 @@ export interface IStorage {
   // Holdings and stock transactions
   getHolding(guildId: string, userId: string, symbol: string): Promise<Holding | undefined>;
   getHoldingsByUser(guildId: string, userId: string): Promise<Holding[]>;
+  getHoldingsByStock(guildId: string, symbol: string): Promise<Holding[]>;
   updateHolding(guildId: string, userId: string, symbol: string, shares: number, avgPrice: number): Promise<void>;
   getStockTransactionsByUser(guildId: string, userId: string): Promise<StockTransaction[]>;
   executeTrade(guildId: string, userId: string, symbol: string, type: 'buy' | 'sell', shares: number, price: number): Promise<StockTransaction>;
@@ -111,6 +112,7 @@ export interface IStorage {
 
   // Audit logs
   addAuditLog(log: InsertAuditLog): Promise<AuditLog>;
+  createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
 
   // Limit orders
   createLimitOrder(limitOrder: InsertLimitOrder): Promise<LimitOrder>;
@@ -356,6 +358,11 @@ export class DatabaseStorage implements IStorage {
   async getHoldingsByUser(guildId: string, userId: string): Promise<Holding[]> {
     return await db.select().from(holdings)
       .where(and(eq(holdings.guildId, guildId), eq(holdings.userId, userId)));
+  }
+
+  async getHoldingsByStock(guildId: string, symbol: string): Promise<Holding[]> {
+    return await db.select().from(holdings)
+      .where(and(eq(holdings.guildId, guildId), eq(holdings.symbol, symbol)));
   }
 
   async updateHolding(guildId: string, userId: string, symbol: string, shares: number, avgPrice: number): Promise<void> {
@@ -902,6 +909,10 @@ export class DatabaseStorage implements IStorage {
   async addAuditLog(log: InsertAuditLog): Promise<AuditLog> {
     const [result] = await db.insert(auditLogs).values(log).returning();
     return result;
+  }
+
+  async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
+    return await this.addAuditLog(log);
   }
 
   // Limit order methods
