@@ -378,37 +378,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { guildId } = req.params;
       console.log(`Web client portfolio request for guild: ${guildId}`);
       
-      // Get actual account data
-      let account;
-      let user;
-      try {
-        // First ensure web-client user exists
-        user = await storage.getUserByDiscordId('web-client');
-        if (!user) {
-          user = await storage.createUser({
-            discordId: 'web-client',
-            username: 'Web Client',
-            discriminator: '0000',
-            avatar: null
-          });
+      // Get all accounts for this guild to show the most recent one (for demo purposes)
+      const accounts = await storage.getAccountsByGuild(guildId);
+      let account = null;
+      let user = null;
+      
+      if (accounts.length > 0) {
+        // Get the most recently created account (latest user)
+        account = accounts[accounts.length - 1];
+        user = await storage.getUser(account.userId);
+      }
+      
+      // If no accounts exist, create a demo web-client account
+      if (!account) {
+        try {
+          // First ensure web-client user exists
+          user = await storage.getUserByDiscordId('web-client');
+          if (!user) {
+            user = await storage.createUser({
+              discordId: 'web-client',
+              username: 'Web Client',
+              discriminator: '0000',
+              avatar: null
+            });
+          }
+          
+          account = await storage.getAccountByUser(guildId, user.id);
+          if (!account) {
+            account = await storage.createAccount({
+              guildId,
+              userId: user.id,
+              balance: '1000000',
+              uniqueCode: Math.floor(1000 + Math.random() * 9000).toString()
+            });
+          }
+        } catch (error) {
+          console.error('Error getting web client portfolio:', error);
+          throw error;
         }
-        
-        account = await storage.getAccountByUser(guildId, user.id);
-        if (!account) {
-          account = await storage.createAccount({
-            guildId,
-            userId: user.id,
-            balance: '1000000',
-            uniqueCode: Math.floor(1000 + Math.random() * 9000).toString()
-          });
-        }
-      } catch (error) {
-        console.error('Error getting web client portfolio:', error);
-        throw error;
       }
       
       // Get holdings from database and enrich with current prices
-      const holdings = await storage.getHoldingsByUser(guildId, user.id);
+      const holdings = await storage.getHoldingsByUser(guildId, user!.id);
       const enrichedHoldings = [];
       let stocksValue = 0;
       
@@ -657,9 +668,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`Web client overview request for guild: ${guildId}`);
       
-      const guildSettings = await storage.getGuildSettings(guildId);
+      // Get or create guild settings
+      let guildSettings = await storage.getGuildSettings(guildId);
       if (!guildSettings) {
-        return res.status(404).json({ error: "Guild not found" });
+        // Auto-create guild settings for new servers
+        const hashedPassword = await require('bcrypt').hash(Math.random().toString(36).substring(2, 15), 10);
+        guildSettings = await storage.createGuildSettings({
+          guildId,
+          taxRate: '0.02', // Default 2% tax rate
+          adminPassword: hashedPassword, // Hashed random default password
+          employerRoleId: null
+        });
+        console.log(`Auto-created guild settings for guild: ${guildId}`);
       }
 
       // Get portfolio total assets

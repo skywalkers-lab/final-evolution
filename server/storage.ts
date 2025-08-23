@@ -76,6 +76,7 @@ export interface IStorage {
 
   // Guild settings
   getGuildSettings(guildId: string): Promise<GuildSettings | undefined>;
+  createGuildSettings(settings: InsertGuildSettings): Promise<GuildSettings>;
   updateGuildSettings(guildId: string, updates: Partial<GuildSettings>): Promise<GuildSettings>;
   updateGuildSetting(guildId: string, key: string, value: any): Promise<void>;
   getAllGuilds(): Promise<{ guildId: string }[]>;
@@ -622,6 +623,13 @@ export class DatabaseStorage implements IStorage {
     const [settings] = await db.select().from(guildSettings)
       .where(eq(guildSettings.guildId, guildId));
     return settings || undefined;
+  }
+
+  async createGuildSettings(settings: InsertGuildSettings): Promise<GuildSettings> {
+    const [result] = await db.insert(guildSettings)
+      .values(settings)
+      .returning();
+    return result;
   }
 
   async updateGuildSettings(guildId: string, updates: Partial<GuildSettings>): Promise<GuildSettings> {
