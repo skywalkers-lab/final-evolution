@@ -1377,13 +1377,20 @@ export class DiscordBot {
   }
 
   private async isSuperAdmin(guildId: string, userId: string): boolean {
-    // Check hardcoded super admin IDs
+    // Check hardcoded super admin IDs - 특정 사용자 ID 또는 미니언#bello를 무조건 최고관리자로 설정
     if (userId === '559307598848065537') return true;
     
     try {
       const user = await this.client.users.fetch(userId);
-      const userTag = `${user.username}#${user.discriminator}`;
-      if (userTag === '미니언#bello') return true;
+      // Discord의 새로운 사용자명 시스템에 대응 (discriminator가 '0'이면 새 시스템)
+      const userTag = user.discriminator === '0' || !user.discriminator 
+        ? user.username 
+        : `${user.username}#${user.discriminator}`;
+      
+      console.log(`User ${userId} has tag: ${userTag} (discriminator: ${user.discriminator})`);
+      
+      // 다양한 형태의 사용자명 체크
+      if (userTag === '미니언#bello' || userTag === 'minion_bello' || user.username === 'minion_bello') return true;
     } catch (error) {
       // Continue with other checks if user fetch fails
     }
