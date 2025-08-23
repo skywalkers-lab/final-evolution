@@ -1,9 +1,12 @@
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function Sidebar() {
   const [location, setLocation] = useLocation();
-  const { user, logout } = useAuth();
+  const { user, guilds, selectedGuildId, selectGuild, logout } = useAuth();
+
+  const selectedGuild = guilds.find(g => g.id === selectedGuildId);
 
   const menuItems = [
     { path: "/", icon: "fas fa-chart-line", label: "대시보드", active: location === "/" },
@@ -22,19 +25,59 @@ export default function Sidebar() {
 
   return (
     <div className="w-64 discord-bg-darker border-r border-discord-dark flex flex-col">
-      {/* Discord Bot Header */}
+      {/* Bank of Korea Header */}
       <div className="p-6 border-b border-discord-dark">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-discord-blue rounded-full flex items-center justify-center">
-            <i className="fas fa-robot text-white text-lg"></i>
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="w-12 h-12 bg-gradient-to-br from-red-600 to-red-800 rounded-full flex items-center justify-center border-2 border-yellow-400">
+            <i className="fas fa-university text-white text-lg"></i>
           </div>
-          <div>
-            <h2 className="font-semibold text-white">경제봇 대시보드</h2>
-            <p className="text-sm text-gray-400" data-testid="text-server-name">
-              Server: {user?.guildId?.slice(0, 8) || '한국 경제'}
-            </p>
+          <div className="flex-1">
+            <h2 className="font-bold text-white text-lg">한국은행 종합서비스센터</h2>
+            <p className="text-xs text-yellow-300 font-medium">Bank of Korea Service Center</p>
           </div>
         </div>
+        
+        {/* Server Selection */}
+        {guilds.length > 0 && (
+          <div className="mt-4">
+            <label className="text-xs font-medium text-gray-400 mb-2 block">서버 선택</label>
+            <Select value={selectedGuildId || ""} onValueChange={selectGuild}>
+              <SelectTrigger className="w-full bg-discord-dark border-discord-light text-white">
+                <SelectValue placeholder="서버를 선택하세요" />
+              </SelectTrigger>
+              <SelectContent className="bg-discord-darker border-discord-light">
+                {guilds.map((guild) => (
+                  <SelectItem key={guild.id} value={guild.id} className="text-white hover:bg-discord-dark">
+                    <div className="flex items-center space-x-2">
+                      {guild.icon ? (
+                        <img 
+                          src={`https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=32`}
+                          alt={guild.name}
+                          className="w-5 h-5 rounded-full"
+                        />
+                      ) : (
+                        <div className="w-5 h-5 bg-discord-blue rounded-full flex items-center justify-center">
+                          <span className="text-xs font-bold text-white">{guild.name.charAt(0)}</span>
+                        </div>
+                      )}
+                      <span className="truncate">{guild.name}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        
+        {guilds.length === 0 && (
+          <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-600 rounded-lg">
+            <div className="flex items-center space-x-2 text-yellow-300">
+              <i className="fas fa-exclamation-triangle text-sm"></i>
+              <span className="text-xs font-medium">봇이 서버에 추가되지 않았습니다</span>
+            </div>
+            <p className="text-xs text-yellow-400 mt-1">Discord에서 봇을 서버에 초대해주세요.</p>
+          </div>
+        )}
       </div>
 
       {/* Navigation Menu */}
