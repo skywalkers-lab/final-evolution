@@ -454,13 +454,13 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
               </div>
             </div>
 
-            <div className="h-80 bg-discord-dark rounded-lg">
+            <div className="h-96 bg-discord-dark rounded-lg">
               {chartType === 'candlestick' ? (
                 <div className="w-full h-full flex items-center justify-center">
                   <canvas 
                     ref={canvasRef} 
-                    width={800} 
-                    height={320} 
+                    width={1200} 
+                    height={600} 
                     className="max-w-full max-h-full"
                     data-testid="canvas-stock-chart"
                   />

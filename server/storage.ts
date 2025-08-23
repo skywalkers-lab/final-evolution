@@ -29,6 +29,7 @@ export interface IStorage {
   createAccount(account: InsertAccount): Promise<Account>;
   updateBalance(accountId: string, amount: number): Promise<void>;
   freezeAccount(accountId: string, frozen: boolean): Promise<void>;
+  suspendAccountTrading(guildId: string, userId: string, suspended: boolean): Promise<void>;
   resetAllAccounts(guildId: string): Promise<void>;
 
   // Transactions
@@ -161,6 +162,12 @@ export class DatabaseStorage implements IStorage {
 
   async freezeAccount(accountId: string, frozen: boolean): Promise<void> {
     await db.update(accounts).set({ frozen }).where(eq(accounts.id, accountId));
+  }
+
+  async suspendAccountTrading(guildId: string, userId: string, suspended: boolean): Promise<void> {
+    await db.update(accounts)
+      .set({ tradingSuspended: suspended })
+      .where(and(eq(accounts.guildId, guildId), eq(accounts.userId, userId)));
   }
 
   async resetAllAccounts(guildId: string): Promise<void> {

@@ -58,6 +58,7 @@ export const accounts = pgTable("accounts", {
   uniqueCode: varchar("unique_code").notNull(),
   balance: decimal("balance", { precision: 15, scale: 2 }).default("1000000"), // Default 1M won
   frozen: boolean("frozen").default(false),
+  tradingSuspended: boolean("trading_suspended").default(false),
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
 });
 

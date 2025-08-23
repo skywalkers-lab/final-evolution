@@ -236,6 +236,51 @@ export class DiscordBot {
             )
         ),
 
+      // Admin account management
+      new SlashCommandBuilder()
+        .setName('관리자계좌')
+        .setDescription('계좌 관리 기능 (관리자 전용)')
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('거래중지')
+            .setDescription('특정 사용자의 거래를 중지합니다 (관리자 전용)')
+            .addUserOption(option =>
+              option.setName('사용자')
+                .setDescription('거래를 중지할 사용자')
+                .setRequired(true)
+            )
+            .addStringOption(option =>
+              option.setName('사유')
+                .setDescription('중지 사유')
+                .setRequired(false)
+            )
+        )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('거래재개')
+            .setDescription('특정 사용자의 거래를 재개합니다 (관리자 전용)')
+            .addUserOption(option =>
+              option.setName('사용자')
+                .setDescription('거래를 재개할 사용자')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('거래내역')
+            .setDescription('특정 사용자의 거래내역을 조회합니다 (관리자 전용)')
+            .addUserOption(option =>
+              option.setName('사용자')
+                .setDescription('거래내역을 조회할 사용자')
+                .setRequired(true)
+            )
+            .addIntegerOption(option =>
+              option.setName('개수')
+                .setDescription('조회할 거래 개수 (기본값: 10개)')
+                .setRequired(false)
+            )
+        ),
+
       // Chart commands
       new SlashCommandBuilder()
         .setName('차트')
@@ -433,6 +478,9 @@ export class DiscordBot {
           break;
         case '관리자설정':
           await this.handleAdminManagementCommand(interaction, guildId, user.id);
+          break;
+        case '관리자계좌':
+          await this.handleAdminAccountCommand(interaction, guildId, user.id);
           break;
         default:
           await interaction.reply('알 수 없는 명령입니다.');
@@ -1241,6 +1289,162 @@ export class DiscordBot {
     await this.storage.removeGuildAdmin(guildId, user.id);
     
     await interaction.reply(`✅ ${targetUser.username}님의 관리자 권한을 제거했습니다.`);
+  }
+
+  private async handleAdminAccountCommand(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
+    const isAdmin = await this.isAdmin(guildId, userId);
+    if (!isAdmin) {
+      await interaction.reply('이 명령은 관리자만 사용할 수 있습니다.');
+      return;
+    }
+
+    const subcommand = interaction.options.getSubcommand();
+    
+    try {
+      switch (subcommand) {
+        case '거래중지':
+          await this.suspendUserTrading(interaction, guildId, userId);
+          break;
+        case '거래재개':
+          await this.resumeUserTrading(interaction, guildId, userId);
+          break;
+        case '거래내역':
+          await this.getUserTradingHistory(interaction, guildId, userId);
+          break;
+      }
+    } catch (error: any) {
+      await interaction.reply(`계좌 관리 작업 실패: ${error.message}`);
+    }
+  }
+
+  private async suspendUserTrading(interaction: ChatInputCommandInteraction, guildId: string, adminUserId: string) {
+    const targetUser = interaction.options.getUser('사용자', true);
+    const reason = interaction.options.getString('사유') || '관리자 조치';
+
+    // Get target user from database
+    let user = await this.storage.getUserByDiscordId(targetUser.id);
+    if (!user) {
+      user = await this.storage.createUser({
+        discordId: targetUser.id,
+        username: targetUser.username,
+        discriminator: targetUser.discriminator || '0',
+        avatar: targetUser.avatar,
+      });
+    }
+
+    // Check if account exists
+    const account = await this.storage.getAccountByUser(guildId, user.id);
+    if (!account) {
+      await interaction.reply('해당 사용자의 계좌를 찾을 수 없습니다.');
+      return;
+    }
+
+    // Suspend trading
+    await this.storage.suspendAccountTrading(guildId, user.id, true);
+
+    // Add audit log
+    await this.storage.addAuditLog({
+      guildId,
+      actorId: adminUserId,
+      action: 'suspend_trading',
+      targetType: 'user',
+      targetId: user.id,
+      details: `거래 중지 - ${reason}`,
+    });
+
+    await interaction.reply(`✅ ${targetUser.username}님의 거래가 중지되었습니다.\n사유: ${reason}`);
+  }
+
+  private async resumeUserTrading(interaction: ChatInputCommandInteraction, guildId: string, adminUserId: string) {
+    const targetUser = interaction.options.getUser('사용자', true);
+
+    // Get target user from database
+    const user = await this.storage.getUserByDiscordId(targetUser.id);
+    if (!user) {
+      await interaction.reply('해당 사용자의 계좌를 찾을 수 없습니다.');
+      return;
+    }
+
+    // Check if account exists
+    const account = await this.storage.getAccountByUser(guildId, user.id);
+    if (!account) {
+      await interaction.reply('해당 사용자의 계좌를 찾을 수 없습니다.');
+      return;
+    }
+
+    // Resume trading
+    await this.storage.suspendAccountTrading(guildId, user.id, false);
+
+    // Add audit log
+    await this.storage.addAuditLog({
+      guildId,
+      actorId: adminUserId,
+      action: 'resume_trading',
+      targetType: 'user',
+      targetId: user.id,
+      details: '거래 재개',
+    });
+
+    await interaction.reply(`✅ ${targetUser.username}님의 거래가 재개되었습니다.`);
+  }
+
+  private async getUserTradingHistory(interaction: ChatInputCommandInteraction, guildId: string, adminUserId: string) {
+    const targetUser = interaction.options.getUser('사용자', true);
+    const limit = interaction.options.getInteger('개수') || 10;
+
+    // Get target user from database
+    const user = await this.storage.getUserByDiscordId(targetUser.id);
+    if (!user) {
+      await interaction.reply('해당 사용자를 찾을 수 없습니다.');
+      return;
+    }
+
+    // Get trading history
+    const transactions = await this.storage.getTransactionsByUser(guildId, user.id, limit);
+    const stockTransactions = await this.storage.getStockTransactionsByUser(guildId, user.id);
+
+    if (transactions.length === 0 && stockTransactions.length === 0) {
+      await interaction.reply(`${targetUser.username}님의 거래내역이 없습니다.`);
+      return;
+    }
+
+    let content = `**${targetUser.username}님의 거래내역**\n\n`;
+    
+    // Recent transactions
+    if (transactions.length > 0) {
+      content += '**💰 계좌 거래내역:**\n';
+      transactions.slice(0, 10).forEach(tx => {
+        const date = new Date(tx.createdAt).toLocaleDateString('ko-KR');
+        const typeMap: { [key: string]: string } = {
+          'transfer_in': '입금',
+          'transfer_out': '출금',
+          'admin_deposit': '관리자 입금',
+          'admin_withdraw': '관리자 출금',
+          'stock_buy': '주식 매수',
+          'stock_sell': '주식 매도',
+          'tax': '세금',
+        };
+        const typeText = typeMap[tx.type] || tx.type;
+        const amount = Number(tx.amount);
+        const sign = amount >= 0 ? '+' : '';
+        content += `• ${date} ${typeText}: ${sign}₩${amount.toLocaleString()}\n`;
+      });
+      content += '\n';
+    }
+
+    // Recent stock transactions
+    if (stockTransactions.length > 0) {
+      content += '**📈 주식 거래내역:**\n';
+      stockTransactions.slice(0, 10).forEach(tx => {
+        const date = new Date(tx.createdAt).toLocaleDateString('ko-KR');
+        const typeText = tx.type === 'buy' ? '매수' : '매도';
+        const price = Number(tx.price);
+        const totalAmount = Number(tx.totalAmount);
+        content += `• ${date} ${tx.symbol} ${typeText}: ${tx.shares}주 @ ₩${price.toLocaleString()} (총 ₩${totalAmount.toLocaleString()})\n`;
+      });
+    }
+
+    await interaction.reply(content);
   }
 
   private async listAdmins(interaction: ChatInputCommandInteraction, guildId: string) {
