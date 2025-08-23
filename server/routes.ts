@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { insertUserSchema, insertGuildSettingsSchema } from "@shared/schema";
 import bcrypt from "bcrypt";
+import axios from "axios";
 import { TradingEngine } from "./services/trading-engine";
 import { AuctionManager } from "./services/auction-manager";
 import { TaxScheduler } from "./services/tax-scheduler";
@@ -50,8 +51,157 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  // Auth routes
-  app.post("/api/auth/login", async (req, res) => {
+  // Discord OAuth routes
+  app.get("/auth/discord", (req, res) => {
+    const clientId = process.env.DISCORD_CLIENT_ID;
+    const redirectUri = `${req.protocol}://${req.get('host')}/auth/discord/callback`;
+    const scopes = "identify guilds";
+    
+    const authUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}`;
+    
+    res.redirect(authUrl);
+  });
+
+  app.get("/auth/discord/callback", async (req, res) => {
+    try {
+      const { code } = req.query;
+      
+      if (!code) {
+        return res.redirect("/?error=no_code");
+      }
+
+      const clientId = process.env.DISCORD_CLIENT_ID;
+      const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+      const redirectUri = `${req.protocol}://${req.get('host')}/auth/discord/callback`;
+
+      // Exchange code for token
+      const tokenResponse = await axios.post('https://discord.com/api/oauth2/token', {
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'authorization_code',
+        code: code,
+        redirect_uri: redirectUri,
+      }, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      });
+
+      const { access_token } = tokenResponse.data;
+
+      // Get user info
+      const userResponse = await axios.get('https://discord.com/api/users/@me', {
+        headers: {
+          Authorization: `Bearer ${access_token}`
+        }
+      });
+
+      const discordUser = userResponse.data;
+
+      // Create/update user in database
+      let user = await storage.getUserByDiscordId(discordUser.id);
+      if (!user) {
+        user = await storage.createUser({
+          discordId: discordUser.id,
+          username: discordUser.username,
+          discriminator: discordUser.discriminator || '0',
+          avatar: discordUser.avatar
+        });
+      }
+
+      // Store session info
+      const sessionToken = Buffer.from(JSON.stringify({
+        userId: user.id,
+        discordId: discordUser.id,
+        username: discordUser.username,
+        discriminator: discordUser.discriminator || '0',
+        avatar: discordUser.avatar,
+        accessToken: access_token
+      })).toString('base64');
+
+      // Set session cookie and redirect
+      res.cookie('session_token', sessionToken, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 }); // 7 days
+      res.redirect('/');
+    } catch (error) {
+      console.error('Discord OAuth error:', error);
+      res.redirect('/?error=auth_failed');
+    }
+  });
+
+  app.get("/api/me", async (req, res) => {
+    try {
+      const sessionToken = req.cookies.session_token;
+      if (!sessionToken) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const sessionData = JSON.parse(Buffer.from(sessionToken, 'base64').toString());
+      
+      // Check if access token is still valid
+      try {
+        const userResponse = await axios.get('https://discord.com/api/users/@me', {
+          headers: {
+            Authorization: `Bearer ${sessionData.accessToken}`
+          }
+        });
+        
+        res.json({
+          id: sessionData.userId,
+          discordId: sessionData.discordId,
+          username: sessionData.username,
+          discriminator: sessionData.discriminator,
+          avatar: sessionData.avatar
+        });
+      } catch (apiError) {
+        res.status(401).json({ message: "Session expired" });
+      }
+    } catch (error) {
+      res.status(401).json({ message: "Invalid session" });
+    }
+  });
+
+  app.get("/api/guilds", async (req, res) => {
+    try {
+      const sessionToken = req.cookies.session_token;
+      if (!sessionToken) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const sessionData = JSON.parse(Buffer.from(sessionToken, 'base64').toString());
+
+      // Get user's guilds from Discord
+      const guildsResponse = await axios.get('https://discord.com/api/users/@me/guilds', {
+        headers: {
+          Authorization: `Bearer ${sessionData.accessToken}`
+        }
+      });
+
+      const userGuilds = guildsResponse.data;
+      
+      // Filter to only include guilds where bot is present
+      const botGuildIds = global.discordBot ? global.discordBot.getBotGuildIds() : [];
+      const commonGuilds = userGuilds.filter((guild: any) => botGuildIds.includes(guild.id));
+      
+      res.json(commonGuilds.map((guild: any) => ({
+        id: guild.id,
+        name: guild.name,
+        icon: guild.icon,
+        owner: guild.owner,
+        permissions: guild.permissions
+      })));
+    } catch (error) {
+      console.error('Error fetching guilds:', error);
+      res.status(500).json({ message: "Failed to fetch guilds" });
+    }
+  });
+
+  app.post("/auth/logout", (req, res) => {
+    res.clearCookie('session_token');
+    res.json({ message: "Logged out successfully" });
+  });
+
+  // Admin auth routes (guild password)
+  app.post("/api/auth/admin-login", async (req, res) => {
     try {
       const { guildId, password } = req.body;
       
@@ -65,10 +215,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      const token = Buffer.from(JSON.stringify({ guildId, isAdmin: true })).toString('base64');
-      res.json({ token, user: { guildId, isAdmin: true } });
+      // Update session to include admin flag
+      const sessionToken = req.cookies.session_token;
+      if (sessionToken) {
+        const sessionData = JSON.parse(Buffer.from(sessionToken, 'base64').toString());
+        sessionData.adminGuilds = sessionData.adminGuilds || [];
+        if (!sessionData.adminGuilds.includes(guildId)) {
+          sessionData.adminGuilds.push(guildId);
+        }
+        
+        const newSessionToken = Buffer.from(JSON.stringify(sessionData)).toString('base64');
+        res.cookie('session_token', newSessionToken, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
+      }
+
+      res.json({ success: true, message: "Admin access granted" });
     } catch (error) {
-      res.status(500).json({ message: "Login failed" });
+      res.status(500).json({ message: "Admin login failed" });
     }
   });
 

@@ -177,7 +177,7 @@ export class DatabaseStorage implements IStorage {
       conditions.push(or(
         eq(transactions.fromUserId, options.userId),
         eq(transactions.toUserId, options.userId)
-      ));
+      )!);
     }
     
     if (options.type) {

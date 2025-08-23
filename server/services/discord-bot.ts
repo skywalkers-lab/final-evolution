@@ -6,6 +6,7 @@ export class DiscordBot {
   private client: Client;
   private storage: IStorage;
   private wsManager: WebSocketManager;
+  private botGuildIds: Set<string> = new Set();
 
   constructor(storage: IStorage, wsManager: WebSocketManager) {
     this.client = new Client({
@@ -13,6 +14,10 @@ export class DiscordBot {
     });
     this.storage = storage;
     this.wsManager = wsManager;
+  }
+
+  getBotGuildIds(): string[] {
+    return Array.from(this.botGuildIds);
   }
 
   async start() {
@@ -257,6 +262,23 @@ export class DiscordBot {
 
     this.client.on('ready', () => {
       console.log(`Discord bot logged in as ${this.client.user?.tag}`);
+      
+      // Track all guilds the bot is currently in
+      this.client.guilds.cache.forEach(guild => {
+        this.botGuildIds.add(guild.id);
+      });
+      
+      console.log(`Bot is in ${this.botGuildIds.size} guilds`);
+    });
+
+    this.client.on('guildCreate', (guild) => {
+      console.log(`Bot joined guild: ${guild.name} (${guild.id})`);
+      this.botGuildIds.add(guild.id);
+    });
+
+    this.client.on('guildDelete', (guild) => {
+      console.log(`Bot left guild: ${guild.name} (${guild.id})`);
+      this.botGuildIds.delete(guild.id);
     });
   }
 
@@ -485,7 +507,7 @@ export class DiscordBot {
         const price = Number(stock.price).toLocaleString();
         message += `${statusIcon} **${stock.symbol}** (${stock.name})\n`;
         message += `   가격: ₩${price}\n`;
-        message += `   상태: ${this.getStatusText(stock.status)}\n\n`;
+        message += `   상태: ${this.getStatusText(stock.status || 'active')}\n\n`;
       }
 
       await interaction.reply(message);

@@ -38,7 +38,14 @@ export const getQueryFn: <T>(options: {
     }
 
     await throwIfResNotOk(res);
-    return await res.json();
+    const data = await res.json();
+    
+    // Return empty array for array endpoints to prevent TypeScript errors
+    if (!data && (queryKey.includes('stocks') || queryKey.includes('auctions') || queryKey.includes('holdings'))) {
+      return [];
+    }
+    
+    return data;
   };
 
 export const queryClient = new QueryClient({

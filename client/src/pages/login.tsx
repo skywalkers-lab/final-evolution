@@ -1,132 +1,64 @@
-import { useState } from "react";
-import { useAuth } from "@/hooks/use-auth";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
-import { useLocation } from "wouter";
 import { useEffect } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useLocation } from "wouter";
 
 export default function Login() {
-  const [guildId, setGuildId] = useState("");
-  const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const { login, user } = useAuth();
-  const { toast } = useToast();
+  const { user, login, isLoading } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (user) {
+    if (user && !isLoading) {
       setLocation("/");
     }
-  }, [user, setLocation]);
+  }, [user, isLoading, setLocation]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!guildId || !password) {
-      toast({
-        title: "입력 오류",
-        description: "길드 ID와 비밀번호를 모두 입력해주세요.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsLoading(true);
-    
-    try {
-      const success = await login(guildId, password);
-      
-      if (success) {
-        toast({
-          title: "로그인 성공",
-          description: "관리자 대시보드에 오신 것을 환영합니다.",
-        });
-      } else {
-        toast({
-          title: "로그인 실패",
-          description: "길드 ID 또는 비밀번호가 올바르지 않습니다.",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "로그인 오류",
-        description: "로그인 중 오류가 발생했습니다. 다시 시도해주세요.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
+  const handleDiscordLogin = () => {
+    login();
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen discord-bg-darkest flex items-center justify-center">
+        <div className="animate-pulse-discord text-gray-400">로딩 중...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen discord-bg-darkest flex items-center justify-center p-4">
-      <Card className="w-full max-w-md bg-discord-darker border-discord-dark">
-        <CardContent className="pt-6">
-          <div className="flex flex-col items-center mb-6">
-            <div className="w-16 h-16 bg-discord-blue rounded-full flex items-center justify-center mb-4">
-              <i className="fas fa-robot text-white text-2xl"></i>
-            </div>
-            <h1 className="text-2xl font-bold text-white mb-2">경제봇 대시보드</h1>
-            <p className="text-gray-400 text-center">관리자 인증이 필요합니다</p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="guildId" className="text-gray-300">
-                길드 ID
-              </Label>
-              <Input
-                id="guildId"
-                type="text"
-                value={guildId}
-                onChange={(e) => setGuildId(e.target.value)}
-                placeholder="Discord 서버 ID를 입력하세요"
-                className="bg-discord-dark border-discord-dark text-white placeholder-gray-500"
-                data-testid="input-guild-id"
-                disabled={isLoading}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="password" className="text-gray-300">
-                관리자 비밀번호
-              </Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="관리자 비밀번호를 입력하세요"
-                className="bg-discord-dark border-discord-dark text-white placeholder-gray-500"
-                data-testid="input-password"
-                disabled={isLoading}
-              />
-            </div>
-
-            <Button 
-              type="submit" 
-              className="w-full bg-discord-blue hover:bg-blue-600 text-white font-medium py-3"
-              disabled={isLoading}
-              data-testid="button-login"
+      <Card className="w-full max-w-md discord-card">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl font-bold text-gray-100 mb-2">
+            디스코드 경제 봇
+          </CardTitle>
+          <p className="text-gray-400">
+            Discord 계정으로 로그인해서 가상 경제 시스템을 이용하세요
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button
+            onClick={handleDiscordLogin}
+            className="w-full bg-discord-blurple hover:bg-discord-blurple/90 text-white font-medium py-3 rounded-lg flex items-center justify-center gap-3 transition-all duration-200"
+            data-testid="button-discord-login"
+          >
+            <svg 
+              className="w-5 h-5" 
+              viewBox="0 -28.5 256 256"
+              xmlns="http://www.w3.org/2000/svg" 
+              preserveAspectRatio="xMidYMid"
             >
-              {isLoading ? (
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  로그인 중...
-                </div>
-              ) : (
-                "로그인"
-              )}
-            </Button>
-          </form>
-
-          <div className="mt-6 text-center text-sm text-gray-400">
-            <p>Discord 서버의 관리자 비밀번호로 로그인하세요.</p>
-            <p className="mt-2">봇이 설정되지 않은 경우 "/설정" 명령을 사용하세요.</p>
+              <path 
+                d="M216.856339,16.5966031 C200.285002,8.84328665 182.566144,3.2084988 164.041564,0 C161.766523,4.11318106 159.108624,9.64549908 157.276099,14.0464379 C137.583995,11.0849896 118.072967,11.0849896 98.7430163,14.0464379 C96.9108417,9.64549908 94.1925838,4.11318106 91.8971895,0 C73.3526068,3.2084988 55.6133949,8.86399117 39.0420583,16.6376612 C5.61752293,67.146514 -3.4433191,116.400813 1.08711069,164.955721 C23.2560196,181.510915 44.7403634,191.567697 65.8621325,198.148576 C71.0772151,190.971126 75.7283628,183.341335 79.7352139,175.300261 C72.104019,172.400575 64.7949724,168.822202 57.8887866,164.667963 C59.7209612,163.310589 61.5131304,161.891452 63.2445898,160.431257 C105.36741,180.133187 151.134928,180.133187 192.754523,160.431257 C194.506336,161.891452 196.298154,163.310589 198.110326,164.667963 C191.183787,168.842556 183.854737,172.420929 176.223542,175.320965 C180.230393,183.341335 184.861538,190.991831 190.096624,198.16893 C211.238746,191.588051 232.743023,181.531619 254.911949,164.955721 C260.227747,108.668201 245.831087,59.8662432 216.856339,16.5966031 Z M85.4738752,135.09489 C72.8290281,135.09489 62.4592217,123.290155 62.4592217,108.914901 C62.4592217,94.5396472 72.607595,82.7145587 85.4738752,82.7145587 C98.3405064,82.7145587 108.709962,94.5189427 108.488529,108.914901 C108.508531,123.290155 98.3405064,135.09489 85.4738752,135.09489 Z M170.525237,135.09489 C157.88039,135.09489 147.510584,123.290155 147.510584,108.914901 C147.510584,94.5396472 157.658606,82.7145587 170.525237,82.7145587 C183.391518,82.7145587 193.761324,94.5189427 193.539891,108.914901 C193.539891,123.290155 183.391518,135.09489 170.525237,135.09489 Z" 
+                fill="currentColor"
+              />
+            </svg>
+            Discord로 로그인
+          </Button>
+          
+          <div className="text-xs text-gray-500 text-center">
+            로그인하시면 Discord 계정 정보와 서버 목록에 접근하게 됩니다
           </div>
         </CardContent>
       </Card>

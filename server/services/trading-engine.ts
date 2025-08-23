@@ -151,18 +151,18 @@ export class TradingEngine {
           symbol,
           timeframe: '1h',
           timestamp: currentHour,
-          open: price,
-          high: price,
-          low: price,
-          close: price,
+          open: price.toString(),
+          high: price.toString(),
+          low: price.toString(),
+          close: price.toString(),
           volume
         });
       } else {
         // Update existing candlestick
         await this.storage.updateCandlestick(guildId, symbol, '1h', currentHour, {
-          high: Math.max(Number(candlestick.high), price),
-          low: Math.min(Number(candlestick.low), price),
-          close: price,
+          high: Math.max(Number(candlestick.high), price).toString(),
+          low: Math.min(Number(candlestick.low), price).toString(),
+          close: price.toString(),
           volume: (candlestick.volume || 0) + volume
         });
       }

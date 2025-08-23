@@ -12,25 +12,26 @@ import MarketOverview from "@/components/dashboard/market-overview";
 import Portfolio from "@/components/trading/portfolio";
 import RecentActivity from "@/components/dashboard/recent-activity";
 import AuctionCard from "@/components/auctions/auction-card";
+import GuildSelector from "@/components/guild/guild-selector";
 
 export default function Dashboard() {
-  const { user, isLoading } = useAuth();
+  const { user, selectedGuildId, isLoading } = useAuth();
   const [, setLocation] = useLocation();
   const [selectedStock, setSelectedStock] = useState<string>('');
 
-  const { data: overview, refetch: refetchOverview } = useQuery({
-    queryKey: ['/api/guilds', user?.guildId, 'overview'],
-    enabled: !!user?.guildId,
+  const { data: overview = {}, refetch: refetchOverview } = useQuery({
+    queryKey: ['/api/guilds', selectedGuildId, 'overview'],
+    enabled: !!selectedGuildId,
   });
 
-  const { data: stocks } = useQuery({
-    queryKey: ['/api/guilds', user?.guildId, 'stocks'],
-    enabled: !!user?.guildId,
+  const { data: stocks = [] } = useQuery({
+    queryKey: ['/api/guilds', selectedGuildId, 'stocks'],
+    enabled: !!selectedGuildId,
   });
 
-  const { data: auctions } = useQuery({
-    queryKey: ['/api/guilds', user?.guildId, 'auctions'],
-    enabled: !!user?.guildId,
+  const { data: auctions = [] } = useQuery({
+    queryKey: ['/api/guilds', selectedGuildId, 'auctions'],
+    enabled: !!selectedGuildId,
   });
 
   // WebSocket handler for real-time updates
@@ -68,6 +69,11 @@ export default function Dashboard() {
 
   if (!user) {
     return null;
+  }
+
+  // Show guild selector if no guild is selected
+  if (!selectedGuildId) {
+    return <GuildSelector />;
   }
 
   return (
