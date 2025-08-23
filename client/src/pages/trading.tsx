@@ -22,7 +22,7 @@ export default function TradingPage() {
   const [selectedStock, setSelectedStock] = useState('');
 
   const { data: stocks = [], refetch: refetchStocks } = useQuery({
-    queryKey: ['/api/guilds', selectedGuildId, 'stocks'],
+    queryKey: ['/api/web-client/guilds', selectedGuildId, 'stocks'],
     enabled: !!selectedGuildId,
   });
 

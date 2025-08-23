@@ -23,7 +23,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   const { data: candlestickData = [] } = useQuery({
-    queryKey: ['/api/guilds', guildId, 'stocks', symbol, 'candlestick', timeframe],
+    queryKey: ['/api/web-client/guilds', guildId, 'stocks', symbol, 'candlestick', timeframe],
     enabled: !!symbol && !!guildId,
     select: (data: any[]) => data || [],
   });

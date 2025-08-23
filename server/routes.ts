@@ -330,6 +330,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Web client stocks list
+  app.get("/api/web-client/guilds/:guildId/stocks", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      console.log(`Web client stocks request for guild: ${guildId}`);
+      
+      const stocks = await storage.getStocksByGuild(guildId);
+      res.json(stocks || []);
+    } catch (error) {
+      console.error('Web client stocks error:', error);
+      res.json([]);
+    }
+  });
+
+  // Web client candlestick data
+  app.get("/api/web-client/guilds/:guildId/stocks/:symbol/candlestick/:timeframe", async (req, res) => {
+    try {
+      const { guildId, symbol, timeframe } = req.params;
+      console.log(`Web client candlestick request: ${guildId}/${symbol}/${timeframe}`);
+      
+      // Get candlestick data from storage
+      const candlestickData = await storage.getCandlestickData(guildId, symbol, timeframe, 100);
+      res.json(candlestickData || []);
+    } catch (error) {
+      console.error('Web client candlestick error:', error);
+      res.json([]);
+    }
+  });
+
   app.get("/api/web-client/guilds/:guildId/portfolio", async (req, res) => {
     try {
       const { guildId } = req.params;
