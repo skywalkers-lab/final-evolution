@@ -461,14 +461,7 @@ export class DiscordBot {
 
   private async createAccount(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
     try {
-      // Check if account already exists
-      const existingAccount = await this.storage.getAccountByUser(guildId, userId);
-      if (existingAccount) {
-        await interaction.reply('이미 계좌가 개설되어 있습니다.');
-        return;
-      }
-
-      // Create user if doesn't exist
+      // First get or create user
       let user = await this.storage.getUserByDiscordId(userId);
       if (!user) {
         const discordUser = await interaction.client.users.fetch(userId);
@@ -478,6 +471,13 @@ export class DiscordBot {
           discriminator: discordUser.discriminator || '0000',
           avatar: discordUser.avatar
         });
+      }
+
+      // Check if account already exists using database user ID
+      const existingAccount = await this.storage.getAccountByUser(guildId, user.id);
+      if (existingAccount) {
+        await interaction.reply(`🚫 이미 계좌가 개설되어 있습니다.\n계좌번호: ${existingAccount.uniqueCode}\n현재 잔액: ₩${Number(existingAccount.balance).toLocaleString()}`);
+        return;
       }
 
       // Generate unique code (3 digits for public officials, 4 digits for regular citizens)
