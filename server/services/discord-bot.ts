@@ -359,12 +359,17 @@ export class DiscordBot {
       // Factory reset command
       new SlashCommandBuilder()
         .setName('공장초기화')
-        .setDescription('모든 사용자 데이터를 초기화합니다 (관리자 전용)')
+        .setDescription('모든 사용자 데이터를 초기화합니다 (최고관리자 전용)')
         .addStringOption(option =>
           option.setName('확인')
             .setDescription('"초기화확인"을 입력하세요')
             .setRequired(true)
         ),
+
+      // Simplified auction password generation command
+      new SlashCommandBuilder()
+        .setName('경매비밀번호생성')
+        .setDescription('경매 생성용 비밀번호를 생성합니다 (관리자 전용)'),
 
       // Auction commands
       new SlashCommandBuilder()
@@ -601,6 +606,9 @@ export class DiscordBot {
         case '공장초기화':
           await this.handleFactoryResetCommand(interaction, guildId, user.id);
           break;
+        case '경매비밀번호생성':
+          await this.handleSimpleAuctionPasswordCommand(interaction, guildId, user.id);
+          break;
         default:
           await interaction.reply('알 수 없는 명령입니다.');
       }
@@ -728,7 +736,7 @@ export class DiscordBot {
 
     try {
       const fromAccount = await this.storage.getAccountByUser(guildId, userId);
-      const toAccount = await this.storage.getAccountByUser(guildId, targetUser.id);
+      const toAccount = await this.storage.getAccountByUser(guildId, targetAccount.userId);
 
       if (!fromAccount) {
         await interaction.reply('계좌를 찾을 수 없습니다. /은행 계좌개설 명령으로 계좌를 먼저 개설해주세요.');
@@ -752,15 +760,18 @@ export class DiscordBot {
         return;
       }
 
+      // Get target user info
+      const targetUser = await this.client.users.fetch(targetAccount.userId);
+      
       // Execute transfer
-      await this.storage.transferMoney(guildId, userId, targetUser.id, amount, memo);
+      await this.storage.transferMoney(guildId, userId, targetAccount.userId, amount, memo);
 
       await interaction.reply(`✅ ₩${amount.toLocaleString()}을 ${targetUser.username}에게 송금했습니다.\n메모: ${memo}`);
       
       this.wsManager.broadcast('transaction_completed', {
         type: 'transfer',
         from: userId,
-        to: targetUser.id,
+        to: targetAccount.userId,
         amount,
         memo
       });
@@ -978,7 +989,7 @@ export class DiscordBot {
     }
   }
 
-  private async isAdmin(guildId: string, userId: string): boolean {
+  private async isAdmin(guildId: string, userId: string): Promise<boolean> {
     if (userId === '559307598848065537') return true;
     
     try {
@@ -1668,13 +1679,11 @@ export class DiscordBot {
     await this.storage.suspendAccountTrading(guildId, user.id, true);
 
     // Add audit log
-    await this.storage.addAuditLog({
+    await this.storage.createAuditLog({
       guildId,
-      actorId: adminUser.id, // Use actual user ID from database
+      actorId: adminUser.id,
       action: 'suspend_trading',
-      targetType: 'user',
-      targetId: user.id,
-      details: `거래 중지 - ${reason}`,
+      details: `거래 중지 - ${reason}`
     });
 
     await interaction.reply(`✅ ${targetUser.username}님의 거래가 중지되었습니다.\n사유: ${reason}`);
@@ -1712,13 +1721,11 @@ export class DiscordBot {
     await this.storage.suspendAccountTrading(guildId, user.id, false);
 
     // Add audit log
-    await this.storage.addAuditLog({
+    await this.storage.createAuditLog({
       guildId,
-      actorId: adminUser.id, // Use actual user ID from database
+      actorId: adminUser.id,
       action: 'resume_trading',
-      targetType: 'user',
-      targetId: user.id,
-      details: '거래 재개',
+      details: '거래 재개'
     });
 
     await interaction.reply(`✅ ${targetUser.username}님의 거래가 재개되었습니다.`);
@@ -1906,6 +1913,76 @@ export class DiscordBot {
     }
   }
 
+  private async isSuperAdmin(userId: string): Promise<boolean> {
+    // 최고관리자 체크: 특정 사용자 ID 또는 미니언#bello
+    if (userId === '559307598848065537') return true;
+    
+    try {
+      const user = await this.client.users.fetch(userId);
+      const userTag = `${user.username}#${user.discriminator}`;
+      if (userTag === '미니언#bello') return true;
+    } catch (error) {
+      // Continue with other checks if user fetch fails
+    }
+    
+    return false;
+  }
+
+  private async handleSimpleAuctionPasswordCommand(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
+    const isAdmin = await this.isAdmin(guildId, userId);
+    if (!isAdmin) {
+      await interaction.reply('이 명령은 관리자만 사용할 수 있습니다.');
+      return;
+    }
+
+    try {
+      // Generate 6-digit password
+      const password = Math.random().toString(36).substring(2, 8).toUpperCase();
+      
+      // Set expiration to 30 minutes from now
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+
+      await this.storage.createAuctionPassword({
+        guildId,
+        createdBy: userId,
+        password,
+        itemName: '일반 경매',
+        startPrice: '1000',
+        duration: 24,
+        buyoutPrice: null,
+        description: '웹 대시보드에서 설정',
+        used: false,
+        expiresAt
+      });
+
+      // Clean up expired passwords
+      await this.storage.cleanupExpiredAuctionPasswords();
+
+      let reply = '🔐 **경매 비밀번호 생성 완료!**\n\n';
+      reply += `**비밀번호**: \`${password}\`\n`;
+      reply += `**유효 시간**: 30분\n`;
+      reply += `**사용법**: 웹 대시보드 경매 생성에서 입력\n\n`;
+      reply += '⚠️ **주의사항**:\n';
+      reply += '• 비밀번호는 30분 후 자동 만료됩니다\n';
+      reply += '• 한 번만 사용할 수 있습니다\n';
+      reply += '🏦 **한국은행 종합서비스센터**';
+
+      await interaction.reply(reply);
+
+      // WebSocket으로 비밀번호 생성 알림
+      this.wsManager.broadcast('auction_password_created', {
+        guildId,
+        password,
+        createdBy: userId,
+        expiresAt
+      });
+
+    } catch (error: any) {
+      await interaction.reply(`비밀번호 생성 실패: ${error.message}`);
+      console.error('Auction password generation error:', error);
+    }
+  }
+
   private async uploadLogo(imageUrl: string, guildId: string, symbol: string): Promise<string> {
     const objectStorage = new ObjectStorageService();
     
@@ -1941,9 +2018,9 @@ export class DiscordBot {
   }
 
   private async handleFactoryResetCommand(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
-    const isAdmin = await this.isAdmin(guildId, userId);
-    if (!isAdmin) {
-      await interaction.reply('이 명령은 관리자만 사용할 수 있습니다.');
+    const isSuperAdmin = await this.isSuperAdmin(userId);
+    if (!isSuperAdmin) {
+      await interaction.reply('이 명령은 최고관리자만 사용할 수 있습니다.');
       return;
     }
 

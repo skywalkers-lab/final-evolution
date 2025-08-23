@@ -185,7 +185,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userGuilds = guildsResponse.data;
       
       // Filter to only include guilds where bot is present
-      const botGuildIds = global.discordBot ? global.discordBot.getBotGuildIds() : [];
+      const botGuildIds = (global as any).discordBot ? (global as any).discordBot.getBotGuildIds() : [];
       console.log('User guilds:', userGuilds.map((g: any) => ({ id: g.id, name: g.name })));
       console.log('Bot guild IDs:', botGuildIds);
       
@@ -206,11 +206,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Debug endpoint to check bot guilds
   app.get("/api/debug/bot-guilds", (req, res) => {
-    const botGuildIds = global.discordBot ? global.discordBot.getBotGuildIds() : [];
+    const botGuildIds = (global as any).discordBot ? (global as any).discordBot.getBotGuildIds() : [];
     res.json({
       botGuildIds,
-      botConnected: !!global.discordBot,
-      clientReady: global.discordBot?.isReady() || false
+      botConnected: !!(global as any).discordBot,
+      clientReady: (global as any).discordBot?.isReady() || false
     });
   });
 
@@ -531,26 +531,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get portfolio total assets
-      const account = await storage.getAccountBalance(guildId, guildId);
-      const holdings = await storage.getHoldings(guildId);
-      
-      let totalAssets = Number(account?.balance || 0);
-      if (holdings && holdings.length > 0) {
-        for (const holding of holdings) {
-          const stock = await storage.getStock(holding.stockId);
-          if (stock) {
-            totalAssets += holding.quantity * Number(stock.price);
-          }
-        }
-      }
+      const accounts = await storage.getAccountsByGuild(guildId);
+      const totalAssets = accounts.reduce((sum, acc) => sum + Number(acc.balance), 0);
 
       // Get transaction count (as active trades approximation)
-      const transactions = await storage.getTransactions(guildId);
+      const transactions = await storage.getRecentTransactions(guildId, 100);
       const activeTrades = transactions ? transactions.length : 0;
 
       // Get active auctions count
-      const auctions = await storage.getAuctions(guildId);
-      const liveAuctions = auctions ? auctions.filter(auction => auction.status === 'active').length : 0;
+      const auctions = await storage.getAuctionsByGuild(guildId, { status: 'live' });
+      const liveAuctions = auctions ? auctions.length : 0;
 
       // Calculate tax collected (sum of all tax transactions)
       const taxCollected = transactions 
