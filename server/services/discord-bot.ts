@@ -475,6 +475,20 @@ export class DiscordBot {
     this.client.on('ready', async () => {
       console.log(`Discord bot logged in as ${this.client.user?.tag}`);
       
+      // 봇 상태를 온라인으로 설정하고 활동 표시
+      try {
+        await this.client.user?.setPresence({
+          status: 'online',
+          activities: [{
+            name: '🏦 한국은행 종합서비스센터 | 24/7 운영',
+            type: 0 // PLAYING
+          }]
+        });
+        console.log('✅ Discord bot status set to ONLINE with activity');
+      } catch (error) {
+        console.error('❌ Failed to set bot status:', error);
+      }
+      
       // Wait a moment for Discord to fully initialize
       setTimeout(async () => {
         try {

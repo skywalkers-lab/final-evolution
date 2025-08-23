@@ -44,9 +44,9 @@ export default function TopBar() {
         <div className="flex items-center space-x-4">
           {/* Real-time status indicator */}
           <div className="flex items-center space-x-2">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-discord-green animate-pulse-discord' : 'bg-gray-500'}`}></div>
-            <span className="text-sm text-gray-400" data-testid="text-connection-status">
-              {isConnected ? '실시간 연결됨' : '연결 중...'}
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></div>
+            <span className={`text-sm font-medium ${isConnected ? 'text-green-400' : 'text-gray-400'}`} data-testid="text-connection-status">
+              {isConnected ? '🟢 온라인' : '⚪ 연결 중...'}
             </span>
           </div>
           
