@@ -133,7 +133,7 @@ export class DiscordBot {
         .addSubcommand(subcommand =>
           subcommand
             .setName('생성')
-            .setDescription('새 주식을 생성합니다')
+            .setDescription('새 주식을 생성합니다 (관리자 전용)')
             .addStringOption(option =>
               option.setName('종목코드')
                 .setDescription('종목코드')
@@ -152,8 +152,18 @@ export class DiscordBot {
         )
         .addSubcommand(subcommand =>
           subcommand
+            .setName('삭제')
+            .setDescription('주식을 삭제합니다 (관리자 전용)')
+            .addStringOption(option =>
+              option.setName('종목코드')
+                .setDescription('삭제할 종목코드')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand(subcommand =>
+          subcommand
             .setName('가격조정')
-            .setDescription('주식 가격을 조정합니다')
+            .setDescription('주식 가격을 조정합니다 (관리자 전용)')
             .addStringOption(option =>
               option.setName('종목코드')
                 .setDescription('종목코드')
@@ -168,7 +178,7 @@ export class DiscordBot {
         .addSubcommand(subcommand =>
           subcommand
             .setName('거래중지')
-            .setDescription('주식 거래를 중지합니다')
+            .setDescription('주식 거래를 중지합니다 (관리자 전용)')
             .addStringOption(option =>
               option.setName('종목코드')
                 .setDescription('종목코드')
@@ -183,7 +193,7 @@ export class DiscordBot {
         .addSubcommand(subcommand =>
           subcommand
             .setName('거래재개')
-            .setDescription('주식 거래를 재개합니다')
+            .setDescription('주식 거래를 재개합니다 (관리자 전용)')
             .addStringOption(option =>
               option.setName('종목코드')
                 .setDescription('종목코드')
@@ -750,6 +760,9 @@ export class DiscordBot {
         case '생성':
           await this.createStock(interaction, guildId);
           break;
+        case '삭제':
+          await this.deleteStock(interaction, guildId);
+          break;
         case '가격조정':
           await this.adjustStockPrice(interaction, guildId);
           break;
@@ -875,6 +888,39 @@ export class DiscordBot {
       });
     } catch (error: any) {
       await interaction.reply(`거래 재개 실패: ${error.message}`);
+    }
+  }
+
+  private async deleteStock(interaction: ChatInputCommandInteraction, guildId: string) {
+    const symbol = interaction.options.getString('종목코드', true).toUpperCase();
+
+    try {
+      const stock = await this.storage.getStockBySymbol(guildId, symbol);
+      if (!stock) {
+        await interaction.reply('해당 종목을 찾을 수 없습니다.');
+        return;
+      }
+
+      // Check if anyone holds this stock
+      const holdings = await this.storage.getHoldingsByStock?.(guildId, symbol);
+      if (holdings && holdings.length > 0) {
+        const totalHolders = holdings.filter(h => h.shares > 0).length;
+        if (totalHolders > 0) {
+          await interaction.reply(`❌ ${stock.name} (${symbol})을 삭제할 수 없습니다.\n이유: ${totalHolders}명이 이 주식을 보유하고 있습니다.`);
+          return;
+        }
+      }
+
+      await this.storage.deleteStock(stock.id);
+
+      await interaction.reply(`🗑️ ${stock.name} (${symbol}) 주식이 삭제되었습니다.`);
+      
+      this.wsManager.broadcast('stock_deleted', {
+        symbol,
+        name: stock.name
+      });
+    } catch (error: any) {
+      await interaction.reply(`주식 삭제 실패: ${error.message}`);
     }
   }
 
