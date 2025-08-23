@@ -171,11 +171,20 @@ export class TradingEngine {
       
       // Update multiple timeframes for real-time progression
       const timeframes = [
-        { tf: 'realtime', interval: 1 }, // Every minute for real-time
+        { tf: 'realtime', interval: 1 }, // Every second for real-time
+        { tf: '1m', interval: 1 }, // Every minute
+        { tf: '3m', interval: 3 }, // Every 3 minutes
+        { tf: '5m', interval: 5 }, // Every 5 minutes
+        { tf: '10m', interval: 10 }, // Every 10 minutes
+        { tf: '15m', interval: 15 }, // Every 15 minutes
+        { tf: '30m', interval: 30 }, // Every 30 minutes
         { tf: '1h', interval: 60 }, // Every hour
-        { tf: '6h', interval: 360 }, // Every 6 hours
-        { tf: '12h', interval: 720 }, // Every 12 hours
+        { tf: '2h', interval: 120 }, // Every 2 hours
+        { tf: '4h', interval: 240 }, // Every 4 hours
         { tf: '1d', interval: 1440 }, // Every day
+        { tf: '7d', interval: 10080 }, // Every week (7 days)
+        { tf: '30d', interval: 43200 }, // Every month (30 days)
+        { tf: '365d', interval: 525600 }, // Every year (365 days)
       ];
       
       for (const { tf, interval } of timeframes) {
@@ -216,22 +225,34 @@ export class TradingEngine {
     switch (timeframe) {
       case 'realtime':
         return new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes());
+      case '1m':
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes());
+      case '3m':
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), Math.floor(date.getMinutes() / 3) * 3);
+      case '5m':
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), Math.floor(date.getMinutes() / 5) * 5);
+      case '10m':
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), Math.floor(date.getMinutes() / 10) * 10);
+      case '15m':
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), Math.floor(date.getMinutes() / 15) * 15);
+      case '30m':
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), Math.floor(date.getMinutes() / 30) * 30);
       case '1h':
         return new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours());
-      case '6h':
-        return new Date(date.getFullYear(), date.getMonth(), date.getDate(), Math.floor(date.getHours() / 6) * 6);
-      case '12h':
-        return new Date(date.getFullYear(), date.getMonth(), date.getDate(), Math.floor(date.getHours() / 12) * 12);
+      case '2h':
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate(), Math.floor(date.getHours() / 2) * 2);
+      case '4h':
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate(), Math.floor(date.getHours() / 4) * 4);
       case '1d':
         return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-      case '2w':
+      case '7d':
         const startOfWeek = new Date(date);
         startOfWeek.setDate(date.getDate() - (date.getDay() === 0 ? 6 : date.getDay() - 1));
         return new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate());
-      case '1m':
+      case '30d':
         return new Date(date.getFullYear(), date.getMonth(), 1);
-      case '6m':
-        return new Date(date.getFullYear(), Math.floor(date.getMonth() / 6) * 6, 1);
+      case '365d':
+        return new Date(date.getFullYear(), 0, 1);
       default:
         return new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours());
     }

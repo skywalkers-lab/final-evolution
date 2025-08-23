@@ -65,10 +65,13 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     drawChart();
   }, [candlestickData, symbol]);
 
-  // 마우스 이벤트 처리
+  // 마우스 이벤트 처리 - 수정된 버전
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (!canvas || !candlestickData || candlestickData.length === 0) return;
+    if (!canvas || !candlestickData || candlestickData.length === 0) {
+      setHoveredCandle(null);
+      return;
+    }
     
     const rect = canvas.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
@@ -82,25 +85,25 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     
     const padding = 60;
     const chartWidth = canvas.width - 2 * padding;
-    const spacing = chartWidth / candlestickData.length;
+    const chartHeight = canvas.height - 2 * padding;
     
-    // 마우스 위치에 해당하는 캔들 찾기
+    // 차트 영역 안에 있는지 확인
+    if (adjustedX < padding || adjustedX > canvas.width - padding || 
+        adjustedY < padding || adjustedY > canvas.height - padding) {
+      setHoveredCandle(null);
+      return;
+    }
+    
+    const spacing = chartWidth / candlestickData.length;
     const candleIndex = Math.floor((adjustedX - padding) / spacing);
     
     if (candleIndex >= 0 && candleIndex < candlestickData.length) {
       const candle = candlestickData[candleIndex];
-      const candleX = padding + (candleIndex * spacing) + spacing / 2;
-      
-      // 해당 캔들 영역 내에 있는지 확인 (좌우 여백 고려)
-      if (Math.abs(adjustedX - candleX) <= spacing / 2) {
-        setHoveredCandle({ 
-          candle, 
-          x: mouseX, // 실제 화면 좌표 사용
-          y: mouseY 
-        });
-      } else {
-        setHoveredCandle(null);
-      }
+      setHoveredCandle({ 
+        candle, 
+        x: mouseX,
+        y: mouseY 
+      });
     } else {
       setHoveredCandle(null);
     }
@@ -210,10 +213,10 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       const highY = padding + ((adjustedMaxPrice - high) / adjustedPriceRange) * chartHeight;
       const lowY = padding + ((adjustedMaxPrice - low) / adjustedPriceRange) * chartHeight;
 
-      // Color based on price movement (Global style: Green=Up, Red=Down)
+      // Color based on price movement (Korean style: Red=Up, Blue=Down)
       const isPriceUp = close >= open;
-      const upColor = '#22c55e'; // 연한 초록색 (상승)
-      const downColor = '#dc2626'; // 진한 빨간색 (하락)
+      const upColor = '#ef4444'; // 빨간색 (상승)
+      const downColor = '#3b82f6'; // 파란색 (하락)
       const color = isPriceUp ? upColor : downColor;
       
       // Draw wick (high-low line) - 더 얇게
@@ -229,14 +232,14 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       const bodyY = Math.min(openY, closeY);
       
       if (isPriceUp) {
-        // Bullish candle - hollow with green outline
-        ctx.fillStyle = 'rgba(34, 197, 94, 0.1)'; // 매우 연한 초록색 배경
+        // Bullish candle - hollow with red outline (Korean style)
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.1)'; // 매우 연한 빨간색 배경
         ctx.fillRect(x, bodyY, candleWidth, Math.max(bodyHeight, 1));
         ctx.strokeStyle = upColor;
         ctx.lineWidth = 1;
         ctx.strokeRect(x, bodyY, candleWidth, Math.max(bodyHeight, 1));
       } else {
-        // Bearish candle - filled red
+        // Bearish candle - filled blue
         ctx.fillStyle = downColor;
         ctx.fillRect(x, bodyY, candleWidth, Math.max(bodyHeight, 1));
       }
@@ -363,7 +366,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     
     // Show price change if available
     if (priceChange !== 0) {
-      ctx.fillStyle = priceChange > 0 ? '#22c55e' : '#dc2626'; // 초록=상승, 빨강=하락
+      ctx.fillStyle = priceChange > 0 ? '#ef4444' : '#3b82f6'; // 빨강=상승, 파랑=하락
       ctx.font = 'bold 12px Inter';
       ctx.textAlign = 'right';
       const changeText = `${priceChange > 0 ? '+' : ''}${priceChange.toFixed(2)}%`;
@@ -473,7 +476,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                   ₩{currentPrice.toLocaleString()}
                 </p>
                 <div className="flex items-center space-x-2">
-                  <span className={`text-sm font-semibold ${priceChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  <span className={`text-sm font-semibold ${priceChange >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
                     {priceChange >= 0 ? '📈 +' : '📉 '}{priceChange.toFixed(2)}%
                   </span>
                   <span className="text-xs text-gray-500" data-testid="text-last-update">
@@ -532,7 +535,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                 </Button>
               </div>
               <div className="text-xs text-gray-500">
-                📈 상승: <span className="text-green-500">초록색</span> | 📉 하락: <span className="text-red-500">빨간색</span>
+                📈 상승: <span className="text-red-500">빨간색</span> | 📉 하락: <span className="text-blue-500">파란색</span>
               </div>
             </div>
 
@@ -574,17 +577,17 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-400">고가:</span>
-                          <span className="text-green-400 font-medium">₩{Number(hoveredCandle.candle.high).toLocaleString()}</span>
+                          <span className="text-red-400 font-medium">₩{Number(hoveredCandle.candle.high).toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-400">저가:</span>
-                          <span className="text-red-400 font-medium">₩{Number(hoveredCandle.candle.low).toLocaleString()}</span>
+                          <span className="text-blue-400 font-medium">₩{Number(hoveredCandle.candle.low).toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-400">종가:</span>
                           <span className={`font-medium ${
                             Number(hoveredCandle.candle.close) >= Number(hoveredCandle.candle.open) 
-                              ? 'text-green-400' : 'text-red-400'
+                              ? 'text-red-400' : 'text-blue-400'
                           }`}>
                             ₩{Number(hoveredCandle.candle.close).toLocaleString()}
                           </span>
@@ -599,7 +602,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                           <span className="text-gray-400">변동:</span>
                           <span className={`font-medium ${
                             Number(hoveredCandle.candle.close) - Number(hoveredCandle.candle.open) >= 0
-                              ? 'text-green-400' : 'text-red-400'
+                              ? 'text-red-400' : 'text-blue-400'
                           }`}>
                             {Number(hoveredCandle.candle.close) - Number(hoveredCandle.candle.open) >= 0 ? '+' : ''}
                             ₩{(Number(hoveredCandle.candle.close) - Number(hoveredCandle.candle.open)).toLocaleString()}

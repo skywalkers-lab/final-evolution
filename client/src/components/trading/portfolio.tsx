@@ -48,10 +48,10 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
     const isPositive = amount >= 0;
     return (
       <div className="flex items-center space-x-1">
-        <span className={isPositive ? 'text-discord-green' : 'text-discord-red'}>
+        <span className={isPositive ? 'text-red-500' : 'text-blue-500'}>
           {isPositive ? '+' : ''}{percentage.toFixed(1)}%
         </span>
-        <span className={`text-xs ${isPositive ? 'text-discord-green' : 'text-discord-red'}`}>
+        <span className={`text-xs ${isPositive ? 'text-red-500' : 'text-blue-500'}`}>
           ({isPositive ? '+' : ''}₩{Math.abs(amount).toLocaleString()})
         </span>
       </div>
