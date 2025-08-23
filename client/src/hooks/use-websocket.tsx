@@ -30,7 +30,7 @@ export function useWebSocket(onMessage?: MessageHandler) {
         ws.send(JSON.stringify({
           type: 'authenticate',
           payload: {
-            guildId: user.guildId,
+            guildId: undefined, // Will be set by auth context
             userId: 'web-client'
           }
         }));

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
+import { useWebSocket } from "@/hooks/use-websocket";
 
 interface TradingPanelProps {
   selectedStock: string;
@@ -19,6 +20,7 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
   const [quantity, setQuantity] = useState<string>('');
   const [price, setPrice] = useState<string>('');
   const [orderType, setOrderType] = useState<'market' | 'limit'>('limit');
+  const [realtimePrice, setRealtimePrice] = useState<number | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -30,12 +32,25 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
     enabled: !!guildId,
   });
 
+  // WebSocket handler for real-time price updates
+  useWebSocket((event: string, data: any) => {
+    if (event === 'stock_price_updated' && data.symbol === selectedStock) {
+      setRealtimePrice(data.newPrice);
+      // Update price input for limit orders
+      if (orderType === 'limit') {
+        setPrice(data.newPrice.toString());
+      }
+    }
+  });
+  
   // Set current price when stock changes
   useEffect(() => {
     if (selectedStockData) {
-      setPrice(selectedStockData.price);
+      const currentPrice = realtimePrice || Number(selectedStockData.price);
+      setPrice(currentPrice.toString());
+      setRealtimePrice(null); // Clear realtime price after setting
     }
-  }, [selectedStockData]);
+  }, [selectedStockData, realtimePrice]);
 
   const tradeMutation = useMutation({
     mutationFn: async (tradeData: any) => {
@@ -202,7 +217,11 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
                 <span className="absolute right-4 top-3 text-gray-400">원</span>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                현재가: ₩{Number(selectedStockData.price).toLocaleString()}
+                {realtimePrice ? (
+                  <span className="text-orange-400">실시간: ₩{realtimePrice.toLocaleString()}</span>
+                ) : (
+                  `현재가: ₩${Number(selectedStockData.price).toLocaleString()}`
+                )}
               </p>
             </div>
 

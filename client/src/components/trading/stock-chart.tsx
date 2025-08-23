@@ -164,6 +164,34 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       }
     });
 
+    // Draw current price line if available
+    if (currentPrice > 0 && currentPrice >= minPrice && currentPrice <= maxPrice) {
+      const currentY = padding + ((maxPrice - currentPrice) / priceRange) * chartHeight;
+      
+      ctx.strokeStyle = '#f39c12';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(padding, currentY);
+      ctx.lineTo(width - padding, currentY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      
+      // Draw current price label with background
+      const labelText = `현재가: ₩${currentPrice.toLocaleString()}`;
+      ctx.font = 'bold 12px Inter';
+      ctx.textAlign = 'left';
+      const labelWidth = ctx.measureText(labelText).width;
+      
+      // Background for label
+      ctx.fillStyle = 'rgba(243, 156, 18, 0.8)';
+      ctx.fillRect(padding + 10, currentY - 20, labelWidth + 8, 16);
+      
+      // Label text
+      ctx.fillStyle = '#000000';
+      ctx.fillText(labelText, padding + 14, currentY - 8);
+    }
+
     // Draw price labels
     ctx.fillStyle = '#ffffff';
     ctx.font = '12px Inter';
@@ -172,7 +200,29 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     for (let i = 0; i <= 5; i++) {
       const price = maxPrice - (priceRange * i / 5);
       const y = padding + (chartHeight * i / 5) + 4;
-      ctx.fillText(`₩${price.toLocaleString()}`, padding - 10, y);
+      ctx.fillText(`₩${Math.round(price).toLocaleString()}`, padding - 10, y);
+    }
+    
+    // Add comprehensive legend at the bottom
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '12px Inter';
+    ctx.textAlign = 'left';
+    
+    const latestCandle = candlestickData[candlestickData.length - 1];
+    const latestHigh = Number(latestCandle?.high || 0);
+    const latestLow = Number(latestCandle?.low || 0);
+    const latestClose = Number(latestCandle?.close || 0);
+    
+    const legendText = `${symbol} | 고가: ₩${latestHigh.toLocaleString()} | 저가: ₩${latestLow.toLocaleString()} | 종가: ₩${latestClose.toLocaleString()}`;
+    ctx.fillText(legendText, padding, height - 10);
+    
+    // Show price change if available
+    if (priceChange !== 0) {
+      ctx.fillStyle = priceChange > 0 ? '#e74c3c' : '#3498db';
+      ctx.font = 'bold 12px Inter';
+      ctx.textAlign = 'right';
+      const changeText = `${priceChange > 0 ? '+' : ''}${priceChange.toFixed(2)}%`;
+      ctx.fillText(changeText, width - padding, height - 10);
     }
   };
 
@@ -273,8 +323,12 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                 </div>
               </div>
               <div className="text-sm text-gray-400">
-                <p>고가: ₩{selectedStock.price}</p>
-                <p>저가: ₩{selectedStock.price}</p>
+                <p>고가: ₩{candlestickData && candlestickData.length > 0 
+                  ? Math.max(...candlestickData.map(d => Number(d.high))).toLocaleString() 
+                  : Number(selectedStock.price).toLocaleString()}</p>
+                <p>저가: ₩{candlestickData && candlestickData.length > 0 
+                  ? Math.min(...candlestickData.map(d => Number(d.low))).toLocaleString() 
+                  : Number(selectedStock.price).toLocaleString()}</p>
               </div>
               <div className="text-sm text-gray-400">
                 <p>거래량: 1,245,678</p>
