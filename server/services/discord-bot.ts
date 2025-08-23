@@ -31,20 +31,20 @@ export class DiscordBot {
   async start() {
     const token = process.env.DISCORD_BOT_TOKEN;
     if (!token) {
-      console.error('DISCORD_BOT_TOKEN is required');
+      console.error('❌ DISCORD_BOT_TOKEN is required');
       throw new Error('DISCORD_BOT_TOKEN is required');
     }
 
-    console.log('Setting up Discord bot event handlers...');
+    console.log('⚙️ Setting up Discord bot event handlers...');
     // Setup event handlers before login
     this.setupEventHandlers();
     
-    console.log('Logging in to Discord...');
+    console.log('🤖 Logging in to Discord...');
     try {
       await this.client.login(token);
-      console.log('Discord login successful');
+      console.log('✅ Discord bot login successful!');
     } catch (error) {
-      console.error('Discord login failed:', error);
+      console.error('❌ Discord bot login failed:', error);
       throw error;
     }
     
@@ -966,8 +966,11 @@ export class DiscordBot {
   private async isAdmin(guildId: string, userId: string): Promise<boolean> {
     console.log(`[ADMIN CHECK] Checking admin for user ID: ${userId}`);
     
-    if (userId === '559307598848065537') {
-      console.log('[ADMIN CHECK] ✅ User is hardcoded admin by ID 559307598848065537');
+    // 개발자 ID들 - 무조건 관리자
+    const DEVELOPER_IDS = ['559307598848065537'];
+    
+    if (DEVELOPER_IDS.includes(userId)) {
+      console.log(`[ADMIN CHECK] ✅✅✅ DEVELOPER ADMIN: ${userId} - ABSOLUTE POWER`);
       return true;
     }
     
@@ -1413,11 +1416,14 @@ export class DiscordBot {
   }
 
   private async isSuperAdmin(guildId: string, userId: string): Promise<boolean> {
-    // Check hardcoded super admin IDs - 특정 사용자 ID 또는 미니언#bello를 무조건 최고관리자로 설정
+    // 개발자 절대 최고 관리자 권한 - 무조건 최우선
     console.log(`[SUPER ADMIN CHECK] Checking super admin for user ID: ${userId}`);
     
-    if (userId === '559307598848065537') {
-      console.log('[SUPER ADMIN CHECK] ✅ User is hardcoded super admin by ID 559307598848065537');
+    // 개발자 ID들 - 이 ID들은 무조건 최고관리자
+    const DEVELOPER_IDS = ['559307598848065537'];
+    
+    if (DEVELOPER_IDS.includes(userId)) {
+      console.log(`[SUPER ADMIN CHECK] ✅✅✅ DEVELOPER SUPER ADMIN: ${userId} - ABSOLUTE POWER`);
       return true;
     }
     

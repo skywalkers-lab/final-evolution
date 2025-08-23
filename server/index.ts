@@ -45,33 +45,33 @@ app.use((req, res, next) => {
   const server = await registerRoutes(app);
 
   // Initialize Discord bot if token is provided
-  log("Checking Discord bot token...");
+  log("🔍 Checking Discord bot token...");
   if (process.env.DISCORD_BOT_TOKEN) {
-    log("Discord bot token found, initializing bot...");
+    log("✅ Discord bot token found, initializing bot...");
     try {
       // Create a basic WebSocket manager for the bot
       const { WebSocketServer } = await import('ws');
       const wss = new WebSocketServer({ noServer: true });
       const wsManager = new WebSocketManager(wss);
       
-      log("Creating Discord bot instance...");
+      log("🤖 Creating Discord bot instance...");
       const discordBot = new DiscordBot(storage, wsManager);
       
-      log("Starting Discord bot...");
+      log("🚀 Starting Discord bot...");
       await discordBot.start();
       
       // Store bot instance globally for routes to access
       (global as any).discordBot = discordBot;
       
-      log("Discord bot initialized successfully");
+      log("🎉 Discord bot initialized successfully!");
     } catch (error) {
-      log(`Failed to initialize Discord bot: ${error}`);
+      log(`❌ Failed to initialize Discord bot: ${error}`);
       if (error instanceof Error) {
-        log(`Error stack: ${error.stack}`);
+        log(`❌ Error stack: ${error.stack}`);
       }
     }
   } else {
-    log("DISCORD_BOT_TOKEN not found, Discord bot will not start");
+    log("⚠️ DISCORD_BOT_TOKEN not found, Discord bot will not start");
   }
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
