@@ -97,7 +97,7 @@ export default function RecentActivity({ guildId }: RecentActivityProps) {
     return `${isIncoming ? '+' : '-'}₩${amount.toLocaleString()}`;
   };
 
-  const displayTransactions = transactions?.slice(0, 5) || [];
+  const displayTransactions = Array.isArray(transactions) ? transactions.slice(0, 5) : [];
 
   return (
     <div className="discord-bg-darker rounded-xl border border-discord-dark">

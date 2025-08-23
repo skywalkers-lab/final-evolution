@@ -617,7 +617,14 @@ export class DiscordBot {
       }
     } catch (error) {
       console.error('Command error:', error);
-      await interaction.reply('명령 처리 중 오류가 발생했습니다.');
+      // Check if interaction is already replied to avoid 40060 error
+      if (!interaction.replied && !interaction.deferred) {
+        try {
+          await interaction.reply('명령 처리 중 오류가 발생했습니다.');
+        } catch (replyError) {
+          console.error('Failed to send error reply:', replyError);
+        }
+      }
     }
   }
 
@@ -1451,7 +1458,11 @@ export class DiscordBot {
       console.error('Admin management command error:', error);
       // Check if interaction is already replied to avoid 40060 error
       if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply(`관리자 설정 실패: ${error.message}`);
+        try {
+          await interaction.reply(`관리자 설정 실패: ${error.message}`);
+        } catch (replyError) {
+          console.error('Failed to send error reply:', replyError);
+        }
       }
     }
   }
