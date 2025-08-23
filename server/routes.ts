@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import * as Express from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
@@ -10,6 +11,7 @@ import { AuctionManager } from "./services/auction-manager";
 import { TaxScheduler } from "./services/tax-scheduler";
 import { NewsAnalyzer } from "./services/news-analyzer";
 import { WebSocketManager } from "./services/websocket-manager";
+import "./types";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -30,7 +32,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   taxScheduler.start();
 
   // Authentication middleware
-  const requireAuth = async (req: any, res: any, next: any) => {
+  const requireAuth = async (req: Express.Request, res: Express.Response, next: Express.NextFunction) => {
     const authHeader = req.headers.authorization;
     if (!authHeader) {
       return res.status(401).json({ message: "No authorization header" });
@@ -514,6 +516,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await tradingEngine.executeTrade(guildId, userId, symbol, type, shares, Number(price));
       res.json(result);
     } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Limit Order routes
+  app.get("/api/guilds/:guildId/limit-orders", requireAuth, async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const { userId, status } = req.query;
+      
+      const limitOrders = await storage.getUserLimitOrders(guildId, userId as string, status as string);
+      res.json(limitOrders);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get limit orders" });
+    }
+  });
+
+  app.post("/api/guilds/:guildId/limit-orders", requireAuth, async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const { symbol, type, shares, targetPrice, expiresAt } = req.body;
+      const userId = req.user.id;
+      
+      const limitOrder = await tradingEngine.createLimitOrder(guildId, userId, symbol, type, shares, Number(targetPrice), expiresAt);
+      res.json(limitOrder);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/guilds/:guildId/limit-orders/:orderId", requireAuth, async (req, res) => {
+    try {
+      const { guildId, orderId } = req.params;
+      const userId = req.user.id;
+      
+      // Security check: Only allow users to cancel their own orders or if they're guild admin
+      const limitOrder = await storage.getLimitOrder(orderId);
+      if (!limitOrder) {
+        return res.status(404).json({ message: "지정가 주문을 찾을 수 없습니다" });
+      }
+      
+      if (limitOrder.userId !== userId) {
+        const isAdmin = await storage.isGuildAdmin(guildId, userId);
+        if (!isAdmin) {
+          return res.status(403).json({ message: "자신의 주문만 취소할 수 있습니다" });
+        }
+      }
+      
+      await storage.cancelLimitOrder(orderId);
+      res.json({ message: "지정가 주문이 취소되었습니다" });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Web client limit orders API
+  app.get("/api/web-client/guilds/:guildId/limit-orders", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const { status } = req.query;
+      
+      // Get or create web-client user
+      let user = await storage.getUserByDiscordId('web-client');
+      if (!user) {
+        user = await storage.createUser({
+          discordId: 'web-client',
+          username: 'Web Client',
+          discriminator: '0000',
+          avatar: null
+        });
+      }
+      
+      const limitOrders = await storage.getUserLimitOrders(guildId, user.id, status as string);
+      res.json(limitOrders);
+    } catch (error) {
+      console.error("Error fetching web client limit orders:", error);
+      res.status(500).json({ error: "Failed to fetch limit orders" });
+    }
+  });
+
+  app.post("/api/web-client/guilds/:guildId/limit-orders", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const { symbol, type, shares, targetPrice, expiresAt } = req.body;
+      
+      console.log('Web client limit order request:', { guildId, symbol, type, shares, targetPrice, expiresAt });
+      
+      // Get or create web-client user
+      let user = await storage.getUserByDiscordId('web-client');
+      if (!user) {
+        user = await storage.createUser({
+          discordId: 'web-client',
+          username: 'Web Client',
+          discriminator: '0000',
+          avatar: null
+        });
+      }
+      
+      const limitOrder = await tradingEngine.createLimitOrder(guildId, user.id, symbol, type, shares, Number(targetPrice), expiresAt);
+      res.json(limitOrder);
+    } catch (error: any) {
+      console.error('Web client limit order error:', error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/web-client/guilds/:guildId/limit-orders/:orderId", async (req, res) => {
+    try {
+      const { guildId, orderId } = req.params;
+      
+      // Get or create web-client user
+      let user = await storage.getUserByDiscordId('web-client');
+      if (!user) {
+        return res.status(404).json({ message: "사용자를 찾을 수 없습니다" });
+      }
+      
+      // Get limit order and check ownership
+      const limitOrder = await storage.getLimitOrder(orderId);
+      if (!limitOrder) {
+        return res.status(404).json({ message: "지정가 주문을 찾을 수 없습니다" });
+      }
+      
+      if (limitOrder.userId !== user.id) {
+        return res.status(403).json({ message: "자신의 주문만 취소할 수 있습니다" });
+      }
+      
+      await storage.cancelLimitOrder(orderId);
+      res.json({ message: "지정가 주문이 취소되었습니다" });
+    } catch (error: any) {
+      console.error('Web client limit order cancel error:', error);
       res.status(400).json({ message: error.message });
     }
   });

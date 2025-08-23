@@ -14,7 +14,6 @@ export default function Sidebar() {
     { path: "/trading", icon: "fas fa-chart-candlestick", label: "주식 거래" },
     { path: "/auctions", icon: "fas fa-gavel", label: "경매" },
     { path: "/news", icon: "fas fa-newspaper", label: "뉴스 분석" },
-    { path: "/tax", icon: "fas fa-coins", label: "세금 관리" },
   ];
 
   const adminItems = [

@@ -10,7 +10,6 @@ import BankPage from "./pages/bank";
 import TradingPage from "./pages/trading";
 import AuctionsPage from "./pages/auctions";
 import NewsPage from "./pages/news";
-import TaxPage from "./pages/tax";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -22,7 +21,6 @@ function Router() {
       <Route path="/trading" component={TradingPage} />
       <Route path="/auctions" component={AuctionsPage} />
       <Route path="/news" component={NewsPage} />
-      <Route path="/tax" component={TaxPage} />
       <Route component={NotFound} />
     </Switch>
   );

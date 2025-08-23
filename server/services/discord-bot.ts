@@ -445,6 +445,18 @@ export class DiscordBot {
             .setName('목록')
             .setDescription('현재 관리자 목록을 보여줍니다')
         )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('세율설정')
+            .setDescription('세율을 설정합니다 (%)')
+            .addNumberOption(option =>
+              option.setName('세율')
+                .setDescription('설정할 세율 (예: 3.3은 3.3%)')
+                .setRequired(true)
+                .setMinValue(0)
+                .setMaxValue(50)
+            )
+        )
     ];
 
     if (this.client.application) {
@@ -1353,6 +1365,9 @@ export class DiscordBot {
         case '목록':
           await this.listAdmins(interaction, guildId);
           break;
+        case '세율설정':
+          await this.setTaxRate(interaction, guildId, userId);
+          break;
         default:
           await interaction.reply('알 수 없는 하위 명령입니다.');
       }
@@ -1651,6 +1666,29 @@ export class DiscordBot {
       await interaction.reply(response);
     } catch (error: any) {
       await interaction.reply(`세금집계 조회 실패: ${error.message}`);
+    }
+  }
+
+  private async setTaxRate(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
+    const taxRate = interaction.options.getNumber('세율', true);
+    
+    try {
+      // Update or create guild settings with the new tax rate
+      let settings = await this.storage.getGuildSettings(guildId);
+      if (!settings) {
+        await this.storage.createGuildSettings({
+          guildId,
+          taxRate: taxRate.toString()
+        });
+      } else {
+        await this.storage.updateGuildSettings(guildId, {
+          taxRate: taxRate.toString()
+        });
+      }
+      
+      await interaction.reply(`✅ 세율이 ${taxRate}%로 설정되었습니다.\n📅 세금은 매월 15일 자정에 자동으로 징수됩니다.`);
+    } catch (error: any) {
+      await interaction.reply(`세율 설정 실패: ${error.message}`);
     }
   }
 

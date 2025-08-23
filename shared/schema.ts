@@ -35,7 +35,7 @@ export const guildSettings = pgTable("guild_settings", {
   adminRoleId: varchar("admin_role_id"),
   employerRoleId: varchar("employer_role_id"),
   currencySymbol: text("currency_symbol").default("₩"),
-  taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("0"),
+  taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("3.3"),
   // Tax bracket settings
   taxBracket1Limit: decimal("tax_bracket1_limit", { precision: 15, scale: 2 }).default("1000000"), // 100만원
   taxBracket1Rate: decimal("tax_bracket1_rate", { precision: 5, scale: 2 }).default("10"), // 10%

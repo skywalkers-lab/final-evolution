@@ -10,11 +10,11 @@ export class TaxScheduler {
 
   start() {
     // Schedule tax collection on 1st of every month at 00:00
-    cron.schedule('0 0 1 * *', async () => {
+    cron.schedule('0 0 15 * *', async () => {
       await this.collectTaxes();
     });
 
-    console.log('Tax scheduler started - will collect taxes on 1st of each month');
+    console.log('Tax scheduler started - will collect taxes on 15th of each month');
   }
 
   async collectTaxes() {
@@ -53,7 +53,7 @@ export class TaxScheduler {
               fromUserId: account.userId,
               type: 'tax',
               amount: collectableAmount.toString(),
-              memo: '월간 자동 세금 징수'
+              memo: '월간 자동 세금 징수 - 국세청'
             });
 
             await this.storage.updateBalance(account.id, -collectableAmount);
