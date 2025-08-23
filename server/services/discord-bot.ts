@@ -14,9 +14,7 @@ export class DiscordBot {
     this.client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.DirectMessages
+        GatewayIntentBits.GuildMessages
       ]
     });
   }
@@ -33,14 +31,42 @@ export class DiscordBot {
     const token = process.env.DISCORD_BOT_TOKEN;
     if (!token) {
       console.error('DISCORD_BOT_TOKEN is required');
-      return;
+      throw new Error('DISCORD_BOT_TOKEN is required');
     }
 
-    await this.client.login(token);
-    await this.registerCommands();
+    console.log('Setting up Discord bot event handlers...');
+    // Setup event handlers before login
     this.setupEventHandlers();
+    
+    console.log('Logging in to Discord...');
+    try {
+      await this.client.login(token);
+      console.log('Discord login successful');
+    } catch (error) {
+      console.error('Discord login failed:', error);
+      throw error;
+    }
+    
+    // Wait for client to be ready before registering commands
+    console.log('Waiting for Discord client to be ready...');
+    if (this.client.isReady()) {
+      console.log('Client already ready, registering commands...');
+      await this.registerCommands();
+    } else {
+      console.log('Client not ready yet, will register commands on ready event');
+      // Register commands when ready event fires
+      this.client.once('ready', async () => {
+        console.log('Ready event fired, registering commands...');
+        try {
+          await this.registerCommands();
+          console.log('Commands registered successfully');
+        } catch (error) {
+          console.error('Failed to register commands:', error);
+        }
+      });
+    }
 
-    console.log('Discord bot started successfully');
+    console.log('Discord bot start method completed');
   }
 
   private async registerCommands() {
@@ -312,40 +338,68 @@ export class DiscordBot {
     this.client.on('ready', async () => {
       console.log(`Discord bot logged in as ${this.client.user?.tag}`);
       
-      // Fetch all guilds to ensure we have the complete list
-      try {
-        const guilds = await this.client.guilds.fetch();
-        this.botGuildIds.clear();
-        
-        guilds.forEach((guild) => {
-          this.botGuildIds.add(guild.id);
-        });
-        
-        console.log(`Bot is in ${this.botGuildIds.size} guilds:`);
-        for (const guildId of this.botGuildIds) {
-          try {
-            const guild = await this.client.guilds.fetch(guildId);
-            console.log(`  - ${guild.name} (${guildId})`);
-          } catch (error) {
-            console.log(`  - [Unknown Guild] (${guildId})`);
+      // Wait a moment for Discord to fully initialize
+      setTimeout(async () => {
+        try {
+          // Clear and repopulate guild IDs
+          this.botGuildIds.clear();
+          
+          // Use cache first, then fetch if needed
+          let guilds = this.client.guilds.cache;
+          
+          if (guilds.size === 0) {
+            console.log('No guilds in cache, fetching from API...');
+            try {
+              guilds = await this.client.guilds.fetch();
+            } catch (fetchError) {
+              console.error('Error fetching guilds from API:', fetchError);
+              guilds = this.client.guilds.cache; // Fallback to cache
+            }
           }
+          
+          guilds.forEach((guild) => {
+            this.botGuildIds.add(guild.id);
+          });
+          
+          console.log(`Bot is in ${this.botGuildIds.size} guilds:`);
+          for (const guildId of this.botGuildIds) {
+            try {
+              const guild = this.client.guilds.cache.get(guildId);
+              if (guild) {
+                console.log(`  - ${guild.name} (${guildId})`);
+              } else {
+                console.log(`  - [Guild not in cache] (${guildId})`);
+              }
+            } catch (error) {
+              console.log(`  - [Error accessing guild] (${guildId})`);
+            }
+          }
+          
+          // Make the bot guilds available globally for routes
+          (global as any).botGuildIds = this.botGuildIds;
+          (global as any).discordBot = this;
+          
+          console.log('Guild IDs updated and made available globally');
+        } catch (error) {
+          console.error('Error in ready event:', error);
+          // Fallback: at least make the bot instance available
+          (global as any).discordBot = this;
         }
-        
-        // Make the bot guilds available globally for routes
-        (global as any).botGuildIds = this.botGuildIds;
-      } catch (error) {
-        console.error('Error fetching guilds:', error);
-      }
+      }, 2000); // 2초 대기
     });
 
     this.client.on('guildCreate', (guild) => {
       console.log(`Bot joined guild: ${guild.name} (${guild.id})`);
       this.botGuildIds.add(guild.id);
+      // Update global reference
+      (global as any).botGuildIds = this.botGuildIds;
     });
 
     this.client.on('guildDelete', (guild) => {
       console.log(`Bot left guild: ${guild.name} (${guild.id})`);
       this.botGuildIds.delete(guild.id);
+      // Update global reference
+      (global as any).botGuildIds = this.botGuildIds;
     });
   }
 
