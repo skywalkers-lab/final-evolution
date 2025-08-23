@@ -4,7 +4,7 @@ import { useWebSocket } from "@/hooks/use-websocket";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Bar, BarChart, ReferenceLine } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Bar, BarChart, ReferenceLine, ComposedChart, Tooltip } from "recharts";
 
 interface StockChartProps {
   symbol: string;
@@ -33,19 +33,16 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
   // WebSocket handler for real-time updates
   useWebSocket((event: string, data: any) => {
     if (event === 'stock_price_updated' && data.symbol === symbol) {
-      // 실시간 가격 업데이트 시 캔들스틱 데이터와 동기화
-      if (candlestickData.length > 0) {
-        const lastCandle = candlestickData[candlestickData.length - 1];
-        setCurrentPrice(data.newPrice);
-        // 변동률을 직전 캔들의 종가 기준으로 재계산
-        const prevClose = Number(lastCandle.close);
-        const change = ((data.newPrice - prevClose) / prevClose) * 100;
-        setPriceChange(change);
-      } else {
-        setCurrentPrice(data.newPrice);
-        setPriceChange(data.changePercent || 0);
-      }
+      // 실시간 가격 업데이트 시 캔들스틱 데이터 새로 가져오기
+      setCurrentPrice(data.newPrice);
+      setPriceChange(data.changePercent || 0);
       setLastUpdate(new Date());
+      
+      // 캔들스틱 데이터 새로고침 (실시간 업데이트)
+      queryClient.invalidateQueries({ 
+        queryKey: ['/api/web-client/guilds', guildId, 'stocks', symbol, 'candlestick', timeframe] 
+      });
+      
       drawChart();
     } else if (event === 'stock_created' && data.guildId === guildId) {
       queryClient.invalidateQueries({ queryKey: ['/api/guilds', guildId, 'stocks'] });
@@ -523,10 +520,14 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                             
                             return {
                               time: timeLabel,
+                              timestamp: item.timestamp,
+                              date: date.toLocaleDateString('ko-KR'),
+                              rawTime: date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
                               price: Number(item.close),
                               open: Number(item.open),
                               high: Number(item.high),
                               low: Number(item.low),
+                              volume: Number(item.volume || 0),
                               change: index > 0 ? Number(item.close) - Number(candlestickData[index - 1].close) : 0
                             };
                           }) : []}
@@ -549,13 +550,56 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                             tickFormatter={(value) => `₩${value.toLocaleString()}`}
                             domain={['dataMin - 1000', 'dataMax + 1000']}
                           />
-                          <ChartTooltip 
-                            content={<ChartTooltipContent 
-                              formatter={(value, name) => [
-                                `₩${Number(value).toLocaleString()}`,
-                                "주가"
-                              ]}
-                            />}
+                          <Tooltip 
+                            content={({ active, payload, label }) => {
+                              if (active && payload && payload.length) {
+                                const data = payload[0].payload;
+                                const priceChangeValue = data.change || 0;
+                                const priceChangePercent = data.open ? ((data.price - data.open) / data.open) * 100 : 0;
+                                
+                                return (
+                                  <div className="bg-discord-darker border border-discord-dark rounded-lg p-4 shadow-lg">
+                                    <div className="text-white font-semibold mb-2">{symbol} - {data.date}</div>
+                                    <div className="space-y-1 text-sm">
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-400">시간:</span>
+                                        <span className="text-white">{data.rawTime}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-400">시가:</span>
+                                        <span className="text-white">₩{data.open.toLocaleString()}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-400">고가:</span>
+                                        <span className="text-red-500">₩{data.high.toLocaleString()}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-400">저가:</span>
+                                        <span className="text-blue-500">₩{data.low.toLocaleString()}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-400">종가:</span>
+                                        <span className="text-white font-bold">₩{data.price.toLocaleString()}</span>
+                                      </div>
+                                      <hr className="border-discord-dark my-2" />
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-400">변동:</span>
+                                        <span className={priceChangeValue >= 0 ? 'text-red-500' : 'text-blue-500'}>
+                                          {priceChangeValue >= 0 ? '+' : ''}₩{priceChangeValue.toLocaleString()}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-400">변동률:</span>
+                                        <span className={priceChangePercent >= 0 ? 'text-red-500' : 'text-blue-500'}>
+                                          {priceChangePercent >= 0 ? '+' : ''}{priceChangePercent.toFixed(2)}%
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
                           />
                           <Line 
                             type="monotone" 

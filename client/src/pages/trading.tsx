@@ -99,7 +99,7 @@ export default function TradingPage() {
             <StockChart 
               symbol={selectedStock}
               guildId={selectedGuildId}
-              stocks={stocks}
+              stocks={stocks as any[] || []}
               onSymbolChange={setSelectedStock}
             />
           ) : (
@@ -121,12 +121,15 @@ export default function TradingPage() {
             <TradingPanel 
               selectedStock={selectedStock}
               guildId={selectedGuildId}
-              stocks={stocks}
+              stocks={stocks as any[] || []}
             />
           )}
           
           {/* 포트폴리오 */}
-          <Portfolio portfolio={portfolio} />
+          <Portfolio 
+            guildId={selectedGuildId} 
+            userId={user.id}
+          />
           
           {/* 시장 현황 */}
           <Card className="discord-bg-darker border-discord-dark">

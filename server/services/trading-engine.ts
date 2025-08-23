@@ -119,16 +119,35 @@ export class TradingEngine {
       for (const stock of activeStocks) {
         if (stock.status === 'active') {
           const currentPrice = Number(stock.price);
+          const volatility = Number(stock.volatility || 1); // 기본 변동률 1%
           
-          // Random price movement ±3%
-          const changePercent = (Math.random() - 0.5) * 0.06; // -3% to +3%
-          const newPrice = Math.max(1, Math.floor(currentPrice * (1 + changePercent)));
+          // 더 현실적인 가격 변동 - 큰 변동은 드물게
+          const randomFactor = Math.random();
+          let changePercent;
+          
+          if (randomFactor < 0.8) {
+            // 80% 확률로 작은 변동 (volatility의 10% 이내)
+            changePercent = (Math.random() - 0.5) * (volatility * 0.2 / 100);
+          } else if (randomFactor < 0.95) {
+            // 15% 확률로 중간 변동 (volatility의 50% 이내)
+            changePercent = (Math.random() - 0.5) * (volatility * 1.0 / 100);
+          } else {
+            // 5% 확률로 큰 변동 (full volatility)
+            changePercent = (Math.random() - 0.5) * (volatility * 2 / 100);
+          }
+          
+          const newPrice = Math.max(100, Math.round(currentPrice * (1 + changePercent))); // 최소 100원
+          
+          // 거래량도 더 현실적으로 계산
+          const baseVolume = Math.floor(Math.random() * 5000) + 500; // 500~5500주
+          const volumeMultiplier = Math.abs(changePercent) * 10 + 1; // 변동이 클수록 거래량 증가
+          const finalVolume = Math.round(baseVolume * volumeMultiplier);
+          
+          // Always update candlestick data with current price (for real-time progression)
+          await this.updateCandlestickData(stock.guildId, stock.symbol, newPrice, finalVolume);
           
           if (newPrice !== currentPrice) {
             await this.storage.updateStockPrice(stock.guildId, stock.symbol, newPrice);
-            
-            // Update candlestick data
-            await this.updateCandlestickData(stock.guildId, stock.symbol, newPrice, 0);
             
             // Broadcast price update
             this.wsManager.broadcast('stock_price_updated', {
@@ -149,35 +168,72 @@ export class TradingEngine {
   private async updateCandlestickData(guildId: string, symbol: string, price: number, volume: number) {
     try {
       const now = new Date();
-      const currentHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
       
-      // Get or create current hour's candlestick
-      let candlestick = await this.storage.getCandlestick(guildId, symbol, '1h', currentHour);
+      // Update multiple timeframes for real-time progression
+      const timeframes = [
+        { tf: 'realtime', interval: 1 }, // Every minute for real-time
+        { tf: '1h', interval: 60 }, // Every hour
+        { tf: '6h', interval: 360 }, // Every 6 hours
+        { tf: '12h', interval: 720 }, // Every 12 hours
+        { tf: '1d', interval: 1440 }, // Every day
+      ];
       
-      if (!candlestick) {
-        // Create new candlestick
-        await this.storage.createCandlestick({
-          guildId,
-          symbol,
-          timeframe: '1h',
-          timestamp: currentHour,
-          open: price.toString(),
-          high: price.toString(),
-          low: price.toString(),
-          close: price.toString(),
-          volume
-        });
-      } else {
-        // Update existing candlestick
-        await this.storage.updateCandlestick(guildId, symbol, '1h', currentHour, {
-          high: Math.max(Number(candlestick.high), price).toString(),
-          low: Math.min(Number(candlestick.low), price).toString(),
-          close: price.toString(),
-          volume: (candlestick.volume || 0) + volume
-        });
+      for (const { tf, interval } of timeframes) {
+        const timestamp = this.getTimeframeTimestamp(now, tf);
+        
+        // Get or create candlestick for this timeframe
+        let candlestick = await this.storage.getCandlestick(guildId, symbol, tf, timestamp);
+        
+        if (!candlestick) {
+          // Create new candlestick
+          await this.storage.createCandlestick({
+            guildId,
+            symbol,
+            timeframe: tf,
+            timestamp: timestamp,
+            open: price.toString(),
+            high: price.toString(),
+            low: price.toString(),
+            close: price.toString(),
+            volume
+          });
+        } else {
+          // Update existing candlestick
+          await this.storage.updateCandlestick(guildId, symbol, tf, timestamp, {
+            high: Math.max(Number(candlestick.high), price).toString(),
+            low: Math.min(Number(candlestick.low), price).toString(),
+            close: price.toString(),
+            volume: (candlestick.volume || 0) + volume
+          });
+        }
       }
     } catch (error) {
       console.error('Error updating candlestick data:', error);
+    }
+  }
+  
+  private getTimeframeTimestamp(date: Date, timeframe: string): Date {
+    switch (timeframe) {
+      case 'realtime':
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes());
+      case '1h':
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours());
+      case '6h':
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate(), Math.floor(date.getHours() / 6) * 6);
+      case '12h':
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate(), Math.floor(date.getHours() / 12) * 12);
+      case '1d':
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      case '2w':
+        const startOfWeek = new Date(date);
+        startOfWeek.setDate(date.getDate() - (date.getDay() === 0 ? 6 : date.getDay() - 1));
+        return new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate());
+      case '1m':
+        return new Date(date.getFullYear(), date.getMonth(), 1);
+      case '6m':
+        return new Date(date.getFullYear(), Math.floor(date.getMonth() / 6) * 6, 1);
+      default:
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours());
     }
   }
 

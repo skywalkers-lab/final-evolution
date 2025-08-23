@@ -128,7 +128,7 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
   const totalRequired = orderAmount + fee;
 
   const availableBalance = Number((portfolio as any)?.account?.balance || 0);
-  const holding = portfolio?.holdings?.find((h: any) => h.symbol === selectedStock);
+  const holding = (portfolio as any)?.holdings?.find((h: any) => h.symbol === selectedStock);
   const availableShares = holding?.shares || 0;
 
   const canTrade = () => {

@@ -1,14 +1,15 @@
 import { 
   users, accounts, transactions, stocks, holdings, stockTransactions, 
   candlestickData, newsAnalyses, auctions, auctionBids, escrows, 
-  auditLogs, guildSettings, guildAdmins,
+  auditLogs, guildSettings, guildAdmins, auctionPasswords,
   type User, type InsertUser, type Account, type InsertAccount,
   type Transaction, type InsertTransaction, type Stock, type InsertStock,
   type Holding, type InsertHolding, type StockTransaction, type InsertStockTransaction,
   type CandlestickData, type InsertCandlestickData, type NewsAnalysis, type InsertNewsAnalysis,
   type Auction, type InsertAuction, type AuctionBid, type InsertAuctionBid,
   type Escrow, type InsertEscrow, type AuditLog, type InsertAuditLog,
-  type GuildSettings, type InsertGuildSettings, type GuildAdmin, type InsertGuildAdmin
+  type GuildSettings, type InsertGuildSettings, type GuildAdmin, type InsertGuildAdmin,
+  type AuctionPassword, type InsertAuctionPassword
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql, gt, lt, asc } from "drizzle-orm";
@@ -101,6 +102,12 @@ export interface IStorage {
   releaseAllEscrows(auctionId: string): Promise<void>;
   captureEscrow(escrowId: string): Promise<void>;
   settleAuction(auctionId: string, winnerId: string): Promise<void>;
+
+  // Auction passwords
+  createAuctionPassword(password: InsertAuctionPassword): Promise<AuctionPassword>;
+  getAuctionPassword(guildId: string, password: string): Promise<AuctionPassword | undefined>;
+  markAuctionPasswordAsUsed(id: string): Promise<void>;
+  cleanupExpiredAuctionPasswords(): Promise<void>;
 
   // Audit logs
   addAuditLog(log: InsertAuditLog): Promise<AuditLog>;
@@ -849,6 +856,37 @@ export class DatabaseStorage implements IStorage {
         }
       }
     });
+  }
+
+  // Auction password methods
+  async createAuctionPassword(insertPassword: InsertAuctionPassword): Promise<AuctionPassword> {
+    const [password] = await db.insert(auctionPasswords).values(insertPassword).returning();
+    return password;
+  }
+
+  async getAuctionPassword(guildId: string, password: string): Promise<AuctionPassword | undefined> {
+    const [result] = await db.select().from(auctionPasswords)
+      .where(and(
+        eq(auctionPasswords.guildId, guildId),
+        eq(auctionPasswords.password, password),
+        eq(auctionPasswords.used, false),
+        gt(auctionPasswords.expiresAt, new Date())
+      ));
+    return result || undefined;
+  }
+
+  async markAuctionPasswordAsUsed(id: string): Promise<void> {
+    await db.update(auctionPasswords)
+      .set({ used: true })
+      .where(eq(auctionPasswords.id, id));
+  }
+
+  async cleanupExpiredAuctionPasswords(): Promise<void> {
+    await db.delete(auctionPasswords)
+      .where(or(
+        eq(auctionPasswords.used, true),
+        lt(auctionPasswords.expiresAt, new Date())
+      ));
   }
 
   // Audit log methods

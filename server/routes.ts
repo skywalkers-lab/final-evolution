@@ -393,20 +393,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw error;
       }
       
-      // Get holdings from database
+      // Get holdings from database and enrich with current prices
       const holdings = await storage.getHoldingsByUser(guildId, user.id);
+      const enrichedHoldings = [];
+      let stocksValue = 0;
+      
+      for (const holding of holdings || []) {
+        const stock = await storage.getStockBySymbol(guildId, holding.symbol);
+        const currentPrice = stock ? Number(stock.price) : 0;
+        const enrichedHolding = {
+          ...holding,
+          name: stock?.name || holding.symbol,
+          currentPrice,
+        };
+        enrichedHoldings.push(enrichedHolding);
+        stocksValue += holding.shares * currentPrice;
+      }
+      
+      const totalValue = Number(account.balance) + stocksValue;
       
       const portfolio = {
-        holdings: holdings || [],
+        holdings: enrichedHoldings,
         account: {
           id: account.id,
           balance: account.balance,
           frozen: account.frozen || false,
           uniqueCode: account.uniqueCode
         },
-        totalValue: Number(account.balance) + (holdings?.reduce((sum: number, holding: any) => {
-          return sum + (Number(holding.shares) * Number(holding.avgPrice || 0));
-        }, 0) || 0)
+        totalValue
       };
       
       console.log('Web client portfolio response:', { balance: account.balance, totalValue: portfolio.totalValue });
@@ -635,12 +649,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Validate auction password before creating auction
+  app.post("/api/guilds/:guildId/auctions/validate-password", requireAuth, async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const { password } = req.body;
+      
+      if (!password) {
+        return res.status(400).json({ message: "비밀번호가 필요합니다" });
+      }
+
+      const auctionPassword = await storage.getAuctionPassword(guildId, password);
+      
+      if (!auctionPassword) {
+        return res.status(400).json({ message: "유효하지 않거나 만료된 비밀번호입니다" });
+      }
+
+      // Return the password details for use in auction creation
+      res.json({
+        valid: true,
+        passwordData: {
+          id: auctionPassword.id,
+          itemName: auctionPassword.itemName,
+          startPrice: auctionPassword.startPrice,
+          duration: auctionPassword.duration,
+          buyoutPrice: auctionPassword.buyoutPrice,
+          description: auctionPassword.description
+        }
+      });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   app.post("/api/guilds/:guildId/auctions", requireAuth, async (req, res) => {
     try {
       const { guildId } = req.params;
-      const auctionData = { ...req.body, guildId };
-      const auction = await auctionManager.createAuction(auctionData);
-      res.json(auction);
+      const { password, ...auctionData } = req.body;
+      
+      // Validate password if provided
+      if (password) {
+        const auctionPassword = await storage.getAuctionPassword(guildId, password);
+        
+        if (!auctionPassword) {
+          return res.status(400).json({ message: "유효하지 않거나 만료된 비밀번호입니다" });
+        }
+
+        // Use password data to create auction
+        const endTime = new Date(Date.now() + auctionPassword.duration * 60 * 60 * 1000);
+        
+        const finalAuctionData = {
+          guildId,
+          itemType: 'text' as const,
+          itemRef: auctionPassword.itemName,
+          startPrice: auctionPassword.startPrice,
+          buyoutPrice: auctionPassword.buyoutPrice,
+          endsAt: endTime,
+          description: auctionPassword.description,
+          sellerUserId: 'web-dashboard',
+          ...auctionData
+        };
+
+        const auction = await auctionManager.createAuction(finalAuctionData);
+        
+        // Mark password as used
+        await storage.markAuctionPasswordAsUsed(auctionPassword.id);
+        
+        res.json(auction);
+      } else {
+        // Legacy creation without password
+        const finalAuctionData = { ...auctionData, guildId };
+        const auction = await auctionManager.createAuction(finalAuctionData);
+        res.json(auction);
+      }
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }
@@ -673,6 +754,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // News analysis routes
+  app.get("/api/guilds/:guildId/news", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const { limit = 50 } = req.query;
+      
+      const news = await storage.getNewsAnalysesByGuild(guildId, {
+        limit: Number(limit)
+      });
+      
+      res.json(news);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get news analyses" });
+    }
+  });
+
   app.post("/api/guilds/:guildId/news/analyze", requireAuth, async (req, res) => {
     try {
       const { guildId } = req.params;

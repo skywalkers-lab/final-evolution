@@ -35,6 +35,17 @@ export const guildSettings = pgTable("guild_settings", {
   employerRoleId: varchar("employer_role_id"),
   currencySymbol: text("currency_symbol").default("₩"),
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("0"),
+  // Tax bracket settings
+  taxBracket1Limit: decimal("tax_bracket1_limit", { precision: 15, scale: 2 }).default("1000000"), // 100만원
+  taxBracket1Rate: decimal("tax_bracket1_rate", { precision: 5, scale: 2 }).default("10"), // 10%
+  taxBracket2Limit: decimal("tax_bracket2_limit", { precision: 15, scale: 2 }).default("5000000"), // 500만원
+  taxBracket2Rate: decimal("tax_bracket2_rate", { precision: 5, scale: 2 }).default("15"), // 15%
+  taxBracket3Rate: decimal("tax_bracket3_rate", { precision: 5, scale: 2 }).default("20"), // 20%
+  // Tax collection settings
+  taxExemptionAmount: decimal("tax_exemption_amount", { precision: 15, scale: 2 }).default("1000"), // 면제 기준액
+  taxCollectionDay: integer("tax_collection_day").default(31), // 징수일 (월말)
+  lateFeeRate: decimal("late_fee_rate", { precision: 5, scale: 2 }).default("3"), // 연체료율 3%
+  freezeAfterMonths: integer("freeze_after_months").default(3), // 계좌 동결 기간 (3개월)
   newsMaxImpactPct: decimal("news_max_impact_pct", { precision: 5, scale: 2 }).default("15"),
   auctionFeePct: decimal("auction_fee_pct", { precision: 5, scale: 2 }).default("0"),
   priceVolatilityPct: decimal("price_volatility_pct", { precision: 5, scale: 2 }).default("3.0"),
@@ -183,6 +194,39 @@ export const escrows = pgTable("escrows", {
   status: escrowStatusEnum("status").default("held"),
 });
 
+// Auction passwords (temporary passwords for creating auctions)
+export const auctionPasswords = pgTable("auction_passwords", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  guildId: varchar("guild_id").notNull(),
+  createdBy: varchar("created_by").notNull(), // Discord user ID
+  password: text("password").notNull(), // 6-digit temporary password
+  itemName: text("item_name").notNull(),
+  startPrice: decimal("start_price", { precision: 15, scale: 2 }).notNull(),
+  duration: integer("duration").default(24), // hours
+  buyoutPrice: decimal("buyout_price", { precision: 15, scale: 2 }),
+  description: text("description"),
+  used: boolean("used").default(false),
+  expiresAt: timestamp("expires_at").notNull(), // Expires after 30 minutes
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
+// Tax collection records
+export const taxCollections = pgTable("tax_collections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  guildId: varchar("guild_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  collectionMonth: varchar("collection_month").notNull(), // YYYY-MM format
+  totalAssets: decimal("total_assets", { precision: 15, scale: 2 }).notNull(),
+  taxableAmount: decimal("taxable_amount", { precision: 15, scale: 2 }).notNull(),
+  taxOwed: decimal("tax_owed", { precision: 15, scale: 2 }).notNull(),
+  taxPaid: decimal("tax_paid", { precision: 15, scale: 2 }).default("0"),
+  lateFee: decimal("late_fee", { precision: 15, scale: 2 }).default("0"),
+  status: text("status").notNull().default("pending"), // pending, paid, overdue, frozen
+  dueDate: timestamp("due_date").notNull(),
+  paidDate: timestamp("paid_date"),
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
 // Audit logs
 export const auditLogs = pgTable("audit_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -238,6 +282,8 @@ export const insertNewsAnalysisSchema = createInsertSchema(newsAnalyses).omit({ 
 export const insertAuctionSchema = createInsertSchema(auctions).omit({ id: true, createdAt: true });
 export const insertAuctionBidSchema = createInsertSchema(auctionBids).omit({ id: true, createdAt: true });
 export const insertEscrowSchema = createInsertSchema(escrows).omit({ id: true });
+export const insertAuctionPasswordSchema = createInsertSchema(auctionPasswords).omit({ id: true, createdAt: true });
+export const insertTaxCollectionSchema = createInsertSchema(taxCollections).omit({ id: true, createdAt: true });
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
 export const insertGuildAdminSchema = createInsertSchema(guildAdmins).omit({ id: true, grantedAt: true });
 
@@ -266,6 +312,10 @@ export type AuctionBid = typeof auctionBids.$inferSelect;
 export type InsertAuctionBid = z.infer<typeof insertAuctionBidSchema>;
 export type Escrow = typeof escrows.$inferSelect;
 export type InsertEscrow = z.infer<typeof insertEscrowSchema>;
+export type AuctionPassword = typeof auctionPasswords.$inferSelect;
+export type InsertAuctionPassword = z.infer<typeof insertAuctionPasswordSchema>;
+export type TaxCollection = typeof taxCollections.$inferSelect;
+export type InsertTaxCollection = z.infer<typeof insertTaxCollectionSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type GuildAdmin = typeof guildAdmins.$inferSelect;

@@ -9,7 +9,7 @@ export default function Sidebar() {
   const selectedGuild = guilds.find(g => g.id === selectedGuildId);
 
   const menuItems = [
-    { path: "/", icon: "fas fa-chart-line", label: "대시보드", active: location === "/" },
+    { path: "/", icon: "fas fa-chart-line", label: "대시보드" },
     { path: "/bank", icon: "fas fa-university", label: "은행 & 계좌" },
     { path: "/trading", icon: "fas fa-chart-candlestick", label: "주식 거래" },
     { path: "/auctions", icon: "fas fa-gavel", label: "경매" },
@@ -87,7 +87,7 @@ export default function Sidebar() {
             key={item.path}
             onClick={() => setLocation(item.path)}
             className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${
-              item.active
+              location === item.path
                 ? 'bg-discord-blue text-white'
                 : 'text-gray-300 hover:bg-discord-dark hover:text-white'
             }`}
