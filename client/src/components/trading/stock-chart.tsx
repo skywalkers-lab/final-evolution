@@ -50,7 +50,23 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
 
   const drawChart = () => {
     const canvas = canvasRef.current;
-    if (!canvas || !candlestickData || candlestickData.length === 0) return;
+    if (!canvas || !candlestickData || candlestickData.length === 0) {
+      // Draw empty chart message
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const { width, height } = canvas;
+          ctx.clearRect(0, 0, width, height);
+          ctx.fillStyle = '#2c2f33';
+          ctx.fillRect(0, 0, width, height);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '14px Inter';
+          ctx.textAlign = 'center';
+          ctx.fillText('차트 데이터가 없습니다', width / 2, height / 2);
+        }
+      }
+      return;
+    }
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -59,20 +75,23 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     ctx.clearRect(0, 0, width, height);
 
     // Chart styling
-    ctx.fillStyle = 'var(--discord-dark)';
+    ctx.fillStyle = '#2c2f33';
     ctx.fillRect(0, 0, width, height);
 
     const padding = 40;
     const chartWidth = width - 2 * padding;
     const chartHeight = height - 2 * padding;
 
-    // Calculate price range
+    // Calculate price range including current price
     const prices = candlestickData.flatMap(d => [
       Number(d.high), Number(d.low), Number(d.open), Number(d.close)
     ]);
+    if (currentPrice > 0) {
+      prices.push(currentPrice);
+    }
     const maxPrice = Math.max(...prices);
     const minPrice = Math.min(...prices);
-    const priceRange = maxPrice - minPrice;
+    const priceRange = maxPrice - minPrice === 0 ? maxPrice * 0.1 : maxPrice - minPrice;
 
     // Draw grid lines
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
@@ -86,15 +105,18 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       ctx.stroke();
     }
 
-    // Draw candlesticks
-    const candleWidth = Math.max(2, chartWidth / candlestickData.length - 2);
+    // Draw candlesticks with proper spacing
+    const candleWidth = Math.max(6, (chartWidth / candlestickData.length) * 0.8);
+    const spacing = chartWidth / candlestickData.length;
     
     candlestickData.forEach((candle, index) => {
-      const x = padding + (index * chartWidth / candlestickData.length);
+      const x = padding + (index * spacing) + spacing / 2 - candleWidth / 2;
       const open = Number(candle.open);
       const close = Number(candle.close);
       const high = Number(candle.high);
       const low = Number(candle.low);
+
+      if (priceRange === 0) return; // Skip if no price variation
 
       const openY = padding + ((maxPrice - open) / priceRange) * chartHeight;
       const closeY = padding + ((maxPrice - close) / priceRange) * chartHeight;
@@ -103,20 +125,32 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
 
       // Color based on price movement (Korean style: Red=Up, Blue=Down)
       const isPriceUp = close >= open;
-      ctx.fillStyle = isPriceUp ? '#ef4444' : '#3b82f6'; // Red for up, Blue for down
-      ctx.strokeStyle = isPriceUp ? '#ef4444' : '#3b82f6';
-
-      // Draw wick
+      const color = isPriceUp ? '#ef4444' : '#3b82f6'; // Red for up, Blue for down
+      
+      // Draw wick (high-low line)
+      ctx.strokeStyle = color;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(x + candleWidth / 2, highY);
       ctx.lineTo(x + candleWidth / 2, lowY);
       ctx.stroke();
 
-      // Draw body
+      // Draw body (open-close rectangle)
       const bodyHeight = Math.abs(closeY - openY);
       const bodyY = Math.min(openY, closeY);
-      ctx.fillRect(x, bodyY, candleWidth, Math.max(bodyHeight, 1));
+      
+      if (isPriceUp) {
+        // Bullish candle - hollow (outline only)
+        ctx.fillStyle = '#2c2f33'; // Fill with background color
+        ctx.fillRect(x, bodyY, candleWidth, Math.max(bodyHeight, 2));
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, bodyY, candleWidth, Math.max(bodyHeight, 2));
+      } else {
+        // Bearish candle - filled
+        ctx.fillStyle = color;
+        ctx.fillRect(x, bodyY, candleWidth, Math.max(bodyHeight, 2));
+      }
     });
 
     // Draw price labels

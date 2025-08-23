@@ -55,10 +55,10 @@ export default function OverviewCards({ data, portfolio }: OverviewCardsProps) {
       testId: "card-total-assets"
     },
     {
-      title: "활성 거래",
+      title: "완료된 거래",
       value: stats.activeTrades.toString(),
-      change: "+12",
-      changeText: "최근 1시간",
+      change: stats.activeTrades > 0 ? "거래 활발" : "거래 없음",
+      changeText: "오늘 현재",
       icon: "fas fa-chart-line",
       color: "discord-gold",
       testId: "card-active-trades"

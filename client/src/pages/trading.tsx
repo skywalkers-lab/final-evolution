@@ -13,7 +13,7 @@ import TradingPanel from "@/components/trading/trading-panel";
 
 export default function TradingPage() {
   const { selectedGuildId } = useAuth();
-  const [selectedStock, setSelectedStock] = useState('AAPL');
+  const [selectedStock, setSelectedStock] = useState('');
 
   const { data: stocks = [] } = useQuery({
     queryKey: ['/api/guilds', selectedGuildId, 'stocks'],
