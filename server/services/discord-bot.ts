@@ -244,6 +244,36 @@ export class DiscordBot {
           option.setName('종목코드')
             .setDescription('영향받을 종목코드 (선택)')
             .setRequired(false)
+        ),
+
+      // Admin management
+      new SlashCommandBuilder()
+        .setName('관리자설정')
+        .setDescription('관리자 권한을 관리합니다 (최고관리자 전용)')
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('부여')
+            .setDescription('특정 사용자에게 관리자 권한을 부여합니다')
+            .addUserOption(option =>
+              option.setName('사용자')
+                .setDescription('관리자 권한을 부여할 사용자')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('제거')
+            .setDescription('특정 사용자의 관리자 권한을 제거합니다')
+            .addUserOption(option =>
+              option.setName('사용자')
+                .setDescription('관리자 권한을 제거할 사용자')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('목록')
+            .setDescription('현재 관리자 목록을 보여줍니다')
         )
     ];
 
@@ -309,6 +339,9 @@ export class DiscordBot {
           break;
         case '뉴스분석':
           await this.handleNewsAnalysisCommand(interaction, guildId, user.id);
+          break;
+        case '관리자설정':
+          await this.handleAdminManagementCommand(interaction, guildId, user.id);
           break;
         default:
           await interaction.reply('알 수 없는 명령입니다.');
@@ -694,6 +727,12 @@ export class DiscordBot {
       return true;
     }
     
+    // Check guild-specific admin permissions
+    const isGuildAdmin = await this.storage.isGuildAdmin(guildId, userId);
+    if (isGuildAdmin) {
+      return true;
+    }
+    
     return false;
   }
 
@@ -952,5 +991,135 @@ export class DiscordBot {
     } catch (error: any) {
       await interaction.reply(`뉴스 분석 실패: ${error.message}`);
     }
+  }
+
+  private async handleAdminManagementCommand(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
+    // Only allow super admins (hardcoded IDs, server owner, or Discord administrators) to manage guild-specific admins
+    const isSuperAdmin = await this.isSuperAdmin(guildId, userId);
+    if (!isSuperAdmin) {
+      await interaction.reply('이 명령은 최고관리자만 사용할 수 있습니다.');
+      return;
+    }
+
+    const subcommand = interaction.options.getSubcommand();
+
+    try {
+      switch (subcommand) {
+        case '부여':
+          await this.grantAdminPermission(interaction, guildId, userId);
+          break;
+        case '제거':
+          await this.removeAdminPermission(interaction, guildId, userId);
+          break;
+        case '목록':
+          await this.listAdmins(interaction, guildId);
+          break;
+        default:
+          await interaction.reply('알 수 없는 하위 명령입니다.');
+      }
+    } catch (error: any) {
+      await interaction.reply(`관리자 설정 실패: ${error.message}`);
+    }
+  }
+
+  private async isSuperAdmin(guildId: string, userId: string): boolean {
+    // Check hardcoded super admin IDs
+    if (userId === '559307598848065537') return true;
+    
+    try {
+      const user = await this.client.users.fetch(userId);
+      const userTag = `${user.username}#${user.discriminator}`;
+      if (userTag === '미니언#bello') return true;
+    } catch (error) {
+      // Continue with other checks if user fetch fails
+    }
+
+    // Check if user is server owner or has administrator permissions
+    try {
+      const guild = await this.client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId);
+      
+      if (guild.ownerId === userId) return true;
+      if (member.permissions.has('Administrator')) return true;
+    } catch (error) {
+      console.error('Error checking Discord permissions:', error);
+    }
+
+    return false;
+  }
+
+  private async grantAdminPermission(interaction: ChatInputCommandInteraction, guildId: string, grantedBy: string) {
+    const targetUser = interaction.options.getUser('사용자', true);
+    
+    // Check if user already has admin permissions
+    const isAlreadyAdmin = await this.storage.isGuildAdmin(guildId, targetUser.id);
+    if (isAlreadyAdmin) {
+      await interaction.reply(`${targetUser.username}님은 이미 관리자 권한을 가지고 있습니다.`);
+      return;
+    }
+
+    // Check if user exists in our database, create if not
+    let user = await this.storage.getUserByDiscordId(targetUser.id);
+    if (!user) {
+      user = await this.storage.createUser({
+        discordId: targetUser.id,
+        username: targetUser.username,
+        discriminator: targetUser.discriminator || '0',
+        avatar: targetUser.avatar,
+      });
+    }
+
+    // Grant admin permission
+    await this.storage.grantGuildAdmin(guildId, user.id, targetUser.id, grantedBy);
+    
+    await interaction.reply(`✅ ${targetUser.username}님에게 이 서버에서의 관리자 권한을 부여했습니다.`);
+  }
+
+  private async removeAdminPermission(interaction: ChatInputCommandInteraction, guildId: string, removedBy: string) {
+    const targetUser = interaction.options.getUser('사용자', true);
+    
+    // Check if user has admin permissions
+    const isAdmin = await this.storage.isGuildAdmin(guildId, targetUser.id);
+    if (!isAdmin) {
+      await interaction.reply(`${targetUser.username}님은 관리자 권한을 가지고 있지 않습니다.`);
+      return;
+    }
+
+    // Get user from database
+    const user = await this.storage.getUserByDiscordId(targetUser.id);
+    if (!user) {
+      await interaction.reply('사용자를 찾을 수 없습니다.');
+      return;
+    }
+
+    // Remove admin permission
+    await this.storage.removeGuildAdmin(guildId, user.id);
+    
+    await interaction.reply(`✅ ${targetUser.username}님의 관리자 권한을 제거했습니다.`);
+  }
+
+  private async listAdmins(interaction: ChatInputCommandInteraction, guildId: string) {
+    const admins = await this.storage.getGuildAdmins(guildId);
+    
+    if (admins.length === 0) {
+      await interaction.reply('현재 서버별 관리자가 설정되어 있지 않습니다.');
+      return;
+    }
+
+    let message = '📋 **현재 관리자 목록**\n\n';
+    
+    for (const admin of admins) {
+      try {
+        const discordUser = await this.client.users.fetch(admin.discordUserId);
+        const grantedByUser = await this.client.users.fetch(admin.grantedBy);
+        message += `• ${discordUser.username}#${discordUser.discriminator}\n`;
+        message += `  부여일: ${admin.grantedAt.toLocaleDateString('ko-KR')}\n`;
+        message += `  부여자: ${grantedByUser.username}\n\n`;
+      } catch (error) {
+        message += `• ID: ${admin.discordUserId} (사용자 정보를 가져올 수 없음)\n\n`;
+      }
+    }
+
+    await interaction.reply(message);
   }
 }

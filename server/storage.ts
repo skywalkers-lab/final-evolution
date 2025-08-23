@@ -1,14 +1,14 @@
 import { 
   users, accounts, transactions, stocks, holdings, stockTransactions, 
   candlestickData, newsAnalyses, auctions, auctionBids, escrows, 
-  auditLogs, guildSettings,
+  auditLogs, guildSettings, guildAdmins,
   type User, type InsertUser, type Account, type InsertAccount,
   type Transaction, type InsertTransaction, type Stock, type InsertStock,
   type Holding, type InsertHolding, type StockTransaction, type InsertStockTransaction,
   type CandlestickData, type InsertCandlestickData, type NewsAnalysis, type InsertNewsAnalysis,
   type Auction, type InsertAuction, type AuctionBid, type InsertAuctionBid,
   type Escrow, type InsertEscrow, type AuditLog, type InsertAuditLog,
-  type GuildSettings, type InsertGuildSettings
+  type GuildSettings, type InsertGuildSettings, type GuildAdmin, type InsertGuildAdmin
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql, gt, lt, asc } from "drizzle-orm";
@@ -75,6 +75,12 @@ export interface IStorage {
   updateGuildSetting(guildId: string, key: string, value: any): Promise<void>;
   getAllGuilds(): Promise<{ guildId: string }[]>;
   setAdminPassword(guildId: string, password: string): Promise<void>;
+
+  // Guild admin management
+  grantGuildAdmin(guildId: string, userId: string, discordUserId: string, grantedBy: string): Promise<GuildAdmin>;
+  removeGuildAdmin(guildId: string, userId: string): Promise<void>;
+  isGuildAdmin(guildId: string, discordUserId: string): Promise<boolean>;
+  getGuildAdmins(guildId: string): Promise<GuildAdmin[]>;
 
   // Auctions
   createAuction(auction: InsertAuction): Promise<Auction>;
@@ -602,6 +608,41 @@ export class DatabaseStorage implements IStorage {
   async setAdminPassword(guildId: string, password: string): Promise<void> {
     const hashedPassword = await bcrypt.hash(password, 10);
     await this.updateGuildSettings(guildId, { adminPassword: hashedPassword });
+  }
+
+  // Guild admin management methods
+  async grantGuildAdmin(guildId: string, userId: string, discordUserId: string, grantedBy: string): Promise<GuildAdmin> {
+    const [admin] = await db.insert(guildAdmins).values({
+      guildId,
+      userId,
+      discordUserId,
+      grantedBy,
+    }).returning();
+    
+    return admin;
+  }
+
+  async removeGuildAdmin(guildId: string, userId: string): Promise<void> {
+    await db.delete(guildAdmins)
+      .where(and(
+        eq(guildAdmins.guildId, guildId),
+        eq(guildAdmins.userId, userId)
+      ));
+  }
+
+  async isGuildAdmin(guildId: string, discordUserId: string): Promise<boolean> {
+    const [admin] = await db.select().from(guildAdmins)
+      .where(and(
+        eq(guildAdmins.guildId, guildId),
+        eq(guildAdmins.discordUserId, discordUserId)
+      ));
+    
+    return !!admin;
+  }
+
+  async getGuildAdmins(guildId: string): Promise<GuildAdmin[]> {
+    return await db.select().from(guildAdmins)
+      .where(eq(guildAdmins.guildId, guildId));
   }
 
   // Auction methods

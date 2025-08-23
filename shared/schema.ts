@@ -40,6 +40,16 @@ export const guildSettings = pgTable("guild_settings", {
   adminPassword: text("admin_password"),
 });
 
+// Guild admins (individual users with admin permissions in specific guilds)
+export const guildAdmins = pgTable("guild_admins", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  guildId: varchar("guild_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  discordUserId: varchar("discord_user_id").notNull(),
+  grantedBy: varchar("granted_by").notNull().references(() => users.id),
+  grantedAt: timestamp("granted_at").default(sql`now()`).notNull(),
+});
+
 // Accounts
 export const accounts = pgTable("accounts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -225,6 +235,7 @@ export const insertAuctionSchema = createInsertSchema(auctions).omit({ id: true,
 export const insertAuctionBidSchema = createInsertSchema(auctionBids).omit({ id: true, createdAt: true });
 export const insertEscrowSchema = createInsertSchema(escrows).omit({ id: true });
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
+export const insertGuildAdminSchema = createInsertSchema(guildAdmins).omit({ id: true, grantedAt: true });
 
 // Types
 export type User = typeof users.$inferSelect;
@@ -253,3 +264,5 @@ export type Escrow = typeof escrows.$inferSelect;
 export type InsertEscrow = z.infer<typeof insertEscrowSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+export type GuildAdmin = typeof guildAdmins.$inferSelect;
+export type InsertGuildAdmin = z.infer<typeof insertGuildAdminSchema>;
