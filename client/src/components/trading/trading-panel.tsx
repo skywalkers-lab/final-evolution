@@ -279,7 +279,7 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
             {/* Order Button */}
             <Button 
               onClick={handleTrade}
-              disabled={!canTrade() || marketTradeMutation.isPending || limitOrderMutation.isPending}
+              disabled={!canTrade() || tradeMutation.isPending}
               className={`w-full font-bold py-3 rounded-lg transition-colors ${
                 tradeType === 'buy'
                   ? 'bg-discord-green hover:bg-green-600 text-white'
@@ -287,7 +287,7 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
               }`}
               data-testid="button-submit-order"
             >
-              {(marketTradeMutation.isPending || limitOrderMutation.isPending) ? (
+              {tradeMutation.isPending ? (
                 <div className="flex items-center">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   처리 중...

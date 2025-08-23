@@ -964,35 +964,62 @@ export class DiscordBot {
   }
 
   private async isAdmin(guildId: string, userId: string): Promise<boolean> {
-    if (userId === '559307598848065537') return true;
+    console.log(`[ADMIN CHECK] Checking admin for user ID: ${userId}`);
+    
+    if (userId === '559307598848065537') {
+      console.log('[ADMIN CHECK] ✅ User is hardcoded admin by ID 559307598848065537');
+      return true;
+    }
     
     try {
       const user = await this.client.users.fetch(userId);
-      const userTag = `${user.username}#${user.discriminator}`;
-      if (userTag === '미니언#bello') return true;
+      // Discord의 새로운 사용자명 시스템에 대응
+      const userTag = user.discriminator === '0' || !user.discriminator 
+        ? user.username 
+        : `${user.username}#${user.discriminator}`;
+      
+      console.log(`[ADMIN CHECK] User ${userId} has tag: ${userTag} (discriminator: ${user.discriminator})`);
+      
+      if (userTag === '미니언#bello' || userTag === 'minion_bello' || user.username === 'minion_bello') {
+        console.log('[ADMIN CHECK] ✅ User is hardcoded admin by username');
+        return true;
+      }
     } catch (error) {
-      // Continue with other checks if user fetch fails
+      console.log('[ADMIN CHECK] ❌ Error fetching user:', error);
     }
     
     // Check if user is server owner or has administrator permissions
-    const guild = await this.client.guilds.fetch(guildId);
-    const member = await guild.members.fetch(userId);
-    
-    if (guild.ownerId === userId) return true;
-    if (member.permissions.has('Administrator')) return true;
-    
-    // Check admin role from settings
-    const settings = await this.storage.getGuildSettings(guildId);
-    if (settings?.adminRoleId && member.roles.cache.has(settings.adminRoleId)) {
-      return true;
+    try {
+      const guild = await this.client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId);
+      
+      if (guild.ownerId === userId) {
+        console.log('[ADMIN CHECK] ✅ User is guild owner');
+        return true;
+      }
+      if (member.permissions.has('Administrator')) {
+        console.log('[ADMIN CHECK] ✅ User has Administrator permission');
+        return true;
+      }
+      
+      // Check admin role from settings
+      const settings = await this.storage.getGuildSettings(guildId);
+      if (settings?.adminRoleId && member.roles.cache.has(settings.adminRoleId)) {
+        console.log('[ADMIN CHECK] ✅ User has admin role');
+        return true;
+      }
+    } catch (error) {
+      console.log('[ADMIN CHECK] ❌ Error checking Discord permissions:', error);
     }
     
     // Check guild-specific admin permissions
     const isGuildAdmin = await this.storage.isGuildAdmin(guildId, userId);
     if (isGuildAdmin) {
+      console.log('[ADMIN CHECK] ✅ User is guild admin in database');
       return true;
     }
     
+    console.log('[ADMIN CHECK] ❌ User is not admin');
     return false;
   }
 
@@ -1345,14 +1372,23 @@ export class DiscordBot {
   }
 
   private async handleAdminManagementCommand(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
-    // Only allow super admins (hardcoded IDs, server owner, or Discord administrators) to manage guild-specific admins
-    const isSuperAdmin = await this.isSuperAdmin(guildId, userId);
-    if (!isSuperAdmin) {
-      await interaction.reply('이 명령은 최고관리자만 사용할 수 있습니다.');
-      return;
-    }
-
     const subcommand = interaction.options.getSubcommand();
+    
+    // 세율설정은 일반 관리자도 가능, 나머지는 최고관리자만 가능
+    if (subcommand === '세율설정') {
+      const isAdmin = await this.isAdmin(guildId, userId);
+      if (!isAdmin) {
+        await interaction.reply('이 명령은 관리자만 사용할 수 있습니다.');
+        return;
+      }
+    } else {
+      // Only allow super admins (hardcoded IDs, server owner, or Discord administrators) to manage guild-specific admins
+      const isSuperAdmin = await this.isSuperAdmin(guildId, userId);
+      if (!isSuperAdmin) {
+        await interaction.reply('이 명령은 최고관리자만 사용할 수 있습니다.');
+        return;
+      }
+    }
 
     try {
       switch (subcommand) {
@@ -1378,7 +1414,12 @@ export class DiscordBot {
 
   private async isSuperAdmin(guildId: string, userId: string): Promise<boolean> {
     // Check hardcoded super admin IDs - 특정 사용자 ID 또는 미니언#bello를 무조건 최고관리자로 설정
-    if (userId === '559307598848065537') return true;
+    console.log(`[SUPER ADMIN CHECK] Checking super admin for user ID: ${userId}`);
+    
+    if (userId === '559307598848065537') {
+      console.log('[SUPER ADMIN CHECK] ✅ User is hardcoded super admin by ID 559307598848065537');
+      return true;
+    }
     
     try {
       const user = await this.client.users.fetch(userId);
@@ -1387,25 +1428,41 @@ export class DiscordBot {
         ? user.username 
         : `${user.username}#${user.discriminator}`;
       
-      console.log(`User ${userId} has tag: ${userTag} (discriminator: ${user.discriminator})`);
+      console.log(`[SUPER ADMIN CHECK] User ${userId} has tag: ${userTag} (discriminator: ${user.discriminator})`);
       
       // 다양한 형태의 사용자명 체크
-      if (userTag === '미니언#bello' || userTag === 'minion_bello' || user.username === 'minion_bello') return true;
+      if (userTag === '미니언#bello' || userTag === 'minion_bello' || user.username === 'minion_bello') {
+        console.log('[SUPER ADMIN CHECK] ✅ User is hardcoded super admin by username');
+        return true;
+      }
     } catch (error) {
-      // Continue with other checks if user fetch fails
+      console.log('[SUPER ADMIN CHECK] ❌ Error fetching user:', error);
     }
 
-    // Check if user is server owner or has administrator permissions
+    // Check guild ownership
+    try {
+      const guild = await this.client.guilds.fetch(guildId);
+      if (guild.ownerId === userId) {
+        console.log('[SUPER ADMIN CHECK] ✅ User is guild owner');
+        return true;
+      }
+    } catch (error) {
+      console.log('[SUPER ADMIN CHECK] ❌ Error checking guild ownership:', error);
+    }
+
+    // Check guild-specific admin permissions
     try {
       const guild = await this.client.guilds.fetch(guildId);
       const member = await guild.members.fetch(userId);
-      
-      if (guild.ownerId === userId) return true;
-      if (member.permissions.has('Administrator')) return true;
+      if (member.permissions.has('Administrator')) {
+        console.log('[SUPER ADMIN CHECK] ✅ User has Administrator permission');
+        return true;
+      }
     } catch (error) {
-      console.error('Error checking Discord permissions:', error);
+      console.log('[SUPER ADMIN CHECK] ❌ Error checking guild admin permissions:', error);
     }
 
+    console.log('[SUPER ADMIN CHECK] ❌ User is not a super admin');
     return false;
   }
 
