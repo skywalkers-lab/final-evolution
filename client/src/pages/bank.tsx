@@ -5,11 +5,83 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function BankPage() {
   const { user, selectedGuildId } = useAuth();
   const [amount, setAmount] = useState('');
-  const [transferTo, setTransferTo] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [memo, setMemo] = useState('');
+  const { toast } = useToast();
+
+  const { data: accountData, refetch: refetchAccount } = useQuery({
+    queryKey: ['/api/guilds', selectedGuildId, 'users', user?.id, 'account'],
+    enabled: !!selectedGuildId && !!user?.id,
+  });
+
+  const { data: transactionHistory } = useQuery({
+    queryKey: ['/api/guilds', selectedGuildId, 'users', user?.id, 'transactions'],
+    enabled: !!selectedGuildId && !!user?.id,
+  });
+
+  const transferMutation = useMutation({
+    mutationFn: async (data: { accountNumber: string; amount: number; memo: string }) => {
+      const response = await fetch(`/api/guilds/${selectedGuildId}/transfer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify(data),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || '송금 실패');
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: '✅ 송금 성공', description: '송금이 완료되었습니다.' });
+      setAmount('');
+      setAccountNumber('');
+      setMemo('');
+      refetchAccount();
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: '❌ 송금 실패', 
+        description: error.message || '송금 중 오류가 발생했습니다.',
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  const handleTransfer = () => {
+    if (!accountNumber || !amount) {
+      toast({ 
+        title: '입력 오류', 
+        description: '계좌번호와 금액을 모두 입력해주세요.',
+        variant: 'destructive' 
+      });
+      return;
+    }
+    
+    const numAmount = parseInt(amount);
+    if (numAmount <= 0) {
+      toast({ 
+        title: '입력 오류', 
+        description: '송금액은 0보다 커야 합니다.',
+        variant: 'destructive' 
+      });
+      return;
+    }
+    
+    transferMutation.mutate({ accountNumber, amount: numAmount, memo });
+  };
 
   return (
     <div className="flex-1 p-6 space-y-6">
@@ -38,22 +110,30 @@ export default function BankPage() {
             <div className="p-4 bg-discord-dark rounded-lg">
               <div className="flex justify-between items-center">
                 <span className="text-gray-400">계좌번호</span>
-                <span className="text-white font-mono">3333-01-{user?.id?.slice(-6) || '123456'}</span>
+                <span className="text-white font-mono" data-testid="text-account-number">
+                  {(accountData as any)?.account?.uniqueCode || '계좌 없음'}
+                </span>
               </div>
               <div className="flex justify-between items-center mt-2">
                 <span className="text-gray-400">현재 잔액</span>
-                <span className="text-2xl font-bold text-green-400">₩1,000,000</span>
+                <span className="text-2xl font-bold text-green-400" data-testid="text-balance">
+                  ₩{Number((accountData as any)?.account?.balance || 0).toLocaleString()}
+                </span>
               </div>
               <div className="flex justify-between items-center mt-2">
                 <span className="text-gray-400">계좌 상태</span>
-                <Badge variant="outline" className="border-green-500 text-green-400">
-                  <i className="fas fa-check-circle mr-1"></i>
-                  정상
+                <Badge variant="outline" className={`${(accountData as any)?.account?.frozen ? 'border-red-500 text-red-400' : 'border-green-500 text-green-400'}`}>
+                  <i className={`fas ${(accountData as any)?.account?.frozen ? 'fa-lock' : 'fa-check-circle'} mr-1`}></i>
+                  {(accountData as any)?.account?.frozen ? '동결' : '정상'}
                 </Badge>
               </div>
             </div>
 
-            <Button className="w-full bg-discord-blue hover:bg-discord-blue/80" data-testid="button-refresh-balance">
+            <Button 
+              className="w-full bg-discord-blue hover:bg-discord-blue/80" 
+              data-testid="button-refresh-balance"
+              onClick={() => refetchAccount()}
+            >
               <i className="fas fa-sync-alt mr-2"></i>
               잔액 새로고침
             </Button>
@@ -71,14 +151,14 @@ export default function BankPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="transferTo" className="text-white">받는 사람</Label>
+              <Label htmlFor="accountNumber" className="text-white">받는 사람 계좌번호</Label>
               <Input 
-                id="transferTo"
-                value={transferTo}
-                onChange={(e) => setTransferTo(e.target.value)}
-                placeholder="사용자 ID 또는 @멘션"
-                className="bg-discord-dark border-discord-light text-white"
-                data-testid="input-transfer-to"
+                id="accountNumber"
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value)}
+                placeholder="3-4자리 계좌번호 입력"
+                className="bg-discord-dark border-discord-light text-white font-mono"
+                data-testid="input-account-number"
               />
             </div>
             <div className="space-y-2">
@@ -93,9 +173,25 @@ export default function BankPage() {
                 data-testid="input-transfer-amount"
               />
             </div>
-            <Button className="w-full bg-green-600 hover:bg-green-700" data-testid="button-transfer">
+            <div className="space-y-2">
+              <Label htmlFor="memo" className="text-white">메모 (선택사항)</Label>
+              <Input 
+                id="memo"
+                value={memo}
+                onChange={(e) => setMemo(e.target.value)}
+                placeholder="송금 메모"
+                className="bg-discord-dark border-discord-light text-white"
+                data-testid="input-transfer-memo"
+              />
+            </div>
+            <Button 
+              className="w-full bg-green-600 hover:bg-green-700" 
+              data-testid="button-transfer"
+              onClick={handleTransfer}
+              disabled={transferMutation.isPending}
+            >
               <i className="fas fa-paper-plane mr-2"></i>
-              송금하기
+              {transferMutation.isPending ? '솨금 중...' : '송금하기'}
             </Button>
           </CardContent>
         </Card>
@@ -111,32 +207,42 @@ export default function BankPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {[
-                { type: 'receive', amount: 50000, from: '미니언#bello', time: '1시간 전', desc: '주식 매도' },
-                { type: 'send', amount: 25000, to: 'TradingBot', time: '2시간 전', desc: '주식 매수' },
-                { type: 'receive', amount: 100000, from: '시스템', time: '1일 전', desc: '월급 지급' },
-              ].map((transaction, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-discord-dark rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      transaction.type === 'receive' ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'
-                    }`}>
-                      <i className={`fas ${transaction.type === 'receive' ? 'fa-arrow-down' : 'fa-arrow-up'}`}></i>
+              {(transactionHistory as any)?.length > 0 ? (
+                (transactionHistory as any[]).map((transaction: any, index: number) => {
+                  const isReceive = transaction.type === 'transfer_in' || transaction.type === 'initial_deposit' || transaction.type === 'admin_deposit' || transaction.type === 'stock_sell';
+                  const amount = Number(transaction.amount);
+                  
+                  return (
+                    <div key={transaction.id || index} className="flex items-center justify-between p-3 bg-discord-dark rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          isReceive ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'
+                        }`}>
+                          <i className={`fas ${isReceive ? 'fa-arrow-down' : 'fa-arrow-up'}`}></i>
+                        </div>
+                        <div>
+                          <p className="text-white font-medium">
+                            {transaction.memo || transaction.type.replace('_', ' ')}
+                          </p>
+                          <p className="text-sm text-gray-400">
+                            {new Date(transaction.createdAt).toLocaleString('ko-KR')}
+                          </p>
+                        </div>
+                      </div>
+                      <span className={`font-bold ${
+                        isReceive ? 'text-green-400' : 'text-red-400'
+                      }`}>
+                        {isReceive ? '+' : '-'}₩{amount.toLocaleString()}
+                      </span>
                     </div>
-                    <div>
-                      <p className="text-white font-medium">
-                        {transaction.type === 'receive' ? `${transaction.from}에서 받음` : `${transaction.to}로 보냄`}
-                      </p>
-                      <p className="text-sm text-gray-400">{transaction.desc} • {transaction.time}</p>
-                    </div>
-                  </div>
-                  <span className={`font-bold ${
-                    transaction.type === 'receive' ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {transaction.type === 'receive' ? '+' : '-'}₩{transaction.amount.toLocaleString()}
-                  </span>
+                  );
+                })
+              ) : (
+                <div className="text-center text-gray-400 py-8">
+                  <i className="fas fa-file-alt text-4xl mb-4 opacity-50"></i>
+                  <p>거래 내역이 없습니다.</p>
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>

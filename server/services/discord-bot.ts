@@ -9,11 +9,16 @@ export class DiscordBot {
   private botGuildIds: Set<string> = new Set();
 
   constructor(storage: IStorage, wsManager: WebSocketManager) {
-    this.client = new Client({
-      intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
-    });
     this.storage = storage;
     this.wsManager = wsManager;
+    this.client = new Client({
+      intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.DirectMessages
+      ]
+    });
   }
 
   getBotGuildIds(): string[] {
@@ -63,9 +68,9 @@ export class DiscordBot {
           subcommand
             .setName('이체')
             .setDescription('다른 사용자에게 송금합니다')
-            .addUserOption(option =>
-              option.setName('받는사람')
-                .setDescription('받을 사용자')
+            .addStringOption(option =>
+              option.setName('계좌번호')
+                .setDescription('받을 사람의 계좌번호 (3-4자리 숫자)')
                 .setRequired(true)
             )
             .addIntegerOption(option =>
@@ -304,15 +309,33 @@ export class DiscordBot {
       await this.handleCommand(interaction);
     });
 
-    this.client.on('ready', () => {
+    this.client.on('ready', async () => {
       console.log(`Discord bot logged in as ${this.client.user?.tag}`);
       
-      // Track all guilds the bot is currently in
-      this.client.guilds.cache.forEach(guild => {
-        this.botGuildIds.add(guild.id);
-      });
-      
-      console.log(`Bot is in ${this.botGuildIds.size} guilds`);
+      // Fetch all guilds to ensure we have the complete list
+      try {
+        const guilds = await this.client.guilds.fetch();
+        this.botGuildIds.clear();
+        
+        guilds.forEach((guild) => {
+          this.botGuildIds.add(guild.id);
+        });
+        
+        console.log(`Bot is in ${this.botGuildIds.size} guilds:`);
+        for (const guildId of this.botGuildIds) {
+          try {
+            const guild = await this.client.guilds.fetch(guildId);
+            console.log(`  - ${guild.name} (${guildId})`);
+          } catch (error) {
+            console.log(`  - [Unknown Guild] (${guildId})`);
+          }
+        }
+        
+        // Make the bot guilds available globally for routes
+        (global as any).botGuildIds = this.botGuildIds;
+      } catch (error) {
+        console.error('Error fetching guilds:', error);
+      }
     });
 
     this.client.on('guildCreate', (guild) => {
@@ -461,12 +484,19 @@ export class DiscordBot {
   }
 
   private async transferMoney(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
-    const targetUser = interaction.options.getUser('받는사람', true);
+    const accountNumber = interaction.options.getString('계좌번호', true);
     const amount = interaction.options.getInteger('금액', true);
     const memo = interaction.options.getString('메모') || '';
 
-    if (targetUser.id === userId) {
-      await interaction.reply('자신에게는 송금할 수 없습니다.');
+    // 계좌번호로 받는사람 찾기
+    const targetAccount = await this.storage.getAccountByUniqueCode(guildId, accountNumber);
+    if (!targetAccount) {
+      await interaction.reply(`❌ 계좌번호 ${accountNumber}를 찾을 수 없습니다.`);
+      return;
+    }
+
+    if (targetAccount.userId === userId) {
+      await interaction.reply('❌ 자신의 계좌로는 송금할 수 없습니다.');
       return;
     }
 

@@ -24,6 +24,7 @@ export interface IStorage {
   // Account management
   getAccount(id: string): Promise<Account | undefined>;
   getAccountByUser(guildId: string, userId: string): Promise<Account | undefined>;
+  getAccountByUniqueCode(guildId: string, uniqueCode: string): Promise<Account | undefined>;
   getAccountsByGuild(guildId: string): Promise<Account[]>;
   createAccount(account: InsertAccount): Promise<Account>;
   updateBalance(accountId: string, amount: number): Promise<void>;
@@ -134,6 +135,12 @@ export class DatabaseStorage implements IStorage {
   async getAccountByUser(guildId: string, userId: string): Promise<Account | undefined> {
     const [account] = await db.select().from(accounts)
       .where(and(eq(accounts.guildId, guildId), eq(accounts.userId, userId)));
+    return account || undefined;
+  }
+
+  async getAccountByUniqueCode(guildId: string, uniqueCode: string): Promise<Account | undefined> {
+    const [account] = await db.select().from(accounts)
+      .where(and(eq(accounts.guildId, guildId), eq(accounts.uniqueCode, uniqueCode)));
     return account || undefined;
   }
 

@@ -357,6 +357,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to get portfolio" });
     }
   });
+  
+  // Account routes
+  app.get("/api/guilds/:guildId/users/:userId/account", requireAuth, async (req, res) => {
+    try {
+      const { guildId, userId } = req.params;
+      
+      // Security: Only allow users to access their own account or if they're guild admin
+      if (req.user.id !== userId) {
+        const isAdmin = await storage.isGuildAdmin(guildId, req.user.id);
+        if (!isAdmin) {
+          return res.status(403).json({ message: "자신의 계좌 정보만 조회할 수 있습니다" });
+        }
+      }
+      
+      const account = await storage.getAccountByUser(guildId, userId);
+      
+      res.json({ account });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get account" });
+    }
+  });
+  
+  // Transaction history
+  app.get("/api/guilds/:guildId/users/:userId/transactions", requireAuth, async (req, res) => {
+    try {
+      const { guildId, userId } = req.params;
+      
+      // Security: Only allow users to access their own transactions or if they're guild admin
+      if (req.user.id !== userId) {
+        const isAdmin = await storage.isGuildAdmin(guildId, req.user.id);
+        if (!isAdmin) {
+          return res.status(403).json({ message: "자신의 거래 내역만 조회할 수 있습니다" });
+        }
+      }
+      
+      const transactions = await storage.getTransactionsByUser(guildId, userId, 20);
+      
+      res.json(transactions);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get transactions" });
+    }
+  });
+  
+  // Transfer money by account number
+  app.post("/api/guilds/:guildId/transfer", requireAuth, async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const { accountNumber, amount, memo } = req.body;
+      const userId = req.user.id;
+      
+      // Input validation
+      if (!accountNumber || typeof accountNumber !== 'string') {
+        return res.status(400).json({ message: "계좌번호를 입력해주세요" });
+      }
+      
+      // Validate account number format (3-4 digits)
+      if (!/^\d{3,4}$/.test(accountNumber)) {
+        return res.status(400).json({ message: "계좌번호는 3-4자리 숫자여야 합니다" });
+      }
+      
+      if (!amount || typeof amount !== 'number' || amount <= 0) {
+        return res.status(400).json({ message: "올바른 송금액을 입력해주세요 (0보다 큰 숫자)" });
+      }
+      
+      if (memo && typeof memo === 'string' && memo.length > 100) {
+        return res.status(400).json({ message: "메모는 100자 이하여야 합니다" });
+      }
+      
+      // Find target account by unique code
+      const targetAccount = await storage.getAccountByUniqueCode(guildId, accountNumber);
+      if (!targetAccount) {
+        return res.status(400).json({ message: "계좌번호를 찾을 수 없습니다" });
+      }
+      
+      if (targetAccount.userId === userId) {
+        return res.status(400).json({ message: "자신의 계좌로는 송금할 수 없습니다" });
+      }
+      
+      await storage.transferMoney(guildId, userId, targetAccount.userId, amount, memo || '송금');
+      
+      res.json({ message: "송금이 완료되었습니다" });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
 
   // Web client portfolio (no auth required)
   app.get("/api/guilds/users/web-client/portfolio", async (req, res) => {

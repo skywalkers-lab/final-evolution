@@ -17,6 +17,11 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
     enabled: !!guildId && !!userId,
   });
 
+  const { data: accountData } = useQuery({
+    queryKey: ['/api/guilds', guildId, 'users', userId, 'account'],
+    enabled: !!guildId && !!userId,
+  });
+
   // WebSocket handler for real-time portfolio updates
   useWebSocket((event: string, data: any) => {
     if (event === 'stock_price_updated' || event === 'trade_executed') {
@@ -26,9 +31,9 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
 
   useEffect(() => {
     if (portfolio) {
-      setTotalValue(portfolio.totalValue || 0);
+      setTotalValue((portfolio as any).totalValue || 0);
       // Calculate profit/loss based on holdings
-      const holdings = portfolio.holdings || [];
+      const holdings = (portfolio as any).holdings || [];
       let totalPL = 0;
       holdings.forEach((holding: any) => {
         const currentValue = holding.currentPrice * holding.shares;
@@ -53,13 +58,21 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
     );
   };
 
-  const holdings = portfolio?.holdings || [];
+  const holdings = (portfolio as any)?.holdings || [];
 
   return (
     <div className="discord-bg-darker rounded-xl border border-discord-dark">
       <div className="p-6 border-b border-discord-dark">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">내 포트폴리오</h3>
+          <div className="flex items-center space-x-4">
+            <h3 className="text-lg font-semibold text-white">내 포트폴리오</h3>
+            {(accountData as any)?.account && (
+              <div className="text-sm bg-discord-dark px-3 py-1 rounded-full" data-testid="text-account-number">
+                <span className="text-gray-400">계좌번호: </span>
+                <span className="text-white font-mono">{(accountData as any).account.uniqueCode}</span>
+              </div>
+            )}
+          </div>
           <div className="flex items-center space-x-4">
             <div className="text-sm text-gray-400">
               <span>총 평가액: </span>
