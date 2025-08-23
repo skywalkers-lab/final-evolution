@@ -14,6 +14,7 @@ export const transactionTypeEnum = pgEnum('transaction_type', [
 ]);
 export const auctionStatusEnum = pgEnum('auction_status', ['scheduled', 'live', 'ended', 'canceled']);
 export const auctionItemTypeEnum = pgEnum('auction_item_type', ['text', 'stock']);
+export const stockTransactionTypeEnum = pgEnum('stock_transaction_type', ['buy', 'sell']);
 export const escrowStatusEnum = pgEnum('escrow_status', ['held', 'released', 'captured']);
 
 // Users table
@@ -91,7 +92,7 @@ export const stockTransactions = pgTable("stock_transactions", {
   guildId: varchar("guild_id").notNull(),
   userId: varchar("user_id").notNull().references(() => users.id),
   symbol: varchar("symbol").notNull(),
-  type: pgEnum('stock_transaction_type', ['buy', 'sell'])("type").notNull(),
+  type: stockTransactionTypeEnum("type").notNull(),
   shares: integer("shares").notNull(),
   price: decimal("price", { precision: 15, scale: 2 }).notNull(),
   totalAmount: decimal("total_amount", { precision: 15, scale: 2 }).notNull(),
