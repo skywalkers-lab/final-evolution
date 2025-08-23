@@ -98,6 +98,7 @@ export const stocks = pgTable("stocks", {
   totalShares: integer("total_shares").default(1000000),
   volatility: decimal("volatility", { precision: 5, scale: 2 }).default("3.00"), // Default ±3%
   status: stockStatusEnum("status").default("active"),
+  logoUrl: text("logo_url"), // 회사 로고 이미지 URL
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
 });
 

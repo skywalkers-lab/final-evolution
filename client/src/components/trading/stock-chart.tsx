@@ -223,6 +223,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     }
     
     // Draw vertical grid lines (시간선) - 데이터 길이에 따른 스마트한 간격 조정
+    const dataLength = dataToUse.length;
     let gridSpacing;
     if (dataLength <= 50) {
       gridSpacing = Math.max(1, Math.ceil(dataLength / 10)); // 적은 데이터: 더 많은 그리드
@@ -236,7 +237,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     
     dataToUse.forEach((_, index) => {
       if (index % gridSpacing === 0) {
-        const x = padding + (index * spacing);
+        const x = padding + (index * (chartWidth / dataToUse.length));
         ctx.beginPath();
         ctx.moveTo(x, padding);
         ctx.lineTo(x, height - padding);
@@ -245,8 +246,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     });
 
     // Draw candlesticks with adaptive auto-scaling for better overview
-    const dataLength = dataToUse.length;
-    const spacing = chartWidth / dataLength;
+    const spacing = chartWidth / dataToUse.length;
     
     // 데이터 길이에 따른 스마트한 캔들 크기 조정 - 길어질수록 더 축소
     let candleWidth;

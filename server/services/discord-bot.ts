@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits, SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { IStorage } from '../storage';
 import { WebSocketManager } from './websocket-manager';
+import { ObjectStorageService } from '../objectStorage';
 
 export class DiscordBot {
   private client: Client;
@@ -184,6 +185,11 @@ export class DiscordBot {
                 .setDescription('초기 주가')
                 .setRequired(true)
             )
+            .addAttachmentOption(option =>
+              option.setName('로고')
+                .setDescription('회사 로고 이미지')
+                .setRequired(false)
+            )
         )
         .addSubcommand(subcommand =>
           subcommand
@@ -250,6 +256,33 @@ export class DiscordBot {
                 .setRequired(true)
                 .setMinValue(0.1)
                 .setMaxValue(10.0)
+            )
+        )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('수정')
+            .setDescription('기존 주식 정보를 수정합니다 (관리자 전용)')
+            .addStringOption(option =>
+              option.setName('종목코드')
+                .setDescription('수정할 종목코드')
+                .setRequired(true)
+            )
+            .addStringOption(option =>
+              option.setName('회사명')
+                .setDescription('새로운 회사명')
+                .setRequired(false)
+            )
+            .addNumberOption(option =>
+              option.setName('변동률')
+                .setDescription('새로운 변동률 (예: 3.0은 ±3%)')
+                .setRequired(false)
+                .setMinValue(0.1)
+                .setMaxValue(10.0)
+            )
+            .addAttachmentOption(option =>
+              option.setName('로고')
+                .setDescription('새로운 회사 로고 이미지')
+                .setRequired(false)
             )
         ),
 
@@ -994,6 +1027,9 @@ export class DiscordBot {
         case '변동률설정':
           await this.setVolatility(interaction, guildId);
           break;
+        case '수정':
+          await this.editStock(interaction, guildId);
+          break;
       }
     } catch (error: any) {
       await interaction.reply(`관리 작업 실패: ${error.message}`);
@@ -1004,6 +1040,7 @@ export class DiscordBot {
     const symbol = interaction.options.getString('종목코드', true).toUpperCase();
     const name = interaction.options.getString('회사명', true);
     const price = interaction.options.getNumber('초기가격', true);
+    const logoAttachment = interaction.options.getAttachment('로고');
 
     if (price <= 0) {
       await interaction.reply('주가는 0보다 커야 합니다.');
@@ -1017,6 +1054,17 @@ export class DiscordBot {
         return;
       }
 
+      // 로고 업로드 처리
+      let logoUrl: string | null = null;
+      if (logoAttachment && logoAttachment.contentType?.startsWith('image/')) {
+        try {
+          logoUrl = await this.uploadLogo(logoAttachment.url, guildId, symbol);
+        } catch (logoError) {
+          console.error('Logo upload failed:', logoError);
+          // 로고 업로드 실패해도 주식 생성은 계속 진행
+        }
+      }
+
       const stock = await this.storage.createStock({
         guildId,
         symbol,
@@ -1024,10 +1072,15 @@ export class DiscordBot {
         price: price.toString(),
         totalShares: 1000000,
         volatility: '1',
-        status: 'active'
+        status: 'active',
+        logoUrl
       });
 
-      await interaction.reply(`✅ 새 주식이 생성되었습니다!\n종목코드: ${symbol}\n회사명: ${name}\n초기가격: ₩${price.toLocaleString()}`);
+      let reply = `✅ 새 주식이 생성되었습니다!\n종목코드: ${symbol}\n회사명: ${name}\n초기가격: ₩${price.toLocaleString()}`;
+      if (logoUrl) {
+        reply += '\n🖼️ 로고가 업로드되었습니다.';
+      }
+      await interaction.reply(reply);
       
       // WebSocket으로 주식 생성 알림
       this.wsManager.broadcast('stock_created', {
@@ -1783,5 +1836,94 @@ export class DiscordBot {
     }
 
     await interaction.reply(message);
+  }
+
+  private async editStock(interaction: ChatInputCommandInteraction, guildId: string) {
+    const symbol = interaction.options.getString('종목코드', true).toUpperCase();
+    const newName = interaction.options.getString('회사명');
+    const newVolatility = interaction.options.getNumber('변동률');
+    const logoAttachment = interaction.options.getAttachment('로고');
+
+    try {
+      const existingStock = await this.storage.getStockBySymbol(guildId, symbol);
+      if (!existingStock) {
+        await interaction.reply('해당 종목을 찾을 수 없습니다.');
+        return;
+      }
+
+      // 로고 업로드 처리
+      let logoUrl: string | null | undefined = undefined;
+      if (logoAttachment && logoAttachment.contentType?.startsWith('image/')) {
+        try {
+          logoUrl = await this.uploadLogo(logoAttachment.url, guildId, symbol);
+        } catch (logoError) {
+          console.error('Logo upload failed:', logoError);
+          await interaction.reply('⚠️ 로고 업로드에 실패했습니다. 다른 정보는 업데이트됩니다.');
+        }
+      }
+
+      // 업데이트할 필드들 준비
+      const updateData: any = {};
+      if (newName) updateData.name = newName;
+      if (newVolatility) updateData.volatility = newVolatility.toString();
+      if (logoUrl !== undefined) updateData.logoUrl = logoUrl;
+
+      if (Object.keys(updateData).length === 0) {
+        await interaction.reply('수정할 내용이 없습니다.');
+        return;
+      }
+
+      await this.storage.updateStock(existingStock.id, updateData);
+
+      let reply = `✅ 주식 정보가 수정되었습니다!\n종목코드: ${symbol}`;
+      if (newName) reply += `\n회사명: ${newName}`;
+      if (newVolatility) reply += `\n변동률: ±${newVolatility}%`;
+      if (logoUrl) reply += '\n🖼️ 로고가 업데이트되었습니다.';
+      
+      await interaction.reply(reply);
+      
+      // WebSocket으로 주식 수정 알림
+      this.wsManager.broadcast('stock_updated', {
+        guildId,
+        symbol,
+        changes: updateData
+      });
+    } catch (error: any) {
+      await interaction.reply(`주식 수정 실패: ${error.message}`);
+    }
+  }
+
+  private async uploadLogo(imageUrl: string, guildId: string, symbol: string): Promise<string> {
+    const objectStorage = new ObjectStorageService();
+    
+    // Discord 이미지 다운로드
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      throw new Error('이미지 다운로드 실패');
+    }
+    
+    // 업로드 URL 생성
+    const uploadUrl = await objectStorage.getObjectEntityUploadURL();
+    
+    // 이미지를 Object Storage에 업로드
+    const imageBuffer = await response.arrayBuffer();
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'PUT',
+      body: imageBuffer,
+      headers: {
+        'Content-Type': response.headers.get('content-type') || 'image/png'
+      }
+    });
+    
+    if (!uploadResponse.ok) {
+      throw new Error('Object Storage 업로드 실패');
+    }
+    
+    // ACL 정책 설정 (공개)
+    const normalizedPath = objectStorage.normalizeObjectEntityPath(uploadUrl);
+    return await objectStorage.trySetObjectEntityAclPolicy(normalizedPath, {
+      owner: guildId,
+      visibility: 'public' // 로고는 공개적으로 접근 가능
+    });
   }
 }
