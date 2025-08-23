@@ -672,7 +672,7 @@ export class DiscordBot {
 
   private generateASCIIChart(data: any[], stock: any): string {
     if (data.length === 0) {
-      return `${stock.name} (${stock.symbol}) - 데이터 없음`;
+      return `📊 **${stock.name} (${stock.symbol})** - 가상 경제 시스템\n\n❌ **차트 데이터 없음**\n\n💡 주식을 매수/매도하거나 시뮬레이션이 실행되면 차트 데이터가 생성됩니다.\n\n🏦 **한국은행 종합 서비스센터**`;
     }
 
     const prices = data.map(d => Number(d.close));
@@ -680,30 +680,35 @@ export class DiscordBot {
     const minPrice = Math.min(...prices);
     const range = maxPrice - minPrice;
     
-    let chart = `${stock.name} (${stock.symbol}) - 실시간 차트\n`;
-    chart += `현재가: ₩${Number(stock.price).toLocaleString()}\n`;
-    chart += `상태: ${this.getStatusText(stock.status)}\n\n`;
+    let chart = `📊 **${stock.name} (${stock.symbol})** - 가상 경제 시스템\n`;
+    chart += `💰 현재가: ₩${Number(stock.price).toLocaleString()}\n`;
+    chart += `📈 상태: ${this.getStatusText(stock.status)}\n\n`;
+    chart += `🎮 **가상 주식 차트** (ASCII)\n`;
     
-    // Simple line chart representation
-    const height = 10;
+    // Enhanced ASCII chart
+    const height = 12;
     for (let row = height - 1; row >= 0; row--) {
       let line = '';
-      for (let i = 0; i < Math.min(data.length, 20); i++) {
+      for (let i = 0; i < Math.min(data.length, 25); i++) {
         const price = Number(data[i].close);
         const normalizedPrice = range > 0 ? ((price - minPrice) / range) * (height - 1) : height / 2;
         
         if (Math.round(normalizedPrice) === row) {
-          line += '█';
+          line += '▓';
+        } else if (Math.abs(normalizedPrice - row) < 0.5) {
+          line += '░';
         } else {
           line += ' ';
         }
       }
-      chart += `${(minPrice + (range * row / (height - 1))).toFixed(0).padStart(6)} |${line}\n`;
+      const priceLevel = range > 0 ? (minPrice + (range * row / (height - 1))) : stock.price;
+      chart += `₩${priceLevel.toFixed(0).padStart(7)} │${line}\n`;
     }
     
-    chart += '       +' + '-'.repeat(Math.min(data.length, 20)) + '\n';
-    chart += '        시간 (최근 24시간)\n';
-    chart += '\n⚡ 5초 시뮬레이션으로 자동 업데이트됩니다.';
+    chart += '         └' + '─'.repeat(Math.min(data.length, 25)) + '\n';
+    chart += '          시간 (최근 24시간)\n\n';
+    chart += '⚡ **가상 시뮬레이션**: 5초마다 자동 업데이트\n';
+    chart += '🏦 **한국은행 종합 서비스센터**';
     
     return chart;
   }
