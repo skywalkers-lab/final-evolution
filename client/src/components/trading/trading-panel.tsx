@@ -71,8 +71,8 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
       });
       setQuantity('');
       // Refetch portfolio and overview
-      queryClient.invalidateQueries({ queryKey: ['/api/guilds', guildId, 'users'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/guilds', guildId, 'overview'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/web-client/guilds', guildId, 'portfolio'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/web-client/guilds', guildId, 'overview'] });
     },
     onError: (error: any) => {
       toast({

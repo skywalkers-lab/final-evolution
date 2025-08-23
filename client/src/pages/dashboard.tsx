@@ -20,7 +20,7 @@ export default function Dashboard() {
   const [selectedStock, setSelectedStock] = useState<string>('');
 
   const { data: overview = {}, refetch: refetchOverview } = useQuery({
-    queryKey: ['/api/guilds', selectedGuildId, 'overview'],
+    queryKey: ['/api/web-client/guilds', selectedGuildId, 'overview'],
     enabled: !!selectedGuildId,
   });
 

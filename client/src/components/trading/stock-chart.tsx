@@ -222,11 +222,20 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       ctx.stroke();
     }
     
-    // Draw vertical grid lines (시간선)
-    const gridSpacing = Math.ceil(dataToUse.length / 8);
+    // Draw vertical grid lines (시간선) - 데이터 길이에 따른 스마트한 간격 조정
+    let gridSpacing;
+    if (dataLength <= 50) {
+      gridSpacing = Math.max(1, Math.ceil(dataLength / 10)); // 적은 데이터: 더 많은 그리드
+    } else if (dataLength <= 100) {
+      gridSpacing = Math.max(1, Math.ceil(dataLength / 8)); // 중간: 보통
+    } else if (dataLength <= 200) {
+      gridSpacing = Math.max(1, Math.ceil(dataLength / 6)); // 많은 데이터: 적은 그리드
+    } else {
+      gridSpacing = Math.max(1, Math.ceil(dataLength / 4)); // 매우 많은 데이터: 매우 적은 그리드
+    }
+    
     dataToUse.forEach((_, index) => {
       if (index % gridSpacing === 0) {
-        const spacing = chartWidth / dataToUse.length;
         const x = padding + (index * spacing);
         ctx.beginPath();
         ctx.moveTo(x, padding);
@@ -235,9 +244,21 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       }
     });
 
-    // Draw candlesticks with improved spacing
-    const spacing = chartWidth / dataToUse.length;
-    const candleWidth = Math.max(2, Math.min(16, spacing * 0.9)); // 캔들 두께를 더 두껍게 하고 간격을 좁혀서 더 촘촘하게
+    // Draw candlesticks with adaptive auto-scaling for better overview
+    const dataLength = dataToUse.length;
+    const spacing = chartWidth / dataLength;
+    
+    // 데이터 길이에 따른 스마트한 캔들 크기 조정 - 길어질수록 더 축소
+    let candleWidth;
+    if (dataLength <= 50) {
+      candleWidth = Math.max(8, Math.min(16, spacing * 0.8)); // 적은 데이터: 두껍게
+    } else if (dataLength <= 100) {
+      candleWidth = Math.max(4, Math.min(12, spacing * 0.7)); // 중간: 보통
+    } else if (dataLength <= 200) {
+      candleWidth = Math.max(2, Math.min(8, spacing * 0.6)); // 많은 데이터: 얇게
+    } else {
+      candleWidth = Math.max(1, Math.min(4, spacing * 0.5)); // 매우 많은 데이터: 매우 얇게
+    }
     
     dataToUse.forEach((candle, index) => {
       const x = padding + (index * spacing) + spacing / 2 - candleWidth / 2;
@@ -340,9 +361,20 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     ctx.font = '10px Inter';
     ctx.textAlign = 'center';
     
-    const showEveryNth = Math.ceil(dataToUse.length / 8); // Show max 8 labels
+    // 데이터 길이에 따른 스마트한 레이블 표시 간격 - 전체 흐름을 보기 편하게
+    let labelInterval;
+    if (dataLength <= 30) {
+      labelInterval = Math.max(1, Math.ceil(dataLength / 6)); // 적은 데이터: 더 많은 레이블
+    } else if (dataLength <= 100) {
+      labelInterval = Math.max(1, Math.ceil(dataLength / 8)); // 중간: 보통
+    } else if (dataLength <= 200) {
+      labelInterval = Math.max(1, Math.ceil(dataLength / 6)); // 많은 데이터: 적절한 간격
+    } else {
+      labelInterval = Math.max(1, Math.ceil(dataLength / 4)); // 매우 많은 데이터: 넓은 간격
+    }
+    
     dataToUse.forEach((candle: any, index: number) => {
-      if (index % showEveryNth === 0 || index === dataToUse.length - 1) {
+      if (index % labelInterval === 0 || index === dataLength - 1) {
         const x = padding + (index * spacing) + spacing / 2;
         const date = new Date(candle.timestamp);
         let timeLabel = '';
@@ -735,6 +767,8 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                             dataKey="time" 
                             stroke="#9ca3af"
                             fontSize={12}
+                            interval={candlestickData.length > 50 ? Math.ceil(candlestickData.length / 8) : 'preserveStartEnd'}
+                            tick={{ fontSize: 11 }}
                           />
                           <YAxis 
                             stroke="#9ca3af"

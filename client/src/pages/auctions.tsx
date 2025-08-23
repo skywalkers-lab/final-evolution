@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import Sidebar from "@/components/layout/sidebar";
+import TopBar from "@/components/layout/top-bar";
 
 export default function AuctionsPage() {
   const { selectedGuildId, user } = useAuth();
@@ -57,12 +59,16 @@ export default function AuctionsPage() {
   };
 
   return (
-    <div className="flex-1 p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white">경매</h1>
-          <p className="text-gray-400 mt-1">실시간 경매 참여 및 관리</p>
-        </div>
+    <div className="min-h-screen discord-bg-darkest flex">
+      <Sidebar />
+      <div className="flex-1 flex flex-col">
+        <TopBar />
+        <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-white">경매</h1>
+              <p className="text-gray-400 mt-1">실시간 경매 참여 및 관리</p>
+            </div>
         <div className="flex items-center space-x-4">
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
@@ -218,6 +224,8 @@ export default function AuctionsPage() {
           </div>
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 }
