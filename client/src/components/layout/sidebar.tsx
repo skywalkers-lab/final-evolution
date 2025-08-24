@@ -11,48 +11,48 @@ export default function Sidebar() {
   const menuItems = [
     { 
       path: "/", 
-      icon: "fas fa-tachometer-alt", 
+      icon: "fas fa-chart-pie", 
       label: "대시보드",
-      gradient: "from-blue-500 to-purple-600",
-      iconColor: "text-blue-400",
-      glowColor: "shadow-blue-500/30",
-      bgIcon: "📊"
+      gradient: "from-slate-600 to-slate-700",
+      iconColor: "text-blue-300",
+      glowColor: "shadow-slate-500/20",
+      bgColor: "bg-blue-500/10"
     },
     { 
       path: "/bank", 
-      icon: "fas fa-coins", 
+      icon: "fas fa-wallet", 
       label: "은행 & 계좌",
-      gradient: "from-green-500 to-emerald-600",
-      iconColor: "text-green-400", 
-      glowColor: "shadow-green-500/30",
-      bgIcon: "🏦"
+      gradient: "from-slate-600 to-slate-700",
+      iconColor: "text-green-300", 
+      glowColor: "shadow-slate-500/20",
+      bgColor: "bg-green-500/10"
     },
     { 
       path: "/trading", 
-      icon: "fas fa-chart-line", 
+      icon: "fas fa-trending-up", 
       label: "주식 거래",
-      gradient: "from-orange-500 to-red-600",
-      iconColor: "text-orange-400",
-      glowColor: "shadow-orange-500/30",
-      bgIcon: "📈"
+      gradient: "from-slate-600 to-slate-700",
+      iconColor: "text-orange-300",
+      glowColor: "shadow-slate-500/20",
+      bgColor: "bg-orange-500/10"
     },
     { 
       path: "/auctions", 
-      icon: "fas fa-hammer", 
+      icon: "fas fa-gavel", 
       label: "경매",
-      gradient: "from-purple-500 to-pink-600",
-      iconColor: "text-purple-400",
-      glowColor: "shadow-purple-500/30",
-      bgIcon: "🔨"
+      gradient: "from-slate-600 to-slate-700",
+      iconColor: "text-purple-300",
+      glowColor: "shadow-slate-500/20",
+      bgColor: "bg-purple-500/10"
     },
     { 
       path: "/news", 
-      icon: "fas fa-rss", 
+      icon: "fas fa-newspaper", 
       label: "뉴스 분석",
-      gradient: "from-cyan-500 to-teal-600",
-      iconColor: "text-cyan-400",
-      glowColor: "shadow-cyan-500/30",
-      bgIcon: "📰"
+      gradient: "from-slate-600 to-slate-700",
+      iconColor: "text-cyan-300",
+      glowColor: "shadow-slate-500/20",
+      bgColor: "bg-cyan-500/10"
     },
   ];
 
@@ -125,43 +125,28 @@ export default function Sidebar() {
           <button
             key={item.path}
             onClick={() => setLocation(item.path)}
-            className={`group relative w-full flex items-center space-x-4 p-4 rounded-xl transition-all duration-300 text-left overflow-hidden ${
+            className={`group relative w-full flex items-center space-x-4 p-3 rounded-lg transition-all duration-300 text-left ${
               location === item.path
-                ? `bg-gradient-to-r ${item.gradient} text-white shadow-lg ${item.glowColor} transform scale-[1.02]`
-                : 'text-gray-300 hover:text-white hover:bg-discord-dark/60 hover:scale-[1.01] hover:shadow-md'
+                ? 'bg-gray-700/80 text-white border border-gray-600/40'
+                : 'text-gray-300 hover:text-white hover:bg-discord-dark/40'
             }`}
             data-testid={`nav-${item.label.replace(/\s+/g, '-').toLowerCase()}`}
           >
-            {/* Background overlay for hover effect */}
-            <div className={`absolute inset-0 bg-gradient-to-r ${item.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300 ${location === item.path ? 'opacity-100' : ''}`}></div>
-            
             {/* Active indicator */}
             {location === item.path && (
-              <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-white rounded-r-full"></div>
+              <div className={`absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-6 ${item.iconColor.replace('text-', 'bg-')} rounded-r-full`}></div>
             )}
             
             {/* Icon container */}
-            <div className={`relative z-10 w-12 h-12 flex items-center justify-center rounded-xl transition-all duration-300 overflow-hidden ${
+            <div className={`relative z-10 w-12 h-12 flex items-center justify-center rounded-lg transition-all duration-300 border ${
               location === item.path 
-                ? `bg-gradient-to-br ${item.gradient} shadow-lg ${item.glowColor} shadow-2xl` 
-                : 'bg-gray-700/50 group-hover:bg-gray-600/80'
-            }`}>
-              {/* Background emoji */}
-              {location === item.path && (
-                <div className="absolute inset-0 flex items-center justify-center text-2xl opacity-20 animate-pulse">
-                  {item.bgIcon}
-                </div>
-              )}
-              
+                ? `${item.bgColor} border-gray-500/30 ${item.glowColor} shadow-lg` 
+                : 'bg-gray-700/40 border-gray-600/30 group-hover:bg-gray-600/60 group-hover:border-gray-500/40'
+            }`}>              
               {/* Main icon */}
-              <i className={`${item.icon} text-xl ${
-                location === item.path ? 'text-white drop-shadow-sm' : item.iconColor + ' group-hover:text-white'
-              } transition-all duration-300 relative z-10`}></i>
-              
-              {/* Shine effect */}
-              {location === item.path && (
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
-              )}
+              <i className={`${item.icon} text-lg ${
+                location === item.path ? 'text-white' : item.iconColor + ' group-hover:text-white'
+              } transition-all duration-300`}></i>
             </div>
             
             {/* Label */}
