@@ -67,11 +67,15 @@ export default function Sidebar() {
       {/* Bank of Korea Header */}
       <div className="p-6 border-b border-discord-dark">
         <div className="flex items-center space-x-3 mb-4">
-          <div className="w-12 h-12 bg-gradient-to-br from-red-600 to-red-800 rounded-full flex items-center justify-center border-2 border-yellow-400">
-            <i className="fas fa-university text-white text-lg"></i>
+          <div className="w-12 h-12 rounded-full flex items-center justify-center border-2 border-yellow-400 overflow-hidden bg-white">
+            <img 
+              src="@assets/IMG_5886_1756010136005.png" 
+              alt="한국은행 로고" 
+              className="w-full h-full object-cover"
+            />
           </div>
           <div className="flex-1">
-            <h2 className="font-bold text-white text-lg">한국은행 종합서비스센터</h2>
+            <h2 className="font-bold text-white text-lg leading-tight">한국은행 종합서비스센터</h2>
             <p className="text-xs text-yellow-300 font-medium">Bank of Korea Service Center</p>
           </div>
         </div>

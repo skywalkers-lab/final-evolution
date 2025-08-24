@@ -88,21 +88,21 @@ export default function OverviewCards({ data, portfolio }: OverviewCardsProps) {
       {cards.map((card, index) => (
         <div 
           key={card.title}
-          className="discord-bg-darker rounded-xl border border-discord-dark p-6"
+          className="discord-bg-darker rounded-xl border border-discord-dark p-6 flex flex-col justify-between"
           data-testid={card.testId}
         >
           <div className="flex items-center justify-between mb-4">
-            <div className={`p-2 bg-${card.color} bg-opacity-20 rounded-lg`}>
-              <i className={`${card.icon} text-${card.color}`}></i>
+            <div className={`p-3 bg-${card.color} bg-opacity-20 rounded-lg`}>
+              <i className={`${card.icon} text-${card.color} text-lg`}></i>
             </div>
             <span className="text-xs text-gray-500">실시간</span>
           </div>
-          <div>
-            <p className="text-sm text-gray-400">{card.title}</p>
-            <p className="text-2xl font-bold text-white" data-testid={`text-${card.testId}-value`}>
+          <div className="flex-1">
+            <p className="text-sm text-gray-400 mb-2">{card.title}</p>
+            <p className="text-2xl font-bold text-white mb-3" data-testid={`text-${card.testId}-value`}>
               {card.value}
             </p>
-            <div className="flex items-center mt-2">
+            <div className="flex items-center">
               <span className={`text-sm ${card.change.startsWith('+') ? 'text-discord-green' : 'text-gray-400'}`}>
                 {card.change}
               </span>

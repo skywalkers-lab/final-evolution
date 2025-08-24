@@ -118,7 +118,7 @@ export default function Dashboard() {
           <OverviewCards data={overview} portfolio={portfolio} />
 
           {/* Main Dashboard Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
             {/* Stock Chart */}
             <div className="lg:col-span-2">
               <StockChart 
@@ -130,7 +130,7 @@ export default function Dashboard() {
             </div>
 
             {/* Trading Panel */}
-            <div>
+            <div className="flex flex-col">
               <TradingPanel 
                 selectedStock={selectedStock}
                 guildId={selectedGuildId || ''}
@@ -140,7 +140,7 @@ export default function Dashboard() {
           </div>
 
           {/* Live Auctions */}
-          <div className="grid grid-cols-1 gap-8 mb-8">
+          <div className="mb-8">
             <div className="discord-bg-darker rounded-xl border border-discord-dark">
               <div className="p-6 border-b border-discord-dark">
                 <div className="flex items-center justify-between">
