@@ -308,30 +308,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { guildId } = req.params;
       console.log(`Web client account request for guild: ${guildId}`);
       
-      // Try to get actual web-client account from database
-      let account;
-      try {
-        // First ensure web-client user exists
-        let user = await storage.getUserByDiscordId('web-client');
-        if (!user) {
-          user = await storage.createUser({
-            discordId: 'web-client',
-            username: 'Web Client',
-            discriminator: '0000',
-            avatar: null
-          });
-        }
-        
-        account = await storage.getAccountByUser(guildId, user.id);
-        // Don't auto-create account - let the dashboard handle "no account" state
-        if (!account) {
-          console.log('Web client account response: no account found');
-          return res.json({ account: null });
-        }
-      } catch (error) {
-        console.error('Error getting web client account:', error);
-        throw error;
+      // Get all accounts for this guild and use the most recent one (like portfolio logic)
+      const accounts = await storage.getAccountsByGuild(guildId);
+      console.log(`Found ${accounts.length} accounts for guild ${guildId}:`, accounts.map(acc => ({ 
+        id: acc.id, 
+        uniqueCode: acc.uniqueCode, 
+        balance: acc.balance,
+        userId: acc.userId 
+      })));
+      
+      if (accounts.length === 0) {
+        console.log('Web client account response: no account found');
+        return res.json({ account: null });
       }
+      
+      // Use the most recently created account (latest user)
+      const account = accounts[accounts.length - 1];
       
       console.log('Web client account response:', { balance: account.balance });
       res.json({ account });
@@ -718,7 +710,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let guildSettings = await storage.getGuildSettings(guildId);
       if (!guildSettings) {
         // Auto-create guild settings for new servers
-        const hashedPassword = await require('bcrypt').hash(Math.random().toString(36).substring(2, 15), 10);
+        const hashedPassword = await bcrypt.hash(Math.random().toString(36).substring(2, 15), 10);
         guildSettings = await storage.createGuildSettings({
           guildId,
           taxRate: '0.02', // Default 2% tax rate
