@@ -191,7 +191,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async resetAllAccounts(guildId: string): Promise<void> {
-    await db.update(accounts).set({ balance: "0" }).where(eq(accounts.guildId, guildId));
+    await db.transaction(async (tx) => {
+      // Delete all related data first (due to foreign keys)
+      // 1. Delete all holdings in this guild
+      await tx.delete(holdings).where(eq(holdings.guildId, guildId));
+
+      // 2. Delete all transactions in this guild
+      await tx.delete(transactions).where(eq(transactions.guildId, guildId));
+
+      // 3. Delete all limit orders in this guild
+      await tx.delete(limitOrders).where(eq(limitOrders.guildId, guildId));
+
+      // 4. Delete all auction bids in this guild
+      await tx.delete(auctionBids).where(eq(auctionBids.guildId, guildId));
+
+      // 5. Delete all auctions in this guild
+      await tx.delete(auctions).where(eq(auctions.guildId, guildId));
+
+      // 6. Delete all news analysis in this guild
+      await tx.delete(newsAnalysis).where(eq(newsAnalysis.guildId, guildId));
+
+      // 7. Delete all candlestick data in this guild
+      await tx.delete(candlestickData).where(eq(candlestickData.guildId, guildId));
+
+      // 8. Delete all accounts in this guild (last due to foreign key references)
+      await tx.delete(accounts).where(eq(accounts.guildId, guildId));
+    });
   }
 
   // Transaction methods

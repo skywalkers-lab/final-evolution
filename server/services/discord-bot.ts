@@ -598,6 +598,8 @@ export class DiscordBot {
           await this.handleNewsAnalysisCommand(interaction, guildId, user.id);
           break;
         case '관리자설정':
+          // Defer reply immediately for admin commands as they involve database operations
+          await interaction.deferReply();
           await this.handleAdminManagementCommand(interaction, guildId, user.id);
           break;
         case '관리자계좌':
@@ -1419,18 +1421,20 @@ export class DiscordBot {
     const subcommand = interaction.options.getSubcommand();
     console.log(`[관리자설정] Received subcommand: "${subcommand}"`);
     
+    // Interaction is already deferred in handleCommand
+    
     // 세율설정은 일반 관리자도 가능, 나머지는 최고관리자만 가능
     if (subcommand === '세율설정') {
       const isAdmin = await this.isAdmin(guildId, userId);
       if (!isAdmin) {
-        await interaction.reply('이 명령은 관리자만 사용할 수 있습니다.');
+        await interaction.editReply('이 명령은 관리자만 사용할 수 있습니다.');
         return;
       }
     } else {
       // Only allow super admins (hardcoded IDs, server owner, or Discord administrators) to manage guild-specific admins
       const isSuperAdmin = await this.isSuperAdmin(guildId, userId);
       if (!isSuperAdmin) {
-        await interaction.reply('이 명령은 최고관리자만 사용할 수 있습니다.');
+        await interaction.editReply('이 명령은 최고관리자만 사용할 수 있습니다.');
         return;
       }
     }
@@ -1438,34 +1442,31 @@ export class DiscordBot {
     try {
       switch (subcommand) {
         case '부여':
-          await this.grantAdminPermission(interaction, guildId, userId);
+          await this.grantAdminPermissionDeferred(interaction, guildId, userId);
           break;
         case '제거':
-          await this.removeAdminPermission(interaction, guildId, userId);
+          await this.removeAdminPermissionDeferred(interaction, guildId, userId);
           break;
         case '목록':
-          await this.listAdmins(interaction, guildId);
+          await this.listAdminsDeferred(interaction, guildId);
           break;
         case '세율설정':
-          await this.setTaxRate(interaction, guildId, userId);
+          await this.setTaxRateDeferred(interaction, guildId, userId);
           break;
         case '계좌삭제':
           console.log('[관리자설정] Processing 계좌삭제 command');
-          await this.deleteUserAccount(interaction, guildId, userId);
+          await this.deleteUserAccountDeferred(interaction, guildId, userId);
           break;
         default:
           console.log(`[관리자설정] Unknown subcommand: "${subcommand}"`);
-          await interaction.reply(`알 수 없는 하위 명령입니다: "${subcommand}"`);
+          await interaction.editReply(`알 수 없는 하위 명령입니다: "${subcommand}"`);
       }
     } catch (error: any) {
       console.error('Admin management command error:', error);
-      // Check if interaction is already replied to avoid 40060 error
-      if (!interaction.replied && !interaction.deferred) {
-        try {
-          await interaction.reply(`관리자 설정 실패: ${error.message}`);
-        } catch (replyError) {
-          console.error('Failed to send error reply:', replyError);
-        }
+      try {
+        await interaction.editReply(`관리자 설정 실패: ${error.message}`);
+      } catch (replyError) {
+        console.error('Failed to send error reply:', replyError);
       }
     }
   }
@@ -1595,10 +1596,75 @@ export class DiscordBot {
     await interaction.reply(`✅ ${targetUser.username}님의 관리자 권한을 제거했습니다.`);
   }
 
-  private async deleteUserAccount(interaction: ChatInputCommandInteraction, guildId: string, adminUserId: string) {
+  private async grantAdminPermissionDeferred(interaction: ChatInputCommandInteraction, guildId: string, grantedBy: string) {
+    const targetUser = interaction.options.getUser('사용자', true);
+
+    // Check if user already has admin privileges
+    const isAlreadyAdmin = await this.storage.isAdmin(guildId, targetUser.id);
+    if (isAlreadyAdmin) {
+      await interaction.editReply(`${targetUser.username}님은 이미 관리자 권한을 가지고 있습니다.`);
+      return;
+    }
+
+    // Get or create target user in database
+    let dbUser = await this.storage.getUserByDiscordId(targetUser.id);
+    if (!dbUser) {
+      dbUser = await this.storage.createUser({
+        discordId: targetUser.id,
+        username: targetUser.username
+      });
+    }
+
+    // Grant admin permission
+    await this.storage.grantAdminPermission(guildId, dbUser.id, grantedBy);
+    await interaction.editReply(`✅ ${targetUser.username}님에게 이 서버에서의 관리자 권한을 부여했습니다.`);
+  }
+
+  private async removeAdminPermissionDeferred(interaction: ChatInputCommandInteraction, guildId: string, removedBy: string) {
+    const targetUser = interaction.options.getUser('사용자', true);
+
+    // Check if user has admin privileges
+    const isAdmin = await this.storage.isAdmin(guildId, targetUser.id);
+    if (!isAdmin) {
+      await interaction.editReply(`${targetUser.username}님은 관리자 권한을 가지고 있지 않습니다.`);
+      return;
+    }
+
+    // Remove admin permission
+    await this.storage.removeAdminPermission(guildId, targetUser.id);
+    await interaction.editReply(`✅ ${targetUser.username}님의 관리자 권한을 제거했습니다.`);
+  }
+
+  private async listAdminsDeferred(interaction: ChatInputCommandInteraction, guildId: string) {
+    const admins = await this.storage.getGuildAdmins(guildId);
+    
+    if (admins.length === 0) {
+      await interaction.editReply('현재 등록된 관리자가 없습니다.');
+      return;
+    }
+
+    const adminList = admins.map((admin, index) => 
+      `${index + 1}. ${admin.username} (ID: ${admin.discordId})`
+    ).join('\n');
+
+    await interaction.editReply(`**관리자 목록**\n\`\`\`\n${adminList}\n\`\`\``);
+  }
+
+  private async setTaxRateDeferred(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
+    const newRate = interaction.options.getNumber('세율', true);
+
+    if (newRate < 0 || newRate > 50) {
+      await interaction.editReply('세율은 0%에서 50% 사이의 값이어야 합니다.');
+      return;
+    }
+
+    await this.storage.setTaxRate(guildId, newRate);
+    await interaction.editReply(`✅ 세율이 ${newRate}%로 설정되었습니다.`);
+  }
+
+  private async deleteUserAccountDeferred(interaction: ChatInputCommandInteraction, guildId: string, adminUserId: string) {
     try {
-      // Defer the reply to get more time for processing
-      await interaction.deferReply();
+      // Interaction is already deferred in handleAdminManagementCommand
       
       const targetUser = interaction.options.getUser('사용자', true);
       const confirmText = interaction.options.getString('확인', true);
