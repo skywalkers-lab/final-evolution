@@ -16,9 +16,28 @@ import "./types";
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   
-  // Initialize WebSocket server
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  // Initialize WebSocket server with proper cleanup
+  const wss = new WebSocketServer({ 
+    server: httpServer, 
+    path: '/ws',
+    perMessageDeflate: false, // 성능 개선
+    maxPayload: 64 * 1024    // 64KB 제한
+  });
+  
   const wsManager = new WebSocketManager(wss);
+
+  // WebSocket 서버 정리 함수
+  httpServer.on('close', () => {
+    console.log('🧹 Cleaning up WebSocket connections...');
+    wss.clients.forEach((ws) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.terminate();
+      }
+    });
+    wss.close(() => {
+      console.log('✅ WebSocket server closed');
+    });
+  });
   
   // Initialize services
   const tradingEngine = new TradingEngine(storage, wsManager);
@@ -30,6 +49,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   tradingEngine.start();
   auctionManager.start();
   taxScheduler.start();
+
+  // Initialize Discord bot with shared WebSocket manager (after routes are set)
+  if (process.env.DISCORD_BOT_TOKEN) {
+    try {
+      const { DiscordBot } = await import("./services/discord-bot");
+      const discordBot = new DiscordBot(storage, wsManager);
+      await discordBot.start();
+      (global as any).discordBot = discordBot;
+      console.log("🎉 Discord bot initialized successfully!");
+    } catch (error) {
+      console.log(`❌ Failed to initialize Discord bot: ${error}`);
+    }
+  }
 
   // Authentication middleware
   const requireAuth = async (req: Express.Request, res: Express.Response, next: Express.NextFunction) => {

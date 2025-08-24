@@ -11,13 +11,12 @@ interface WebSocketMessage {
 type MessageHandler = (event: string, data: any) => void;
 
 export function useWebSocket(onMessage?: MessageHandler) {
-  const { user } = useAuth();
+  const { user, selectedGuildId } = useAuth();
   const wsRef = useRef<WebSocket | null>(null);
   const handlersRef = useRef<Set<MessageHandler>>(new Set());
 
   const connect = useCallback(() => {
-    if (!user) return;
-
+    // Allow connection even without user for demo/guest access
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws`;
     
@@ -26,12 +25,12 @@ export function useWebSocket(onMessage?: MessageHandler) {
       
       ws.onopen = () => {
         console.log("WebSocket connected");
-        // Authenticate
+        // Authenticate with proper user info or fallback
         ws.send(JSON.stringify({
           type: 'authenticate',
           payload: {
-            guildId: undefined, // Will be set by auth context
-            userId: 'web-client'
+            guildId: selectedGuildId || '1284053249057620018', // Demo guild fallback
+            userId: user?.id?.toString() || 'guest'
           }
         }));
       };
@@ -65,7 +64,7 @@ export function useWebSocket(onMessage?: MessageHandler) {
     } catch (error) {
       console.error("Failed to create WebSocket connection:", error);
     }
-  }, [user]);
+  }, [user, selectedGuildId]);
 
   const addHandler = useCallback((handler: MessageHandler) => {
     handlersRef.current.add(handler);

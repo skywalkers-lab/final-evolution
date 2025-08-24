@@ -4,8 +4,14 @@ class WebSocketClient {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
+  private lastGuildId?: string;
+  private lastUserId?: string;
 
-  connect(guildId?: string) {
+  connect(guildId?: string, userId?: string) {
+    // Store for reconnection attempts
+    this.lastGuildId = guildId;
+    this.lastUserId = userId;
+    
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws`;
     
@@ -16,9 +22,11 @@ class WebSocketClient {
         console.log("WebSocket connected");
         this.reconnectAttempts = 0;
         
-        if (guildId) {
-          this.send('authenticate', { guildId });
-        }
+        // Always authenticate, with fallback values for guest users
+        this.send('authenticate', { 
+          guildId: guildId || 'unknown', 
+          userId: userId || 'guest'
+        });
       };
 
       this.ws.onmessage = (event) => {
@@ -67,7 +75,7 @@ class WebSocketClient {
       console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
       
       setTimeout(() => {
-        this.connect();
+        this.connect(this.lastGuildId, this.lastUserId);
       }, delay);
     }
   }

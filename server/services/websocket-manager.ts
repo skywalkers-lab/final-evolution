@@ -78,7 +78,7 @@ export class WebSocketManager {
       case 'authenticate':
         ws.guildId = payload.guildId;
         ws.userId = payload.userId;
-        console.log(`Client authenticated for guild ${payload.guildId}`);
+        console.log(`Client authenticated for guild ${payload.guildId} (user: ${payload.userId})`);
         break;
       
       case 'subscribe':

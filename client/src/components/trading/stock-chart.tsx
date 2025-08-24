@@ -70,8 +70,13 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     setIsRealTimeMode(timeframe === 'realtime' || timeframe === '1m' || timeframe === '3m' || timeframe === '5m');
   }, [timeframe]);
 
+  // 차트 다시 그리기 트리거 - 더 반응성 있게 개선
   useEffect(() => {
-    drawChart();
+    const timer = setTimeout(() => {
+      drawChart();
+    }, 10); // 10ms 딜레이로 여러 상태 변경을 배치 처리
+    
+    return () => clearTimeout(timer);
   }, [candlestickData, symbol, zoomLevel, chartType, currentPrice]);
 
   // 실시간 애니메이션 효과를 위한 requestAnimationFrame
@@ -96,29 +101,45 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     };
   }, [isRealTimeMode, chartType, candlestickData]);
 
-  // 마우스 휠 줌 기능
+  // 마우스 휠 줌 기능 - 디바운싱과 즉시 반영 추가
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    let wheelTimeout: NodeJS.Timeout;
+
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       const delta = e.deltaY > 0 ? -0.1 : 0.1; // 휠 아래로 굴리면 축소, 위로 굴리면 확대
-      setZoomLevel(prev => Math.max(0.1, Math.min(5, prev + delta))); // 0.1배 ~ 5배 제한
+      
+      setZoomLevel(prev => {
+        const newZoom = Math.max(0.1, Math.min(5, prev + delta));
+        
+        // 디바운싱으로 마지막 휠 이벤트 후 차트 업데이트
+        clearTimeout(wheelTimeout);
+        wheelTimeout = setTimeout(() => {
+          drawChart();
+        }, 50);
+        
+        return newZoom;
+      });
     };
 
     canvas.addEventListener('wheel', handleWheel, { passive: false });
     
     return () => {
       canvas.removeEventListener('wheel', handleWheel);
+      clearTimeout(wheelTimeout);
     };
   }, []);
 
-  // 줌 조작 함수들
+  // 줌 조작 함수들 - 즉시 차트 업데이트 추가
   const handleZoomIn = () => {
     setZoomLevel(prev => {
       const newZoom = Math.min(5, prev + 0.2);
       console.log(`[DEBUG] Zoom In: ${prev} → ${newZoom}`);
+      // 상태 업데이트 후 즉시 차트 다시 그리기
+      setTimeout(() => drawChart(), 0);
       return newZoom;
     });
   };
@@ -127,6 +148,8 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     setZoomLevel(prev => {
       const newZoom = Math.max(0.1, prev - 0.2);
       console.log(`[DEBUG] Zoom Out: ${prev} → ${newZoom}`);
+      // 상태 업데이트 후 즉시 차트 다시 그리기
+      setTimeout(() => drawChart(), 0);
       return newZoom;
     });
   };
@@ -134,6 +157,8 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
   const handleZoomReset = () => {
     setZoomLevel(prev => {
       console.log(`[DEBUG] Zoom Reset: ${prev} → 1.0`);
+      // 상태 업데이트 후 즉시 차트 다시 그리기
+      setTimeout(() => drawChart(), 0);
       return 1;
     });
   };
