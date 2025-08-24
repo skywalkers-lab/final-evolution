@@ -88,21 +88,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Discord OAuth routes
   app.get("/auth/discord", (req, res) => {
     const clientId = process.env.DISCORD_CLIENT_ID;
-    // Use proper domain for Replit environment
-    let domain = process.env.REPLIT_DOMAINS;
-    if (domain && domain.includes(',')) {
-      // If multiple domains, use the first one
-      domain = domain.split(',')[0];
-    }
-    // Fallback to known deployed domain or construct from env vars
-    domain = domain || 'bankofkorea.replit.app' || `${process.env.REPL_SLUG}.${process.env.REPL_OWNER || 'dev'}.replit.app`;
+    
+    console.log('🚀 Discord OAuth initiated:', {
+      clientId,
+      host: req.get('host'),
+      originalUrl: req.originalUrl,
+      headers: {
+        'User-Agent': req.get('User-Agent'),
+        'Referer': req.get('Referer')
+      }
+    });
+    
+    // Force use of the deployed domain
+    const domain = 'bankofkorea.replit.app';
     const redirectUri = `https://${domain}/auth/discord/callback`;
     const scopes = "identify guilds";
     
-    console.log('Discord OAuth redirect URI:', redirectUri);
+    console.log('📍 Discord OAuth redirect URI:', redirectUri);
     
     const authUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}`;
     
+    console.log('🔗 Full Discord OAuth URL:', authUrl);
     res.redirect(authUrl);
   });
 
