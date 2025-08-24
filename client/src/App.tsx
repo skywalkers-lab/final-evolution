@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "./hooks/use-auth";
 import Dashboard from "./pages/dashboard";
+import DashboardMinimal from "./pages/dashboard-minimal";
 import Login from "./pages/login";
 import BankPage from "./pages/bank";
 import TradingPage from "./pages/trading";
@@ -15,7 +16,7 @@ import NotFound from "@/pages/not-found";
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
+      <Route path="/" component={DashboardMinimal} />
       <Route path="/login" component={Login} />
       <Route path="/b" component={BankPage} />
       <Route path="/s" component={TradingPage} />

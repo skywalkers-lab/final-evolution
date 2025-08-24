@@ -13,6 +13,7 @@ import RecentActivity from "@/components/dashboard/recent-activity";
 import AuctionCard from "@/components/auctions/auction-card";
 import LimitOrders from "@/components/trading/limit-orders";
 import GuildSelector from "@/components/guild/guild-selector";
+import ErrorBoundary from "@/components/error-boundary";
 
 export default function Dashboard() {
   const { user, selectedGuildId, isLoading } = useAuth();
@@ -41,8 +42,11 @@ export default function Dashboard() {
 
   // WebSocket handler for real-time updates
   useWebSocket((event: string, data: any) => {
-    switch (event) {
-      case 'stock_price_updated':
+    try {
+      if (!event || !data) return;
+      
+      switch (event) {
+        case 'stock_price_updated':
       case 'trade_executed':
       case 'auction_bid':
       case 'auction_settled':
@@ -74,6 +78,9 @@ export default function Dashboard() {
         refetchOverview();
         window.location.reload(); // Full reload to ensure all components refresh
         break;
+    }
+    } catch (error) {
+      console.error('Error handling WebSocket message in Dashboard:', error);
     }
   });
 
@@ -117,27 +124,33 @@ export default function Dashboard() {
         
         <main className="flex-1 overflow-y-auto p-6" data-testid="dashboard-main">
           {/* Overview Cards */}
-          <OverviewCards data={overview} portfolio={portfolio} />
+          <ErrorBoundary>
+            <OverviewCards data={overview} portfolio={portfolio} />
+          </ErrorBoundary>
 
           {/* Main Dashboard Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
             {/* Stock Chart */}
             <div className="lg:col-span-2">
-              <StockChart 
-                symbol={selectedStock} 
-                guildId={selectedGuildId || ''}
-                onSymbolChange={setSelectedStock}
-                stocks={Array.isArray(stocks) ? stocks : []}
-              />
+              <ErrorBoundary>
+                <StockChart 
+                  symbol={selectedStock} 
+                  guildId={selectedGuildId || ''}
+                  onSymbolChange={setSelectedStock}
+                  stocks={Array.isArray(stocks) ? stocks : []}
+                />
+              </ErrorBoundary>
             </div>
 
             {/* Trading Panel */}
             <div className="flex flex-col">
-              <TradingPanel 
-                selectedStock={selectedStock}
-                guildId={selectedGuildId || ''}
-                stocks={Array.isArray(stocks) ? stocks : []}
-              />
+              <ErrorBoundary>
+                <TradingPanel 
+                  selectedStock={selectedStock}
+                  guildId={selectedGuildId || ''}
+                  stocks={Array.isArray(stocks) ? stocks : []}
+                />
+              </ErrorBoundary>
             </div>
           </div>
 
@@ -174,15 +187,21 @@ export default function Dashboard() {
           {/* Portfolio, Limit Orders & Recent Activity */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div>
-              <Portfolio guildId={selectedGuildId || ''} userId="web-client" />
+              <ErrorBoundary>
+                <Portfolio guildId={selectedGuildId || ''} userId="web-client" />
+              </ErrorBoundary>
             </div>
             
             <div>
-              <LimitOrders guildId={selectedGuildId || ''} />
+              <ErrorBoundary>
+                <LimitOrders guildId={selectedGuildId || ''} />
+              </ErrorBoundary>
             </div>
             
             <div>
-              <RecentActivity guildId={selectedGuildId || ''} />
+              <ErrorBoundary>
+                <RecentActivity guildId={selectedGuildId || ''} />
+              </ErrorBoundary>
             </div>
           </div>
         </main>

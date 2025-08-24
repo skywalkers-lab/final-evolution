@@ -31,31 +31,44 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     select: (data: any[]) => data || [],
   });
 
-  const selectedStock = stocks.find(s => s.symbol === symbol);
+  const selectedStock = stocks && Array.isArray(stocks) ? stocks.find(s => s?.symbol === symbol) : null;
 
   // WebSocket handler for real-time updates
   useWebSocket((event: string, data: any) => {
-    if (event === 'stock_price_updated' && data.symbol === symbol) {
-      // 실시간 가격 업데이트 시 캔들스틱 데이터 새로 가져오기
-      setCurrentPrice(data.newPrice);
-      setPriceChange(data.changePercent || 0);
-      setLastUpdate(new Date());
+    try {
+      if (!event || !data) return;
       
-      // 실시간 모드에서만 즉시 업데이트
-      if (isRealTimeMode) {
-        queryClient.invalidateQueries({ 
-          queryKey: ['/api/web-client/guilds', guildId, 'stocks', symbol, 'candlestick', timeframe] 
-        });
+      if (event === 'stock_price_updated' && data.symbol === symbol) {
+        // 실시간 가격 업데이트 시 캔들스틱 데이터 새로 가져오기
+        if (typeof data.newPrice === 'number') {
+          setCurrentPrice(data.newPrice);
+        }
+        setPriceChange(data.changePercent || 0);
+        setLastUpdate(new Date());
+        
+        // 실시간 모드에서만 즉시 업데이트
+        if (isRealTimeMode) {
+          queryClient.invalidateQueries({ 
+            queryKey: ['/api/web-client/guilds', guildId, 'stocks', symbol, 'candlestick', timeframe] 
+          });
+        }
+        
+        // drawChart는 try-catch로 감싸서 호출
+        try {
+          drawChart();
+        } catch (chartError) {
+          console.error('Error drawing chart:', chartError);
+        }
+      } else if (event === 'stock_created' && data.guildId === guildId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/guilds', guildId, 'stocks'] });
+      } else if (event === 'stock_deleted' && data.guildId === guildId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/guilds', guildId, 'stocks'] });
+        if (data.symbol === symbol) {
+          onSymbolChange('');
+        }
       }
-      
-      drawChart();
-    } else if (event === 'stock_created' && data.guildId === guildId) {
-      queryClient.invalidateQueries({ queryKey: ['/api/guilds', guildId, 'stocks'] });
-    } else if (event === 'stock_deleted' && data.guildId === guildId) {
-      queryClient.invalidateQueries({ queryKey: ['/api/guilds', guildId, 'stocks'] });
-      if (data.symbol === symbol) {
-        onSymbolChange('');
-      }
+    } catch (error) {
+      console.error('Error handling WebSocket message in StockChart:', error);
     }
   });
 

@@ -27,20 +27,26 @@ export default function OverviewCards({ data, portfolio }: OverviewCardsProps) {
 
   // WebSocket handler for real-time updates
   useWebSocket((event: string, data: any) => {
-    switch (event) {
-      case 'trade_executed':
-        setStats(prev => ({ ...prev, activeTrades: prev.activeTrades + 1 }));
-        break;
-      case 'auction_started':
-        setStats(prev => ({ ...prev, liveAuctions: prev.liveAuctions + 1 }));
-        break;
-      case 'auction_settled':
-      case 'auction_canceled':
-        setStats(prev => ({ ...prev, liveAuctions: Math.max(0, prev.liveAuctions - 1) }));
-        break;
-      case 'tax_collected':
-        setStats(prev => ({ ...prev, taxCollected: prev.taxCollected + (data.amount || 0) }));
-        break;
+    try {
+      if (!event) return;
+      
+      switch (event) {
+        case 'trade_executed':
+          setStats(prev => ({ ...prev, activeTrades: prev.activeTrades + 1 }));
+          break;
+        case 'auction_started':
+          setStats(prev => ({ ...prev, liveAuctions: prev.liveAuctions + 1 }));
+          break;
+        case 'auction_settled':
+        case 'auction_canceled':
+          setStats(prev => ({ ...prev, liveAuctions: Math.max(0, prev.liveAuctions - 1) }));
+          break;
+        case 'tax_collected':
+          setStats(prev => ({ ...prev, taxCollected: prev.taxCollected + (data?.amount || 0) }));
+          break;
+      }
+    } catch (error) {
+      console.error('Error handling WebSocket message in OverviewCards:', error);
     }
   });
 

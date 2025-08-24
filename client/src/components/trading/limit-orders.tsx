@@ -15,11 +15,16 @@ export default function LimitOrders({ guildId }: LimitOrdersProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: limitOrders = [], isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['/api/web-client/guilds', guildId, 'limit-orders', filter],
-    queryFn: () => apiRequest('GET', `/api/web-client/guilds/${guildId}/limit-orders?status=${filter === 'all' ? '' : filter}`),
+    queryFn: async () => {
+      const response = await apiRequest('GET', `/api/web-client/guilds/${guildId}/limit-orders?status=${filter === 'all' ? '' : filter}`);
+      return Array.isArray(response) ? response : [];
+    },
     enabled: !!guildId,
   });
+  
+  const limitOrders = Array.isArray(data) ? data : [];
 
   const cancelMutation = useMutation({
     mutationFn: async (orderId: string) => {
