@@ -193,13 +193,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userInfo: { username: discordUser.username, id: user.id }
       });
       
-      // Set cookie with flexible settings for both dev and prod
+      // Set cookie with simple settings
       res.cookie('session_token', sessionToken, { 
-        httpOnly: true, 
+        httpOnly: false, // Allow JavaScript access for debugging
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        secure: false, // Allow HTTP for development
-        sameSite: 'lax', // Compatible with most scenarios
-        path: '/' // Ensure cookie is available for all paths
+        secure: false, // Allow HTTP
+        sameSite: 'none', // Allow cross-site
+        path: '/'
       });
       
       console.log('✅ OAuth success, redirecting to dashboard');
