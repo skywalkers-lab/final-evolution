@@ -542,9 +542,20 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     // 데이터는 시간 순서대로 정렬 (오래된 것부터 최신 것까지)
     const sortedData = candlestickData.slice().sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     
-    // 줌 레벨에 따라 표시할 데이터 개수 조정
+    // 줌 레벨에 따라 표시할 데이터 개수 조정 - 더 극적인 효과
     const baseItemCount = isRealTimeMode ? 100 : sortedData.length;
-    const itemsToShow = Math.max(10, Math.floor(baseItemCount / zoomLevel)); // 최소 10개는 표시
+    let itemsToShow;
+    
+    if (zoomLevel >= 2.0) {
+      // 2배 이상 확대: 매우 적은 데이터만 표시 (5-15개)
+      itemsToShow = Math.max(5, Math.floor(15 / (zoomLevel - 1)));
+    } else if (zoomLevel >= 1.0) {
+      // 1-2배 확대: 기본에서 점진적 감소
+      itemsToShow = Math.max(10, Math.floor(baseItemCount / (zoomLevel * 1.5)));
+    } else {
+      // 1배 미만 축소: 더 많은 데이터 표시
+      itemsToShow = Math.min(baseItemCount, Math.floor(baseItemCount * (2 - zoomLevel)));
+    }
     
     const displayData = sortedData.slice(-itemsToShow); // 최신 데이터가 오른쪽에 표시
     console.log(`[DEBUG] Candlestick Chart - Zoom: ${zoomLevel}x, Base: ${baseItemCount}, Show: ${itemsToShow}, Display: ${displayData.length}`);
@@ -1000,8 +1011,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                   className={`px-4 py-2 ${chartType === 'candlestick' ? 'bg-discord-blue text-white' : 'text-gray-400 hover:text-white hover:bg-discord-light'}`}
                   data-testid="button-chart-candlestick"
                 >
-                  <i className="fas fa-chart-candlestick mr-2"></i>
-                  캔들스틱
+                  🕯️ 캔들스틱
                 </Button>
                 <Button
                   variant={chartType === 'line' ? 'default' : 'ghost'}
@@ -1010,8 +1020,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                   className={`px-4 py-2 ${chartType === 'line' ? 'bg-discord-blue text-white' : 'text-gray-400 hover:text-white hover:bg-discord-light'}`}
                   data-testid="button-chart-line"
                 >
-                  <i className="fas fa-chart-line mr-2"></i>
-                  꺾은선
+                  📈 꺾은선
                 </Button>
               </div>
               
@@ -1051,9 +1060,24 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                 </Button>
               </div>
               
-              <div className="text-xs text-gray-400 space-y-1">
-                <div>📈 상승: <span className="text-red-500">빨간색</span> | 📉 하락: <span className="text-blue-500">파란색</span></div>
-                <div>🖱️ <span className="text-yellow-400">마우스 휠로 확대/축소</span> | 🎯 <span className="text-green-400">차트 위로 마우스를 올리면 상세 정보</span></div>
+              <div className="text-xs text-gray-400 space-y-1.5 leading-relaxed">
+                <div className="flex items-center gap-1">
+                  <span>📈 상승:</span> 
+                  <span className="text-red-500">빨간색</span>
+                  <span className="mx-1">|</span>
+                  <span>📉 하락:</span>
+                  <span className="text-blue-500">파란색</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-1">
+                    <span>🖱️</span>
+                    <span className="text-yellow-400">마우스 휠로 확대/축소</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span>🎯</span>
+                    <span className="text-green-400">차트 위로 마우스를 올리면 상세 정보</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1151,7 +1175,17 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                             
                             const sortedData = candlestickData.slice().sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
                             const baseItemCount = isRealTimeMode ? 100 : sortedData.length;
-                            const itemsToShow = Math.max(10, Math.floor(baseItemCount / zoomLevel));
+                            
+                            // 꺾은선 차트도 동일한 극적인 줌 로직 적용
+                            let itemsToShow;
+                            if (zoomLevel >= 2.0) {
+                              itemsToShow = Math.max(5, Math.floor(15 / (zoomLevel - 1)));
+                            } else if (zoomLevel >= 1.0) {
+                              itemsToShow = Math.max(10, Math.floor(baseItemCount / (zoomLevel * 1.5)));
+                            } else {
+                              itemsToShow = Math.min(baseItemCount, Math.floor(baseItemCount * (2 - zoomLevel)));
+                            }
+                            
                             const displayData = sortedData.slice(-itemsToShow);
                             console.log(`[DEBUG] Line Chart - Zoom: ${zoomLevel}x, Base: ${baseItemCount}, Show: ${itemsToShow}, Display: ${displayData.length}`);
                             return displayData.map((item: any, index: number, arr: any[]) => {
@@ -1228,7 +1262,16 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                               if (!candlestickData || candlestickData.length === 0) return 'preserveStartEnd';
                               const sortedData = candlestickData.slice().sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
                               const baseItemCount = isRealTimeMode ? 100 : sortedData.length;
-                              const itemsToShow = Math.max(10, Math.floor(baseItemCount / zoomLevel));
+                              
+                              let itemsToShow;
+                              if (zoomLevel >= 2.0) {
+                                itemsToShow = Math.max(5, Math.floor(15 / (zoomLevel - 1)));
+                              } else if (zoomLevel >= 1.0) {
+                                itemsToShow = Math.max(10, Math.floor(baseItemCount / (zoomLevel * 1.5)));
+                              } else {
+                                itemsToShow = Math.min(baseItemCount, Math.floor(baseItemCount * (2 - zoomLevel)));
+                              }
+                              
                               const displayLength = Math.min(itemsToShow, sortedData.length);
                               return displayLength > 50 ? Math.ceil(displayLength / 8) : 'preserveStartEnd';
                             })()}
