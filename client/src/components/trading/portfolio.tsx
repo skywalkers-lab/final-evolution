@@ -41,6 +41,19 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
       });
       
       console.log('계좌가 삭제되었습니다:', data);
+    } else if (event === 'factory_reset') {
+      // Refetch both portfolio and account data after factory reset
+      refetch();
+      refetchAccount();
+      
+      // Show notification about factory reset
+      toast({
+        title: "공장초기화 완료",
+        description: "모든 데이터가 초기화되었습니다. 새로운 계좌를 개설하세요.",
+        variant: "default",
+      });
+      
+      console.log('공장초기화가 완료되었습니다:', data);
     }
   });
 
@@ -81,23 +94,35 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <h3 className="text-lg font-semibold text-white">내 포트폴리오</h3>
-            {(accountData as any)?.account && (
+            {(accountData as any)?.account ? (
               <div className="text-sm bg-discord-dark px-3 py-1 rounded-full" data-testid="text-account-number">
                 <span className="text-gray-400">계좌번호: </span>
                 <span className="text-white font-mono">{(accountData as any).account.uniqueCode}</span>
               </div>
+            ) : (
+              <div className="text-sm bg-red-900/20 text-red-400 px-3 py-1 rounded-full border border-red-800" data-testid="text-no-account">
+                계좌없음
+              </div>
             )}
           </div>
           <div className="flex items-center space-x-4">
-            <div className="text-sm text-gray-400">
-              <span>총 평가액: </span>
-              <span className="text-white font-medium" data-testid="text-portfolio-value">
-                ₩{totalValue.toLocaleString()}
-              </span>
-            </div>
-            <div className="text-sm" data-testid="text-portfolio-change">
-              {formatProfitLoss(profitLoss, (profitLoss / Math.max(totalValue - profitLoss, 1)) * 100)}
-            </div>
+            {(accountData as any)?.account ? (
+              <>
+                <div className="text-sm text-gray-400">
+                  <span>총 평가액: </span>
+                  <span className="text-white font-medium" data-testid="text-portfolio-value">
+                    ₩{totalValue.toLocaleString()}
+                  </span>
+                </div>
+                <div className="text-sm" data-testid="text-portfolio-change">
+                  {formatProfitLoss(profitLoss, (profitLoss / Math.max(totalValue - profitLoss, 1)) * 100)}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-gray-400" data-testid="text-no-portfolio">
+                계좌를 개설해주세요
+              </div>
+            )}
           </div>
         </div>
       </div>

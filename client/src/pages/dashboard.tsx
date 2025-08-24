@@ -65,6 +65,12 @@ export default function Dashboard() {
         // Refetch overview to update statistics
         refetchOverview();
         break;
+      case 'factory_reset':
+        console.log('Factory reset performed:', data);
+        // Refetch all data after factory reset
+        refetchOverview();
+        window.location.reload(); // Full reload to ensure all components refresh
+        break;
     }
   });
 

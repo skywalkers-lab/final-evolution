@@ -158,15 +158,22 @@ export default function BankPage() {
               <div className="flex justify-between items-center mt-2">
                 <span className="text-gray-400">현재 잔액</span>
                 <span className="text-2xl font-bold text-green-400" data-testid="text-balance">
-                  ₩{Number((accountData as any)?.account?.balance || 0).toLocaleString()}
+                  {(accountData as any)?.account ? `₩${Number((accountData as any).account.balance).toLocaleString()}` : '계좌 없음'}
                 </span>
               </div>
               <div className="flex justify-between items-center mt-2">
                 <span className="text-gray-400">계좌 상태</span>
-                <Badge variant="outline" className={`${(accountData as any)?.account?.frozen ? 'border-red-500 text-red-400' : 'border-green-500 text-green-400'}`}>
-                  <i className={`fas ${(accountData as any)?.account?.frozen ? 'fa-lock' : 'fa-check-circle'} mr-1`}></i>
-                  {(accountData as any)?.account?.frozen ? '동결' : '정상'}
-                </Badge>
+                {(accountData as any)?.account ? (
+                  <Badge variant="outline" className={`${(accountData as any).account.frozen ? 'border-red-500 text-red-400' : 'border-green-500 text-green-400'}`}>
+                    <i className={`fas ${(accountData as any).account.frozen ? 'fa-lock' : 'fa-check-circle'} mr-1`}></i>
+                    {(accountData as any).account.frozen ? '동결' : '정상'}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="border-red-500 text-red-400">
+                    <i className="fas fa-times-circle mr-1"></i>
+                    계좌 없음
+                  </Badge>
+                )}
               </div>
             </div>
 

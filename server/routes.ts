@@ -323,13 +323,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         account = await storage.getAccountByUser(guildId, user.id);
+        // Don't auto-create account - let the dashboard handle "no account" state
         if (!account) {
-          account = await storage.createAccount({
-            guildId,
-            userId: user.id,
-            balance: '1000000', // 100만원 시작 잔고
-            uniqueCode: Math.floor(1000 + Math.random() * 9000).toString() // 4자리 계좌번호
-          });
+          console.log('Web client account response: no account found');
+          return res.json({ account: null });
         }
       } catch (error) {
         console.error('Error getting web client account:', error);
