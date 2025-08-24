@@ -136,9 +136,9 @@ export class TradingEngine {
             changePercent = (Math.random() - 0.5) * (volatility * 0.3) / 100;
           }
           
-          // 최소가격을 원래 가격의 50%로 설정하여 과도한 하락 방지
-          const minPrice = Math.max(100, Math.round(Number(stock.basePrice || currentPrice) * 0.5));
-          const maxPrice = Math.round(Number(stock.basePrice || currentPrice) * 2.0);
+          // 안전한 가격 범위 설정 (현재가 기준 ±5%)
+          const minPrice = Math.max(100, Math.round(currentPrice * 0.95));
+          const maxPrice = Math.round(currentPrice * 1.05);
           const newPrice = Math.max(minPrice, Math.min(maxPrice, Math.round(currentPrice * (1 + changePercent))));
           
           // 거래량도 더 현실적으로 계산

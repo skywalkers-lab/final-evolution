@@ -390,8 +390,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let user = null;
       
       if (accounts.length > 0) {
-        // Get the most recently created account (latest user)
-        account = accounts[accounts.length - 1];
+        // Always get account 5677 specifically for this user
+        account = accounts.find(acc => acc.uniqueCode === '5677');
+        if (!account) {
+          console.log('Account 5677 not found, available accounts:', accounts.map(a => a.uniqueCode));
+          account = accounts[0]; // fallback
+        }
         user = await storage.getUser(account.userId);
       }
       
