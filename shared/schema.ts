@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, integer, decimal, timestamp, boolean, jsonb, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, decimal, timestamp, boolean, jsonb, pgEnum, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -101,7 +101,10 @@ export const stocks = pgTable("stocks", {
   status: stockStatusEnum("status").default("active"),
   logoUrl: text("logo_url"), // 회사 로고 이미지 URL
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
-});
+}, (table) => ({
+  // 길드별로 종목코드가 유니크하도록 제약 조건 추가
+  uniqueGuildSymbol: unique('unique_guild_symbol').on(table.guildId, table.symbol)
+}));
 
 // Holdings
 export const holdings = pgTable("holdings", {

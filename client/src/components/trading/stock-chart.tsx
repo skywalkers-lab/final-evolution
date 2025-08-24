@@ -72,7 +72,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
 
   useEffect(() => {
     drawChart();
-  }, [candlestickData, symbol, zoomLevel, chartType]);
+  }, [candlestickData, symbol, zoomLevel, chartType, currentPrice]);
 
   // 실시간 애니메이션 효과를 위한 requestAnimationFrame
   useEffect(() => {
@@ -116,15 +116,26 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
 
   // 줌 조작 함수들
   const handleZoomIn = () => {
-    setZoomLevel(prev => Math.min(5, prev + 0.2));
+    setZoomLevel(prev => {
+      const newZoom = Math.min(5, prev + 0.2);
+      console.log(`[DEBUG] Zoom In: ${prev} → ${newZoom}`);
+      return newZoom;
+    });
   };
 
   const handleZoomOut = () => {
-    setZoomLevel(prev => Math.max(0.1, prev - 0.2));
+    setZoomLevel(prev => {
+      const newZoom = Math.max(0.1, prev - 0.2);
+      console.log(`[DEBUG] Zoom Out: ${prev} → ${newZoom}`);
+      return newZoom;
+    });
   };
 
   const handleZoomReset = () => {
-    setZoomLevel(1);
+    setZoomLevel(prev => {
+      console.log(`[DEBUG] Zoom Reset: ${prev} → 1.0`);
+      return 1;
+    });
   };
 
   // 실시간 모드에서 주기적 업데이트
@@ -536,6 +547,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     const itemsToShow = Math.max(10, Math.floor(baseItemCount / zoomLevel)); // 최소 10개는 표시
     
     const displayData = sortedData.slice(-itemsToShow); // 최신 데이터가 오른쪽에 표시
+    console.log(`[DEBUG] Candlestick Chart - Zoom: ${zoomLevel}x, Base: ${baseItemCount}, Show: ${itemsToShow}, Display: ${displayData.length}`);
     
     const dataToUse = displayData;
 
@@ -1133,7 +1145,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                     >
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart
-                          key={`line-chart-${zoomLevel}`}
+                          key={`line-chart-${zoomLevel}-${candlestickData?.length}`}
                           data={(() => {
                             if (!candlestickData || candlestickData.length === 0) return [];
                             
@@ -1141,6 +1153,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                             const baseItemCount = isRealTimeMode ? 100 : sortedData.length;
                             const itemsToShow = Math.max(10, Math.floor(baseItemCount / zoomLevel));
                             const displayData = sortedData.slice(-itemsToShow);
+                            console.log(`[DEBUG] Line Chart - Zoom: ${zoomLevel}x, Base: ${baseItemCount}, Show: ${itemsToShow}, Display: ${displayData.length}`);
                             return displayData.map((item: any, index: number, arr: any[]) => {
                             const date = new Date(item.timestamp);
                             let timeLabel = '';
