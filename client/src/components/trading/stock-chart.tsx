@@ -1133,7 +1133,12 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                     >
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart
-                          data={candlestickData && candlestickData.length > 0 ? candlestickData.map((item: any, index: number) => {
+                          data={candlestickData && candlestickData.length > 0 ? (() => {
+                            const sortedData = candlestickData.slice().sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                            const baseItemCount = isRealTimeMode ? 100 : sortedData.length;
+                            const itemsToShow = Math.max(10, Math.floor(baseItemCount / zoomLevel));
+                            const displayData = sortedData.slice(-itemsToShow);
+                            return displayData.map((item: any, index: number, arr: any[]) => {
                             const date = new Date(item.timestamp);
                             let timeLabel = '';
                             
@@ -1187,9 +1192,10 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                               high: Number(item.high),
                               low: Number(item.low),
                               volume: Number(item.volume || 0),
-                              change: index > 0 ? Number(item.close) - Number(candlestickData[index - 1].close) : 0
+                              change: index > 0 ? Number(item.close) - Number(arr[index - 1].close) : 0
                             };
-                          }) : []}
+                          });
+                          })() : []}
                           margin={{
                             top: 20,
                             right: 30,
