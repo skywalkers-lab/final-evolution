@@ -519,9 +519,9 @@ export class DiscordBot {
           subcommand
             .setName('계좌삭제')
             .setDescription('특정 사용자의 계좌를 삭제합니다 (최고관리자 전용)')
-            .addUserOption(option =>
-              option.setName('사용자')
-                .setDescription('계좌를 삭제할 사용자')
+            .addStringOption(option =>
+              option.setName('사용자id')
+                .setDescription('계좌를 삭제할 사용자의 Discord ID')
                 .setRequired(true)
             )
             .addStringOption(option =>
@@ -2030,7 +2030,7 @@ export class DiscordBot {
     try {
       // Interaction is already deferred in handleAdminManagementCommand
       
-      const targetUser = interaction.options.getUser('사용자', true);
+      const targetUserId = interaction.options.getString('사용자id', true);
       const confirmText = interaction.options.getString('확인', true);
 
       // Check confirmation text
@@ -2039,17 +2039,36 @@ export class DiscordBot {
         return;
       }
 
+      // Validate Discord ID format
+      if (!/^\d{17,19}$/.test(targetUserId)) {
+        await interaction.editReply('올바른 Discord 사용자 ID를 입력해주세요. (17-19자리 숫자)');
+        return;
+      }
+
+      // Fetch Discord user to validate ID
+      let discordUser;
+      try {
+        discordUser = await this.client.users.fetch(targetUserId);
+      } catch (error) {
+        if (error.code === 10013) { // Discord API error: Unknown User
+          await interaction.editReply('해당 사용자 ID를 찾을 수 없습니다. 올바른 Discord 사용자 ID를 입력해주세요.');
+        } else {
+          await interaction.editReply('사용자 정보를 가져오는 중 오류가 발생했습니다.');
+        }
+        return;
+      }
+
       // Get target user from database
-      const dbUser = await this.storage.getUserByDiscordId(targetUser.id);
+      const dbUser = await this.storage.getUserByDiscordId(targetUserId);
       if (!dbUser) {
         await interaction.editReply('해당 사용자는 시스템에 등록되지 않았습니다.');
         return;
       }
 
       // Check if user has an active account
-      const hasAccount = await this.storage.hasActiveAccount(guildId, dbUser.id);
+      const hasAccount = await this.storage.hasActiveAccount(guildId, targetUserId);
       if (!hasAccount) {
-        await interaction.editReply(`${targetUser.username}님은 현재 계좌가 없습니다.`);
+        await interaction.editReply(`${discordUser.username}님(ID: ${targetUserId})은 현재 계좌가 없습니다.`);
         return;
       }
 
@@ -2061,21 +2080,21 @@ export class DiscordBot {
       }
 
       // Delete the account and all related data
-      await this.storage.deleteUserAccount(guildId, dbUser.id);
+      await this.storage.deleteUserAccount(guildId, targetUserId);
 
       await interaction.editReply(
         `✅ **계좌 삭제 완료**\n` +
-        `**사용자**: ${targetUser.username}\n` +
-        `**계좌번호**: ${account.uniqueCode}\n` +
+        `**사용자**: ${discordUser.username} (ID: ${targetUserId})\n` +
+        `**계좌번호**: ${account.accountCode}\n` +
         `**삭제된 잔액**: ₩${Number(account.balance).toLocaleString()}\n\n` +
         `⚠️ 이 사용자는 이제 /은행 계좌개설 명령으로 새 계좌를 다시 개설할 수 있습니다.`
       );
 
       // Broadcast account deletion
       this.wsManager.broadcast('account_deleted', {
-        userId: targetUser.id,
-        username: targetUser.username,
-        accountCode: account.uniqueCode,
+        userId: targetUserId,
+        username: discordUser.username,
+        accountCode: account.accountCode,
         balance: account.balance
       });
 
