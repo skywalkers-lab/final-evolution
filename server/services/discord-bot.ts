@@ -2,16 +2,19 @@ import { Client, GatewayIntentBits, SlashCommandBuilder, ChatInputCommandInterac
 import { IStorage } from '../storage';
 import { WebSocketManager } from './websocket-manager';
 import { ObjectStorageService } from '../objectStorage';
+import { TradingEngine } from './trading-engine';
 
 export class DiscordBot {
   private client: Client;
   private storage: IStorage;
   private wsManager: WebSocketManager;
+  private tradingEngine: TradingEngine;
   private botGuildIds: Set<string> = new Set();
 
-  constructor(storage: IStorage, wsManager: WebSocketManager) {
+  constructor(storage: IStorage, wsManager: WebSocketManager, tradingEngine: TradingEngine) {
     this.storage = storage;
     this.wsManager = wsManager;
+    this.tradingEngine = tradingEngine;
     this.client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
@@ -158,6 +161,61 @@ export class DiscordBot {
             .addIntegerOption(option =>
               option.setName('수량')
                 .setDescription('매도할 수량')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('지정가매수')
+            .setDescription('지정가 매수 주문을 넣습니다')
+            .addStringOption(option =>
+              option.setName('종목코드')
+                .setDescription('매수할 종목코드')
+                .setRequired(true)
+            )
+            .addIntegerOption(option =>
+              option.setName('수량')
+                .setDescription('매수할 수량')
+                .setRequired(true)
+            )
+            .addIntegerOption(option =>
+              option.setName('지정가')
+                .setDescription('매수할 가격')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('지정가매도')
+            .setDescription('지정가 매도 주문을 넣습니다')
+            .addStringOption(option =>
+              option.setName('종목코드')
+                .setDescription('매도할 종목코드')
+                .setRequired(true)
+            )
+            .addIntegerOption(option =>
+              option.setName('수량')
+                .setDescription('매도할 수량')
+                .setRequired(true)
+            )
+            .addIntegerOption(option =>
+              option.setName('지정가')
+                .setDescription('매도할 가격')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('주문목록')
+            .setDescription('내 지정가 주문 목록을 확인합니다')
+        )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('주문취소')
+            .setDescription('지정가 주문을 취소합니다')
+            .addStringOption(option =>
+              option.setName('주문id')
+                .setDescription('취소할 주문 ID')
                 .setRequired(true)
             )
         ),
@@ -828,6 +886,150 @@ export class DiscordBot {
     }
   }
 
+  private async limitBuyStock(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
+    const symbol = interaction.options.getString('종목코드', true).toUpperCase();
+    const shares = interaction.options.getInteger('수량', true);
+    const targetPrice = interaction.options.getInteger('지정가', true);
+
+    if (shares <= 0) {
+      await interaction.reply('매수 수량은 0보다 커야 합니다.');
+      return;
+    }
+
+    if (targetPrice <= 0) {
+      await interaction.reply('지정가는 0보다 커야 합니다.');
+      return;
+    }
+
+    try {
+      const user = await this.storage.getUserByDiscordId(userId);
+      if (!user) {
+        await interaction.reply('계좌를 찾을 수 없습니다. /은행 계좌개설 명령으로 계좌를 먼저 개설해주세요.');
+        return;
+      }
+
+      // Use trading engine to create limit order
+      const limitOrder = await this.tradingEngine.createLimitOrder(guildId, user.id, symbol, 'buy', shares, targetPrice);
+      
+      const totalAmount = targetPrice * shares;
+      await interaction.reply(`📝 **지정가 매수 주문 접수**
+      
+종목: ${symbol}
+수량: ${shares}주
+지정가: ₩${targetPrice.toLocaleString()}
+총 주문금액: ₩${totalAmount.toLocaleString()}
+
+💰 주문금액이 계좌에서 예약되었습니다.
+📊 주가가 지정가 이하로 떨어지면 자동으로 체결됩니다.
+
+주문ID: ${limitOrder.id}`);
+
+    } catch (error: any) {
+      await interaction.reply(`지정가 매수 주문 실패: ${error.message}`);
+    }
+  }
+
+  private async limitSellStock(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
+    const symbol = interaction.options.getString('종목코드', true).toUpperCase();
+    const shares = interaction.options.getInteger('수량', true);
+    const targetPrice = interaction.options.getInteger('지정가', true);
+
+    if (shares <= 0) {
+      await interaction.reply('매도 수량은 0보다 커야 합니다.');
+      return;
+    }
+
+    if (targetPrice <= 0) {
+      await interaction.reply('지정가는 0보다 커야 합니다.');
+      return;
+    }
+
+    try {
+      const user = await this.storage.getUserByDiscordId(userId);
+      if (!user) {
+        await interaction.reply('계좌를 찾을 수 없습니다. /은행 계좌개설 명령으로 계좌를 먼저 개설해주세요.');
+        return;
+      }
+
+      // Use trading engine to create limit order
+      const limitOrder = await this.tradingEngine.createLimitOrder(guildId, user.id, symbol, 'sell', shares, targetPrice);
+      
+      const totalAmount = targetPrice * shares;
+      await interaction.reply(`📝 **지정가 매도 주문 접수**
+      
+종목: ${symbol}
+수량: ${shares}주
+지정가: ₩${targetPrice.toLocaleString()}
+예상 수령금액: ₩${totalAmount.toLocaleString()}
+
+🔒 보유주식이 예약되었습니다.
+📈 주가가 지정가 이상으로 올라가면 자동으로 체결됩니다.
+
+주문ID: ${limitOrder.id}`);
+
+    } catch (error: any) {
+      await interaction.reply(`지정가 매도 주문 실패: ${error.message}`);
+    }
+  }
+
+  private async listLimitOrders(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
+    try {
+      const user = await this.storage.getUserByDiscordId(userId);
+      if (!user) {
+        await interaction.reply('계좌를 찾을 수 없습니다.');
+        return;
+      }
+
+      const orders = await this.storage.getUserLimitOrders(guildId, user.id);
+
+      if (orders.length === 0) {
+        await interaction.reply('📋 등록된 지정가 주문이 없습니다.');
+        return;
+      }
+
+      let message = '📋 **내 지정가 주문 목록**\n\n';
+      
+      for (const order of orders.slice(0, 10)) {
+        const statusIcon = order.status === 'pending' ? '⏳' : 
+                          order.status === 'executed' ? '✅' : '❌';
+        const typeText = order.type === 'buy' ? '매수' : '매도';
+        const totalAmount = Number(order.targetPrice) * order.shares;
+        
+        message += `${statusIcon} **${order.symbol}** ${typeText}\n`;
+        message += `   수량: ${order.shares}주\n`;
+        message += `   지정가: ₩${Number(order.targetPrice).toLocaleString()}\n`;
+        message += `   총액: ₩${totalAmount.toLocaleString()}\n`;
+        message += `   주문ID: ${order.id}\n\n`;
+      }
+
+      if (orders.length > 10) {
+        message += `\n... 외 ${orders.length - 10}개 주문`;
+      }
+
+      await interaction.reply(message);
+    } catch (error: any) {
+      await interaction.reply(`주문 목록 조회 실패: ${error.message}`);
+    }
+  }
+
+  private async cancelLimitOrder(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
+    const orderId = interaction.options.getString('주문id', true);
+
+    try {
+      const user = await this.storage.getUserByDiscordId(userId);
+      if (!user) {
+        await interaction.reply('계좌를 찾을 수 없습니다.');
+        return;
+      }
+
+      await this.storage.cancelLimitOrder(orderId);
+      await interaction.reply(`✅ 주문이 취소되었습니다. (주문ID: ${orderId})`);
+
+    } catch (error: any) {
+      await interaction.reply(`주문 취소 실패: ${error.message}`);
+    }
+  }
+
   private async handleStockCommand(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
     const subcommand = interaction.options.getSubcommand();
     
@@ -843,6 +1045,18 @@ export class DiscordBot {
         break;
       case '매도':
         await this.sellStock(interaction, guildId, userId);
+        break;
+      case '지정가매수':
+        await this.limitBuyStock(interaction, guildId, userId);
+        break;
+      case '지정가매도':
+        await this.limitSellStock(interaction, guildId, userId);
+        break;
+      case '주문목록':
+        await this.listLimitOrders(interaction, guildId, userId);
+        break;
+      case '주문취소':
+        await this.cancelLimitOrder(interaction, guildId, userId);
         break;
     }
   }

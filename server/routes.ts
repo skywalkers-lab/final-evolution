@@ -54,7 +54,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   if (process.env.DISCORD_BOT_TOKEN) {
     try {
       const { DiscordBot } = await import("./services/discord-bot");
-      const discordBot = new DiscordBot(storage, wsManager);
+      const discordBot = new DiscordBot(storage, wsManager, tradingEngine);
       await discordBot.start();
       (global as any).discordBot = discordBot;
       console.log("🎉 Discord bot initialized successfully!");

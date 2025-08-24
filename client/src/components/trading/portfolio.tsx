@@ -185,7 +185,7 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
                       <td className="py-4 text-white" data-testid={`text-holding-shares-${index}`}>
                         {holding.shares.toLocaleString()}주
                       </td>
-                      <td className="py-4 text-white" data-testid={`text-holding-avg-price-${index}`}>
+                      <td className="py-4 text-green-400 font-semibold" data-testid={`text-holding-avg-price-${index}`}>
                         ₩{Number(holding.avgPrice).toLocaleString()}
                       </td>
                       <td className="py-4 text-white" data-testid={`text-holding-current-price-${index}`}>
