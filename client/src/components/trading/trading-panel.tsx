@@ -65,14 +65,15 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
     }
   }, [selectedStockData, realtimePrice, orderType]);
 
-  const tradeMutation = useMutation({
+  // Market order mutation (즉시 체결)
+  const marketTradeMutation = useMutation({
     mutationFn: async (tradeData: any) => {
       return await apiRequest('POST', `/api/web-client/guilds/${guildId}/trades`, tradeData);
     },
     onSuccess: () => {
       toast({
-        title: "거래 성공",
-        description: `${tradeType === 'buy' ? '매수' : '매도'} 주문이 체결되었습니다.`,
+        title: "거래 체결",
+        description: `${tradeType === 'buy' ? '매수' : '매도'} 주문이 즉시 체결되었습니다.`,
       });
       setQuantity('');
       // Refetch portfolio and overview
@@ -83,6 +84,31 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
       toast({
         title: "거래 실패",
         description: error.message || "거래 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Limit order mutation (예약 주문)
+  const limitOrderMutation = useMutation({
+    mutationFn: async (orderData: any) => {
+      return await apiRequest('POST', `/api/web-client/guilds/${guildId}/limit-orders`, orderData);
+    },
+    onSuccess: () => {
+      toast({
+        title: "예약 주문 생성",
+        description: `${tradeType === 'buy' ? '매수' : '매도'} 지정가 주문이 예약되었습니다. 목표가에 도달하면 자동으로 체결됩니다.`,
+      });
+      setQuantity('');
+      // Refetch portfolio and overview
+      queryClient.invalidateQueries({ queryKey: ['/api/web-client/guilds', guildId, 'portfolio'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/web-client/guilds', guildId, 'overview'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/web-client/guilds', guildId, 'limit-orders'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "예약 주문 실패",
+        description: error.message || "지정가 주문 생성 중 오류가 발생했습니다.",
         variant: "destructive",
       });
     },
@@ -110,12 +136,24 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
       return;
     }
 
-    tradeMutation.mutate({
-      symbol: selectedStock,
-      type: tradeType,
-      shares: quantityNum,
-      price: priceNum,
-    });
+    if (orderType === 'market') {
+      // 시장가 주문 - 즉시 체결
+      marketTradeMutation.mutate({
+        symbol: selectedStock,
+        type: tradeType,
+        shares: quantityNum,
+        price: priceNum,
+      });
+    } else {
+      // 지정가 주문 - 예약 주문 생성
+      limitOrderMutation.mutate({
+        symbol: selectedStock,
+        type: tradeType,
+        shares: quantityNum,
+        targetPrice: priceNum,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30일 후 만료
+      });
+    }
   };
 
   const calculateOrderAmount = () => {
@@ -139,6 +177,7 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
   const canTrade = () => {
     if (!selectedStockData || selectedStockData.status !== 'active') return false;
     if (tradeType === 'buy') {
+      // 지정가 매수는 예약 시에만 잔액 확인 (즉시 차감하지 않음)
       return availableBalance >= totalRequired;
     } else {
       return availableShares >= parseInt(quantity || '0');
@@ -305,7 +344,7 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
             {/* Order Button */}
             <Button 
               onClick={handleTrade}
-              disabled={!canTrade() || tradeMutation.isPending}
+              disabled={!canTrade() || marketTradeMutation.isPending || limitOrderMutation.isPending}
               className={`w-full font-bold py-3 rounded-lg transition-colors ${
                 tradeType === 'buy'
                   ? 'bg-discord-green hover:bg-green-600 text-white'
@@ -313,15 +352,32 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
               }`}
               data-testid="button-submit-order"
             >
-              {tradeMutation.isPending ? (
+              {(marketTradeMutation.isPending || limitOrderMutation.isPending) ? (
                 <div className="flex items-center">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   처리 중...
                 </div>
               ) : (
-                `${tradeType === 'buy' ? '매수' : '매도'} ${orderType === 'market' ? '시장가' : '지정가'} 주문`
+                <>
+                  {orderType === 'market' ? (
+                    `${tradeType === 'buy' ? '매수' : '매도'} 시장가 주문`
+                  ) : (
+                    `${tradeType === 'buy' ? '매수' : '매도'} 지정가 예약`
+                  )}
+                </>
               )}
             </Button>
+
+            {/* 지정가 주문 설명 */}
+            {orderType === 'limit' && (
+              <div className="bg-blue-600 bg-opacity-20 border border-blue-600 rounded-lg p-3">
+                <p className="text-blue-400 text-sm text-center">
+                  <i className="fas fa-info-circle mr-2"></i>
+                  지정가 주문은 예약으로 등록되며, 목표가 도달 시 자동으로 체결됩니다.
+                  {tradeType === 'buy' ? ' 주문 시 잔액이 예약됩니다.' : ' 보유 주식이 예약됩니다.'}
+                </p>
+              </div>
+            )}
 
             {selectedStockData.status !== 'active' && (
               <div className="bg-yellow-600 bg-opacity-20 border border-yellow-600 rounded-lg p-3">

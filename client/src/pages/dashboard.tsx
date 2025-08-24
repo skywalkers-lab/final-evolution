@@ -11,6 +11,7 @@ import TradingPanel from "@/components/trading/trading-panel";
 import Portfolio from "@/components/trading/portfolio";
 import RecentActivity from "@/components/dashboard/recent-activity";
 import AuctionCard from "@/components/auctions/auction-card";
+import LimitOrders from "@/components/trading/limit-orders";
 import GuildSelector from "@/components/guild/guild-selector";
 
 export default function Dashboard() {
@@ -169,13 +170,17 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Portfolio & Recent Activity */}
+          {/* Portfolio, Limit Orders & Recent Activity */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
+            <div>
               <Portfolio guildId={selectedGuildId || ''} userId="web-client" />
             </div>
             
-            <div className="flex flex-col">
+            <div>
+              <LimitOrders guildId={selectedGuildId || ''} />
+            </div>
+            
+            <div>
               <RecentActivity guildId={selectedGuildId || ''} />
             </div>
           </div>
