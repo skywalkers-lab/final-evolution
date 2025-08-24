@@ -28,16 +28,16 @@ export default function Sidebar() {
       bgColor: "bg-green-500/10"
     },
     { 
-      path: "/trading", 
+      path: "/stock", 
       icon: "fas fa-trending-up", 
-      label: "주식 거래",
+      label: "주식",
       gradient: "from-slate-600 to-slate-700",
       iconColor: "text-orange-300",
       glowColor: "shadow-slate-500/20",
       bgColor: "bg-orange-500/10"
     },
     { 
-      path: "/auctions", 
+      path: "/auction", 
       icon: "fas fa-gavel", 
       label: "경매",
       gradient: "from-slate-600 to-slate-700",
@@ -156,12 +156,12 @@ export default function Sidebar() {
                     <path d="M12 2l7 3.5v3L12 12 5 8.5v-3L12 2zM5 10v6l7 3.5 7-3.5v-6l-7 3.5L5 10z"/>
                   </svg>
                 )}
-                {item.path === "/trading" && (
+                {item.path === "/stock" && (
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/>
                   </svg>
                 )}
-                {item.path === "/auctions" && (
+                {item.path === "/auction" && (
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M21 3H3v6h18V3zM12 7c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM3 10v11h6v-9H3zm8 11h6v-6h-6v6zm0-8h10v-3H11v3z"/>
                   </svg>

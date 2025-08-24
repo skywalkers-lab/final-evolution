@@ -18,8 +18,8 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/login" component={Login} />
       <Route path="/bank" component={BankPage} />
-      <Route path="/trading" component={TradingPage} />
-      <Route path="/auctions" component={AuctionsPage} />
+      <Route path="/stock" component={TradingPage} />
+      <Route path="/auction" component={AuctionsPage} />
       <Route path="/news" component={NewsPage} />
       <Route component={NotFound} />
     </Switch>

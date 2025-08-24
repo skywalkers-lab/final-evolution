@@ -57,6 +57,19 @@ export class TaxScheduler {
             });
 
             await this.storage.updateBalance(account.id, -collectableAmount);
+            
+            // Get user info for broadcast
+            const user = await this.storage.getUser(account.userId);
+            if (user) {
+              // Broadcast tax collection to WebSocket clients
+              this.wsManager.broadcast('tax_collected', {
+                guildId: guild.guildId,
+                userId: account.userId,
+                username: user.username,
+                amount: collectableAmount,
+                timestamp: new Date().toISOString()
+              });
+            }
           }
         }
       }
@@ -100,6 +113,19 @@ export class TaxScheduler {
         });
 
         await this.storage.updateBalance(account.id, -collectableAmount);
+        
+        // Get user info for broadcast
+        const user = await this.storage.getUser(account.userId);
+        if (user) {
+          // Broadcast manual tax collection to WebSocket clients
+          this.wsManager.broadcast('tax_collected', {
+            guildId,
+            userId: account.userId,
+            username: user.username,
+            amount: collectableAmount,
+            timestamp: new Date().toISOString()
+          });
+        }
         
         totalCollected += collectableAmount;
         affectedUsers++;

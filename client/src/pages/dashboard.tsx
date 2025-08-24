@@ -45,6 +45,9 @@ export default function Dashboard() {
       case 'trade_executed':
       case 'auction_bid':
       case 'auction_settled':
+      case 'account_created':
+      case 'transfer_completed':
+      case 'tax_collected':
         refetchOverview();
         break;
       case 'stock_created':
