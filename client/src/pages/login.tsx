@@ -15,7 +15,14 @@ export default function Login() {
   }, [user, isLoading, setLocation]);
 
   const handleDiscordLogin = () => {
-    login();
+    console.log('🔴 Discord login button clicked!');
+    console.log('🔄 Calling login function...');
+    try {
+      login();
+      console.log('✅ Login function called successfully');
+    } catch (error) {
+      console.error('❌ Error calling login function:', error);
+    }
   };
 
   if (isLoading) {
