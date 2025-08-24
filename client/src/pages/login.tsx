@@ -17,12 +17,20 @@ export default function Login() {
   const handleDiscordLogin = () => {
     console.log('🔴 Discord login button clicked!');
     console.log('🔄 Calling login function...');
+    alert('버튼 클릭됨! 콘솔을 확인하세요.'); // 즉시 확인 가능한 알림
     try {
       login();
       console.log('✅ Login function called successfully');
     } catch (error) {
       console.error('❌ Error calling login function:', error);
+      alert('로그인 함수 오류: ' + error.message);
     }
+  };
+
+  // 테스트용 간단한 버튼 핸들러
+  const handleTestButton = () => {
+    console.log('🧪 Test button clicked!');
+    alert('테스트 버튼 작동 중! JavaScript가 정상입니다.');
   };
 
   if (isLoading) {
@@ -46,6 +54,15 @@ export default function Login() {
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* 테스트 버튼 추가 */}
+          <Button
+            onClick={handleTestButton}
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded-lg"
+            data-testid="button-test"
+          >
+            🧪 JavaScript 테스트 (클릭해보세요)
+          </Button>
+          
           <Button
             onClick={handleDiscordLogin}
             className="w-full bg-discord-blurple hover:bg-discord-blurple/90 text-white font-medium py-3 rounded-lg flex items-center justify-center gap-3 transition-all duration-200"
