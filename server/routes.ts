@@ -138,6 +138,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/me", async (req, res) => {
     try {
+      // Development mode: provide default user for testing
+      if (process.env.NODE_ENV === 'development') {
+        const defaultUser = {
+          id: "1",
+          discordId: "559307598813461442",
+          username: "Developer",
+          discriminator: "0001",
+          avatar: null
+        };
+        return res.json(defaultUser);
+      }
+      
       const sessionToken = req.cookies.session_token;
       if (!sessionToken) {
         return res.status(401).json({ message: "Not authenticated" });
@@ -170,6 +182,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/guilds", async (req, res) => {
     try {
+      // Development mode: provide default guild for testing
+      if (process.env.NODE_ENV === 'development') {
+        const defaultGuilds = [
+          {
+            id: "1284053249057620018",
+            name: "🌊 𝗝𝗢𝗡𝗚𝗡𝗢ㆍ𝗞𝗥:𝗥𝗣",
+            icon: null,
+            owner: true,
+            permissions: "0"
+          }
+        ];
+        return res.json(defaultGuilds);
+      }
+      
       const sessionToken = req.cookies.session_token;
       if (!sessionToken) {
         return res.status(401).json({ message: "Not authenticated" });

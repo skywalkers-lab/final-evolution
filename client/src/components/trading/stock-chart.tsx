@@ -511,13 +511,13 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-white">실시간 주식 차트</h3>
-            <div className="flex items-center space-x-2 mt-1">
+            <div className="flex items-center space-x-2 mt-1 flex-wrap">
               <span className="text-sm text-gray-400">선택된 종목:</span>
               <span className="text-discord-blue font-medium">
                 {selectedStock ? `${selectedStock.name} (${selectedStock.symbol})` : '선택된 종목 없음'}
               </span>
               {selectedStock && (
-                <span className="text-xs">
+                <span className="text-xs whitespace-nowrap">
                   {getStatusIcon(selectedStock.status)} {getStatusText(selectedStock.status)}
                 </span>
               )}

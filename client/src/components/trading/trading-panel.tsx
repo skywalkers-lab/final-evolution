@@ -38,7 +38,8 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
       case 'stock_price_updated':
         if (data.symbol === selectedStock) {
           setRealtimePrice(data.newPrice);
-          if (orderType === 'limit') {
+          // 시장가 주문일 때만 가격을 자동 업데이트
+          if (orderType === 'market') {
             setPrice(data.newPrice.toString());
           }
         }
@@ -201,8 +202,8 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
                       {selectedStockData.symbol.substring(0, 2)}
                     </div>
                   </div>
-                  <div>
-                    <p className="text-white font-medium">{selectedStockData.name}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-white font-medium truncate">{selectedStockData.name}</p>
                     <p className="text-gray-400 text-sm">{selectedStockData.symbol}</p>
                   </div>
                 </div>
