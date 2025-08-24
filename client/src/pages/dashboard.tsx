@@ -20,13 +20,13 @@ export default function Dashboard() {
   const [selectedStock, setSelectedStock] = useState<string>('');
 
   const { data: overview = {}, refetch: refetchOverview } = useQuery({
-    queryKey: ['/api/web-client/guilds', selectedGuildId, 'overview'],
+    queryKey: ['/api/guilds', selectedGuildId, 'overview'],
     enabled: !!selectedGuildId,
   });
 
   const { data: portfolio } = useQuery({
-    queryKey: ['/api/guilds', 'users', 'web-client', 'portfolio'],
-    enabled: true,
+    queryKey: ['/api/web-client/guilds', selectedGuildId, 'portfolio'],
+    enabled: !!selectedGuildId,
   });
 
   const { data: stocks = [] } = useQuery({

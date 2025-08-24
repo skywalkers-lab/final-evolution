@@ -590,7 +590,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { guildId } = req.params;
       const { symbol, type, shares, targetPrice, expiresAt } = req.body;
-      const userId = req.user.id;
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
       
       const limitOrder = await tradingEngine.createLimitOrder(guildId, userId, symbol, type, shares, Number(targetPrice), expiresAt);
       res.json(limitOrder);
@@ -602,7 +605,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/guilds/:guildId/limit-orders/:orderId", requireAuth, async (req, res) => {
     try {
       const { guildId, orderId } = req.params;
-      const userId = req.user.id;
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
       
       // Security check: Only allow users to cancel their own orders or if they're guild admin
       const limitOrder = await storage.getLimitOrder(orderId);
@@ -870,8 +876,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { guildId, userId } = req.params;
       
       // Security: Only allow users to access their own account or if they're guild admin
-      if (req.user.id !== userId) {
-        const isAdmin = await storage.isGuildAdmin(guildId, req.user.id);
+      const currentUserId = req.user?.id;
+      if (!currentUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+      if (currentUserId !== userId) {
+        const isAdmin = await storage.isGuildAdmin(guildId, currentUserId);
         if (!isAdmin) {
           return res.status(403).json({ message: "자신의 계좌 정보만 조회할 수 있습니다" });
         }
@@ -891,8 +901,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { guildId, userId } = req.params;
       
       // Security: Only allow users to access their own transactions or if they're guild admin
-      if (req.user.id !== userId) {
-        const isAdmin = await storage.isGuildAdmin(guildId, req.user.id);
+      const currentUserId = req.user?.id;
+      if (!currentUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+      if (currentUserId !== userId) {
+        const isAdmin = await storage.isGuildAdmin(guildId, currentUserId);
         if (!isAdmin) {
           return res.status(403).json({ message: "자신의 거래 내역만 조회할 수 있습니다" });
         }
@@ -911,7 +925,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { guildId } = req.params;
       const { accountNumber, amount, memo } = req.body;
-      const userId = req.user.id;
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
       
       // Input validation
       if (!accountNumber || typeof accountNumber !== 'string') {
@@ -1009,7 +1026,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Use password data to create auction
-        const endTime = new Date(Date.now() + auctionPassword.duration * 60 * 60 * 1000);
+        const duration = auctionPassword.duration || 24; // Default to 24 hours if null
+        const endTime = new Date(Date.now() + duration * 60 * 60 * 1000);
         
         const finalAuctionData = {
           guildId,

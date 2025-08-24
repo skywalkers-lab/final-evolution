@@ -1726,10 +1726,10 @@ export class DiscordBot {
 
     const title = interaction.options.getString('제목', true);
     const content = interaction.options.getString('내용', true);
-    const symbol = interaction.options.getString('종목코드')?.toUpperCase();
+    const symbol = interaction.options.getString('종목코드')?.toUpperCase() || undefined;
 
     try {
-      const analysis = await this.storage.analyzeNews(guildId, title, content, symbol, null);
+      const analysis = await this.storage.analyzeNews(guildId, title, content, symbol, undefined);
       
       let message = `📰 **뉴스 분석 완료**\n\n`;
       message += `제목: ${title}\n`;

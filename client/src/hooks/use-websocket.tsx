@@ -29,7 +29,7 @@ export function useWebSocket(onMessage?: MessageHandler) {
         ws.send(JSON.stringify({
           type: 'authenticate',
           payload: {
-            guildId: selectedGuildId || '1284053249057620018', // Demo guild fallback
+            guildId: selectedGuildId || 'unknown',
             userId: user?.id?.toString() || 'guest'
           }
         }));
