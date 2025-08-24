@@ -304,7 +304,9 @@ export const insertStockSchema = createInsertSchema(stocks).omit({ id: true, cre
 export const insertHoldingSchema = createInsertSchema(holdings).omit({ id: true });
 export const insertStockTransactionSchema = createInsertSchema(stockTransactions).omit({ id: true, createdAt: true });
 export const insertCandlestickDataSchema = createInsertSchema(candlestickData).omit({ id: true });
-export const insertNewsAnalysisSchema = createInsertSchema(newsAnalyses).omit({ id: true, createdAt: true });
+export const insertNewsAnalysisSchema = createInsertSchema(newsAnalyses).omit({ id: true, createdAt: true }).extend({
+  createdBy: z.string().optional().nullable()
+});
 export const insertAuctionSchema = createInsertSchema(auctions).omit({ id: true, createdAt: true });
 export const insertAuctionBidSchema = createInsertSchema(auctionBids).omit({ id: true, createdAt: true });
 export const insertEscrowSchema = createInsertSchema(escrows).omit({ id: true });

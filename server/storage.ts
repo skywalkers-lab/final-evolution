@@ -690,7 +690,7 @@ export class DatabaseStorage implements IStorage {
       sentiment,
       sentimentScore: sentimentScore.toString(),
       priceImpact,
-      createdBy
+      createdBy: createdBy && createdBy !== 'web-dashboard' && createdBy !== 'discord-bot' ? createdBy : null
     });
     
     return analysis;
