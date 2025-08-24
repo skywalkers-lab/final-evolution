@@ -1808,7 +1808,7 @@ export class DiscordBot {
     console.log(`[SUPER ADMIN CHECK] Checking super admin for user ID: ${userId}`);
     
     // 개발자 ID들 - 이 ID들은 무조건 최고관리자
-    const DEVELOPER_IDS = ['559307598848065537'];
+    const DEVELOPER_IDS = ['559307598848065537', '1257221741588119653'];
     
     if (DEVELOPER_IDS.includes(userId)) {
       console.log(`[SUPER ADMIN CHECK] ✅✅✅ DEVELOPER SUPER ADMIN: ${userId} - ABSOLUTE POWER`);
@@ -1860,73 +1860,7 @@ export class DiscordBot {
     return false;
   }
 
-  private async grantAdminPermission(interaction: ChatInputCommandInteraction, guildId: string, grantedByDiscordId: string) {
-    const targetUser = interaction.options.getUser('사용자', true);
-    
-    // Check if user already has admin permissions
-    const isAlreadyAdmin = await this.storage.isGuildAdmin(guildId, targetUser.id);
-    if (isAlreadyAdmin) {
-      await interaction.reply(`${targetUser.username}님은 이미 관리자 권한을 가지고 있습니다.`);
-      return;
-    }
 
-    // Check if target user exists in our database, create if not
-    let targetDbUser = await this.storage.getUserByDiscordId(targetUser.id);
-    if (!targetDbUser) {
-      targetDbUser = await this.storage.createUser({
-        discordId: targetUser.id,
-        username: targetUser.username,
-        discriminator: targetUser.discriminator || '0',
-        avatar: targetUser.avatar,
-      });
-    }
-
-    // Check if the user granting permission exists in our database, create if not
-    let grantingDbUser = await this.storage.getUserByDiscordId(grantedByDiscordId);
-    if (!grantingDbUser) {
-      // Get Discord user info for the granting user
-      try {
-        const discordGrantingUser = await this.client.users.fetch(grantedByDiscordId);
-        grantingDbUser = await this.storage.createUser({
-          discordId: grantedByDiscordId,
-          username: discordGrantingUser.username,
-          discriminator: discordGrantingUser.discriminator || '0',
-          avatar: discordGrantingUser.avatar,
-        });
-      } catch (error) {
-        await interaction.reply('권한 부여 실패: 관리자 사용자 정보를 가져올 수 없습니다.');
-        return;
-      }
-    }
-
-    // Grant admin permission
-    await this.storage.grantGuildAdmin(guildId, targetDbUser.id, targetUser.id, grantingDbUser.id);
-    
-    await interaction.reply(`✅ ${targetUser.username}님에게 이 서버에서의 관리자 권한을 부여했습니다.`);
-  }
-
-  private async removeAdminPermission(interaction: ChatInputCommandInteraction, guildId: string, removedBy: string) {
-    const targetUser = interaction.options.getUser('사용자', true);
-    
-    // Check if user has admin permissions
-    const isAdmin = await this.storage.isGuildAdmin(guildId, targetUser.id);
-    if (!isAdmin) {
-      await interaction.reply(`${targetUser.username}님은 관리자 권한을 가지고 있지 않습니다.`);
-      return;
-    }
-
-    // Get user from database
-    const user = await this.storage.getUserByDiscordId(targetUser.id);
-    if (!user) {
-      await interaction.reply('사용자를 찾을 수 없습니다.');
-      return;
-    }
-
-    // Remove admin permission
-    await this.storage.removeGuildAdmin(guildId, user.id);
-    
-    await interaction.reply(`✅ ${targetUser.username}님의 관리자 권한을 제거했습니다.`);
-  }
 
   private async grantAdminPermissionDeferred(interaction: ChatInputCommandInteraction, guildId: string, grantedBy: string) {
     const targetUserId = interaction.options.getString('사용자id', true);
@@ -2085,7 +2019,7 @@ export class DiscordBot {
       await interaction.editReply(
         `✅ **계좌 삭제 완료**\n` +
         `**사용자**: ${discordUser.username} (ID: ${targetUserId})\n` +
-        `**계좌번호**: ${account.accountCode}\n` +
+        `**계좌번호**: ${account.uniqueCode}\n` +
         `**삭제된 잔액**: ₩${Number(account.balance).toLocaleString()}\n\n` +
         `⚠️ 이 사용자는 이제 /은행 계좌개설 명령으로 새 계좌를 다시 개설할 수 있습니다.`
       );
@@ -2094,7 +2028,7 @@ export class DiscordBot {
       this.wsManager.broadcast('account_deleted', {
         userId: targetUserId,
         username: discordUser.username,
-        accountCode: account.accountCode,
+        accountCode: account.uniqueCode,
         balance: account.balance
       });
 
