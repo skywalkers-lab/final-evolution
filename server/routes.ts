@@ -95,7 +95,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       domain = domain.split(',')[0];
     }
     // Fallback to known deployed domain or construct from env vars
-    domain = domain || 'BankofKorea.replit.app' || `${process.env.REPL_SLUG}.${process.env.REPL_OWNER || 'dev'}.replit.app`;
+    domain = domain || 'bankofkorea.replit.app' || `${process.env.REPL_SLUG}.${process.env.REPL_OWNER || 'dev'}.replit.app`;
     const redirectUri = `https://${domain}/auth/discord/callback`;
     const scopes = "identify guilds";
     
@@ -130,7 +130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         domain = domain.split(',')[0];
       }
       // Fallback to known deployed domain or request host
-      domain = domain || 'BankofKorea.replit.app' || req.get('host');
+      domain = domain || 'bankofkorea.replit.app' || req.get('host');
       const redirectUri = `https://${domain}/auth/discord/callback`;
 
       // Exchange code for token
