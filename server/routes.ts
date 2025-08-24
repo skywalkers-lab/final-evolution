@@ -601,6 +601,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Web client trading route (no auth required)
+  app.post("/api/web-client/guilds/:guildId/trades", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const { userId, symbol, type, shares, price } = req.body;
+      
+      const result = await tradingEngine.executeTrade(guildId, userId, symbol, type, shares, Number(price));
+      res.json(result);
+    } catch (error: any) {
+      console.error('Web client trade error:', error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   // Limit Order routes
   app.get("/api/guilds/:guildId/limit-orders", requireAuth, async (req, res) => {
     try {
