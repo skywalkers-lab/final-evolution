@@ -85,14 +85,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  // 간단한 테스트 라우트
+  // 🚨 CRITICAL: httpServer 생성 후 라우트 등록
+  console.log('🔧 Registering critical routes after httpServer creation...');
+  
+  // 테스트 라우트들
   app.get("/test", (req, res) => {
-    console.log('🧪 TEST ROUTE HIT!');
-    res.json({ message: 'Test route working!', timestamp: new Date().toISOString() });
+    console.log('🧪 TEST ROUTE HIT! URL:', req.originalUrl);
+    res.json({ message: 'Test route working!', timestamp: new Date().toISOString(), success: true });
   });
+  
+  app.get("/api/test", (req, res) => {
+    console.log('🧪 API TEST ROUTE HIT!');
+    res.json({ message: 'API test route working!', timestamp: new Date().toISOString() });
+  });
+  
+  console.log('✅ Critical routes registered after httpServer');
 
-  // Discord OAuth routes
-  app.get("/auth/discord", (req, res) => {
+  // Discord OAuth routes - /api prefix로 이동
+  app.get("/api/auth/discord", (req, res) => {
     const clientId = process.env.DISCORD_CLIENT_ID;
     
     console.log('🚀 Discord OAuth initiated:', {
@@ -107,7 +117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     // Force use of the deployed domain
     const domain = 'bankofkorea.replit.app';
-    const redirectUri = `https://${domain}/auth/discord/callback`;
+    const redirectUri = `https://${domain}/api/auth/discord/callback`;
     const scopes = "identify guilds";
     
     console.log('📍 Discord OAuth redirect URI:', redirectUri);
@@ -118,7 +128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.redirect(authUrl);
   });
 
-  app.get("/auth/discord/callback", async (req, res) => {
+  app.get("/api/auth/discord/callback", async (req, res) => {
     console.log('🔥 Discord OAuth callback triggered!', { 
       query: req.query, 
       host: req.get('host'),

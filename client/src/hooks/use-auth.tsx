@@ -117,24 +117,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = () => {
     console.log('🚀 Starting Discord login...');
     console.log('Current location:', window.location.href);
-    console.log('Redirecting to:', '/auth/discord');
+    console.log('Redirecting to:', '/api/auth/discord');
     console.log('User agent:', navigator.userAgent);
     
     try {
       // Multiple fallback methods for Safari
       console.log('Method 1: window.location.assign');
-      window.location.assign('/auth/discord');
+      window.location.assign('/api/auth/discord');
       
       // Fallback for Safari
       setTimeout(() => {
         console.log('Method 2: window.location.href (fallback)');
-        window.location.href = '/auth/discord';
+        window.location.href = '/api/auth/discord';
       }, 100);
       
     } catch (error) {
       console.error('❌ Navigation error:', error);
       // Last resort
-      window.open('/auth/discord', '_self');
+      window.open('/api/auth/discord', '_self');
     }
   };
 
