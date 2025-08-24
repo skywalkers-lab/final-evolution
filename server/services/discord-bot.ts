@@ -244,7 +244,7 @@ export class DiscordBot {
         .addSubcommand(subcommand =>
           subcommand
             .setName('변동률설정')
-            .setDescription('특정 주식의 주가 변동률을 설정합니다 (관리자 전용)')
+            .setDescription('특정 주식의 주가 변동률을 설정합니다 (최고관리자 전용)')
             .addStringOption(option =>
               option.setName('종목코드')
                 .setDescription('변동률을 설정할 종목코드')
@@ -252,10 +252,10 @@ export class DiscordBot {
             )
             .addNumberOption(option =>
               option.setName('변동률')
-                .setDescription('주가 변동률 (예: 3.0은 ±3%)')
+                .setDescription('주가 변동률 (0.001~1000% 범위)')
                 .setRequired(true)
-                .setMinValue(0.1)
-                .setMaxValue(10.0)
+                .setMinValue(0.001)
+                .setMaxValue(1000.0)
             )
         )
         .addSubcommand(subcommand =>
@@ -1117,7 +1117,7 @@ export class DiscordBot {
           await this.resumeStock(interaction, guildId);
           break;
         case '변동률설정':
-          await this.setVolatility(interaction, guildId);
+          await this.setVolatility(interaction, guildId, userId);
           break;
         case '수정':
           await this.editStock(interaction, guildId);
@@ -1263,7 +1263,13 @@ export class DiscordBot {
     }
   }
 
-  private async setVolatility(interaction: ChatInputCommandInteraction, guildId: string) {
+  private async setVolatility(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
+    const isSuperAdmin = await this.isSuperAdmin(guildId, userId);
+    if (!isSuperAdmin) {
+      await interaction.reply('이 명령은 최고관리자만 사용할 수 있습니다.');
+      return;
+    }
+
     const symbol = interaction.options.getString('종목코드', true).toUpperCase();
     const volatility = interaction.options.getNumber('변동률', true);
 

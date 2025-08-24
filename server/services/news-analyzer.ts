@@ -53,12 +53,14 @@ export class NewsAnalyzer {
     
     // Get guild settings for max impact
     const settings = await this.storage.getGuildSettings(guildId);
-    const maxImpactPct = Number(settings?.newsMaxImpactPct || 15) / 100;
+    const maxImpactPct = Number(settings?.newsMaxImpactPct || 25) / 100; // 기본값을 25%로 증가
     
-    // Calculate price impact with deadzone
+    // Calculate price impact with enhanced sensitivity
     let priceImpact = 0;
-    if (Math.abs(sentimentScore) >= 0.03) {
-      priceImpact = Math.min(Math.max(sentimentScore * maxImpactPct, -maxImpactPct), maxImpactPct);
+    if (Math.abs(sentimentScore) >= 0.01) { // 더 낮은 임계값으로 민감도 증가
+      // 키워드별 가중치 적용
+      const enhancedScore = this.enhanceScoreBasedOnKeywords(normalizedText, sentimentScore);
+      priceImpact = Math.min(Math.max(enhancedScore * maxImpactPct, -maxImpactPct), maxImpactPct);
     }
     
     let oldPrice, newPrice;
@@ -108,6 +110,15 @@ export class NewsAnalyzer {
       }
     }
     
+    // Get user by Discord ID for proper database reference
+    let databaseUserId = null;
+    if (createdBy) {
+      const user = await this.storage.getUserByDiscordId(createdBy);
+      if (user) {
+        databaseUserId = user.id;
+      }
+    }
+
     // Save analysis to database
     const analysis = await this.storage.addNewsAnalysis({
       guildId,
@@ -119,7 +130,7 @@ export class NewsAnalyzer {
       priceImpact: priceImpact.toString(),
       oldPrice: oldPrice?.toString(),
       newPrice: newPrice?.toString(),
-      createdBy
+      createdBy: databaseUserId
     });
     
     return analysis;
@@ -162,5 +173,51 @@ export class NewsAnalyzer {
 
   private clamp(value: number, min: number, max: number): number {
     return Math.min(Math.max(value, min), max);
+  }
+
+  // 뉴스 키워드에 따른 감정 점수 강화
+  private enhanceScoreBasedOnKeywords(text: string, baseScore: number): number {
+    // 금융 특화 키워드 추가 가중치
+    const FINANCIAL_POSITIVE = [
+      '급등', '폭등', '신기록', '상장', '투자유치', '성장', '확장', '매수',
+      '추천', '목표가상향', '실적호조', '매출증가', '수익개선', '배당'
+    ];
+    
+    const FINANCIAL_NEGATIVE = [
+      '폭락', '급락', '하락', '손실', '적자', '부도', '파산', '매도',
+      '목표가하향', '실적악화', '매출감소', '손해', '리스크', '우려'
+    ];
+
+    const INTENSITY_WORDS = [
+      '대폭', '급속히', '크게', '현저히', '상당히', '엄청나게', '극도로',
+      '치솟다', '폭락하다', '급등하다'
+    ];
+
+    let multiplier = 1.0;
+
+    // 금융 키워드 감지
+    if (baseScore > 0) {
+      for (const keyword of FINANCIAL_POSITIVE) {
+        if (text.includes(keyword)) {
+          multiplier *= 1.3; // 30% 추가 증폭
+        }
+      }
+    } else if (baseScore < 0) {
+      for (const keyword of FINANCIAL_NEGATIVE) {
+        if (text.includes(keyword)) {
+          multiplier *= 1.3; // 30% 추가 증폭
+        }
+      }
+    }
+
+    // 강도 단어 감지
+    for (const keyword of INTENSITY_WORDS) {
+      if (text.includes(keyword)) {
+        multiplier *= 1.5; // 50% 추가 증폭
+      }
+    }
+
+    // 최대 5배까지 증폭 가능
+    return baseScore * Math.min(multiplier, 5.0);
   }
 }
