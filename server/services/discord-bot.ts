@@ -1729,7 +1729,7 @@ export class DiscordBot {
     const symbol = interaction.options.getString('종목코드')?.toUpperCase();
 
     try {
-      const analysis = await this.storage.analyzeNews(guildId, title, content, symbol, null);
+      const analysis = await this.storage.analyzeNews(guildId, title, content, symbol, undefined);
       
       let message = `📰 **뉴스 분석 완료**\n\n`;
       message += `제목: ${title}\n`;
@@ -1887,7 +1887,7 @@ export class DiscordBot {
       // Grant admin permission - this will automatically create the user if needed
       await this.storage.grantAdminPermission(guildId, targetUserId, grantedBy);
       await interaction.editReply(`✅ ${discordUser.username}님(ID: ${targetUserId})에게 이 서버에서의 관리자 권한을 부여했습니다.`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Grant admin permission error:', error);
       if (error.code === 10013) { // Discord API error: Unknown User
         await interaction.editReply('해당 사용자 ID를 찾을 수 없습니다. 올바른 Discord 사용자 ID를 입력해주세요.');
@@ -1920,7 +1920,7 @@ export class DiscordBot {
       // Remove admin permission
       await this.storage.removeAdminPermission(guildId, targetUserId);
       await interaction.editReply(`✅ ${discordUser.username}님(ID: ${targetUserId})의 관리자 권한을 제거했습니다.`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Remove admin permission error:', error);
       if (error.code === 10013) { // Discord API error: Unknown User
         await interaction.editReply('해당 사용자 ID를 찾을 수 없습니다. 올바른 Discord 사용자 ID를 입력해주세요.');
@@ -1985,7 +1985,7 @@ export class DiscordBot {
       let discordUser;
       try {
         discordUser = await this.client.users.fetch(targetUserId);
-      } catch (error) {
+      } catch (error: any) {
         if (error.code === 10013) { // Discord API error: Unknown User
           await interaction.editReply('해당 사용자 ID를 찾을 수 없습니다. 올바른 Discord 사용자 ID를 입력해주세요.');
         } else {
