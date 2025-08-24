@@ -172,7 +172,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })).toString('base64');
 
       // Set session cookie and redirect
-      res.cookie('session_token', sessionToken, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 }); // 7 days
+      const isProduction = process.env.NODE_ENV === 'production' || req.get('host')?.includes('replit.app');
+      res.cookie('session_token', sessionToken, { 
+        httpOnly: true, 
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        secure: isProduction, // HTTPS only in production
+        sameSite: isProduction ? 'none' : 'lax' // Allow cross-site in production
+      });
       res.redirect('/');
     } catch (error) {
       console.error('Discord OAuth error:', error);
