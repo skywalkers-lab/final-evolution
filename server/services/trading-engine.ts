@@ -125,15 +125,15 @@ export class TradingEngine {
           const randomFactor = Math.random();
           let changePercent;
           
-          if (randomFactor < 0.8) {
-            // 80% 확률로 작은 변동 (volatility의 10% 이내)
-            changePercent = (Math.random() - 0.5) * (volatility * 0.2 / 100);
-          } else if (randomFactor < 0.95) {
-            // 15% 확률로 중간 변동 (volatility의 50% 이내)
-            changePercent = (Math.random() - 0.5) * (volatility * 1.0 / 100);
+          if (randomFactor < 0.85) {
+            // 85% 확률로 매우 작은 변동 (volatility의 5% 이내)
+            changePercent = (Math.random() - 0.5) * (volatility * 0.1 / 100);
+          } else if (randomFactor < 0.97) {
+            // 12% 확률로 작은 변동 (volatility의 25% 이내)
+            changePercent = (Math.random() - 0.5) * (volatility * 0.5 / 100);
           } else {
-            // 5% 확률로 큰 변동 (full volatility)
-            changePercent = (Math.random() - 0.5) * (volatility * 2 / 100);
+            // 3% 확률로 중간 변동 (volatility의 100% 이내, 최대 1%)
+            changePercent = (Math.random() - 0.5) * (volatility * 1 / 100);
           }
           
           const newPrice = Math.max(100, Math.round(currentPrice * (1 + changePercent))); // 최소 100원

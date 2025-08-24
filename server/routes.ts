@@ -1,5 +1,4 @@
-import type { Express } from "express";
-import * as Express from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
@@ -11,6 +10,7 @@ import { AuctionManager } from "./services/auction-manager";
 import { TaxScheduler } from "./services/tax-scheduler";
 import { NewsAnalyzer } from "./services/news-analyzer";
 import { WebSocketManager } from "./services/websocket-manager";
+import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import "./types";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -214,6 +214,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       botConnected: !!(global as any).discordBot,
       clientReady: (global as any).discordBot?.isReady() || false
     });
+  });
+
+  // Public object serving for stock logos (no auth required)
+  app.get("/objects/:objectPath(*)", async (req, res) => {
+    try {
+      const objectStorageService = new ObjectStorageService();
+      const objectFile = await objectStorageService.getObjectEntityFile(req.path);
+      
+      // For stock logos, we make them publicly accessible
+      await objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error serving object:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.status(404).json({ error: "Object not found" });
+      }
+      return res.status(500).json({ error: "Internal server error" });
+    }
   });
 
   app.post("/auth/logout", (req, res) => {

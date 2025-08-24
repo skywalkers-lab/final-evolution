@@ -163,7 +163,8 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
                                   // 로고 로드 실패 시 fallback
                                   const target = e.target as HTMLImageElement;
                                   target.style.display = 'none';
-                                  target.nextElementSibling!.style.display = 'flex';
+                                  const nextElement = target.nextElementSibling as HTMLElement;
+                                  if (nextElement) nextElement.style.display = 'flex';
                                 }}
                               />
                             ) : null}

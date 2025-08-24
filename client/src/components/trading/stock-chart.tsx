@@ -538,7 +538,8 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
                               target.style.display = 'none';
-                              target.nextElementSibling!.style.display = 'flex';
+                              const nextElement = target.nextElementSibling as HTMLElement;
+                              if (nextElement) nextElement.style.display = 'flex';
                             }}
                           />
                         ) : null}
@@ -564,7 +565,8 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
                               target.style.display = 'none';
-                              target.nextElementSibling!.style.display = 'flex';
+                              const nextElement = target.nextElementSibling as HTMLElement;
+                              if (nextElement) nextElement.style.display = 'flex';
                             }}
                           />
                         ) : null}
