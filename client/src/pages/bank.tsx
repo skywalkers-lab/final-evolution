@@ -177,14 +177,36 @@ export default function BankPage() {
               </div>
             </div>
 
-            <Button 
-              className="w-full bg-discord-blue hover:bg-discord-blue/80" 
-              data-testid="button-refresh-balance"
-              onClick={() => refetchAccount()}
-            >
-              <i className="fas fa-sync-alt mr-2"></i>
-              잔액 새로고침
-            </Button>
+            {(accountData as any)?.account ? (
+              <Button 
+                className="w-full bg-discord-blue hover:bg-discord-blue/80" 
+                data-testid="button-refresh-balance"
+                onClick={() => refetchAccount()}
+              >
+                <i className="fas fa-sync-alt mr-2"></i>
+                잔액 새로고침
+              </Button>
+            ) : (
+              <div className="space-y-3">
+                <div className="p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
+                  <div className="flex items-center space-x-2 text-yellow-400">
+                    <i className="fas fa-exclamation-triangle"></i>
+                    <span className="text-sm font-medium">계좌가 없습니다</span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Discord에서 <code className="bg-gray-800 px-1 rounded text-yellow-300">/계좌개설</code> 명령어를 사용해 계좌를 만드세요.
+                  </p>
+                </div>
+                <Button 
+                  className="w-full bg-gray-600 hover:bg-gray-700" 
+                  data-testid="button-refresh-account"
+                  onClick={() => refetchAccount()}
+                >
+                  <i className="fas fa-sync-alt mr-2"></i>
+                  계좌 상태 새로고침
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -236,11 +258,17 @@ export default function BankPage() {
               className="w-full bg-green-600 hover:bg-green-700" 
               data-testid="button-transfer"
               onClick={handleTransfer}
-              disabled={transferMutation.isPending}
+              disabled={transferMutation.isPending || !(accountData as any)?.account}
             >
               <i className="fas fa-paper-plane mr-2"></i>
-              {transferMutation.isPending ? '솨금 중...' : '송금하기'}
+              {transferMutation.isPending ? '송금 중...' : '송금하기'}
             </Button>
+            
+            {!(accountData as any)?.account && (
+              <div className="mt-2 p-2 bg-red-900/20 border border-red-500/30 rounded text-center">
+                <span className="text-xs text-red-400">계좌가 없어 송금할 수 없습니다</span>
+              </div>
+            )}
           </CardContent>
         </Card>
 

@@ -72,7 +72,29 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
 
   useEffect(() => {
     drawChart();
-  }, [candlestickData, symbol, zoomLevel]);
+  }, [candlestickData, symbol, zoomLevel, chartType]);
+
+  // 실시간 애니메이션 효과를 위한 requestAnimationFrame
+  useEffect(() => {
+    let animationFrame: number;
+    
+    const animate = () => {
+      if (isRealTimeMode && chartType === 'line') {
+        drawChart(); // 라인 차트의 펄스 애니메이션 효과
+      }
+      animationFrame = requestAnimationFrame(animate);
+    };
+    
+    if (isRealTimeMode && chartType === 'line') {
+      animationFrame = requestAnimationFrame(animate);
+    }
+    
+    return () => {
+      if (animationFrame) {
+        cancelAnimationFrame(animationFrame);
+      }
+    };
+  }, [isRealTimeMode, chartType, candlestickData]);
 
   // 마우스 휠 줌 기능
   useEffect(() => {
@@ -195,6 +217,315 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       }
       return;
     }
+
+    if (chartType === 'line') {
+      drawLineChart();
+    } else {
+      drawCandlestickChart();
+    }
+  };
+
+  const drawLineChart = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx || !candlestickData || candlestickData.length === 0) return;
+
+    const { width, height } = canvas;
+    ctx.clearRect(0, 0, width, height);
+
+    // Chart styling
+    ctx.fillStyle = '#2c2f33';
+    ctx.fillRect(0, 0, width, height);
+
+    const padding = 60;
+    const chartWidth = width - 2 * padding;
+    const chartHeight = height - 2 * padding;
+
+    // 데이터 정렬 및 선택 (최신값이 오른쪽에 오도록)
+    const sortedData = candlestickData.slice().sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    const baseItemCount = isRealTimeMode ? 100 : sortedData.length;
+    const itemsToShow = Math.max(10, Math.floor(baseItemCount / zoomLevel));
+    const displayData = sortedData.slice(-itemsToShow); // 최신 데이터부터 표시
+
+    // Calculate price range
+    const prices = displayData.map(d => Number(d.close));
+    if (currentPrice > 0 && displayData.length > 0) {
+      const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
+      if (Math.abs(currentPrice - avgPrice) / avgPrice < 0.5) {
+        prices.push(currentPrice);
+      }
+    }
+
+    const maxPrice = Math.max(...prices);
+    const minPrice = Math.min(...prices);
+    const priceRange = maxPrice - minPrice === 0 ? maxPrice * 0.1 : maxPrice - minPrice;
+    const priceMargin = priceRange * 0.05;
+    const adjustedMaxPrice = maxPrice + priceMargin;
+    const adjustedMinPrice = Math.max(0, minPrice - priceMargin);
+    const adjustedPriceRange = adjustedMaxPrice - adjustedMinPrice;
+
+    // Draw grid
+    drawGrid(ctx, width, height, padding, chartWidth, chartHeight, displayData, adjustedMaxPrice, adjustedMinPrice, adjustedPriceRange);
+
+    // Draw line chart with gradient
+    if (displayData.length > 1) {
+      const spacing = chartWidth / (displayData.length - 1);
+      
+      // Create gradient
+      const gradient = ctx.createLinearGradient(0, padding, 0, height - padding);
+      gradient.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
+      gradient.addColorStop(1, 'rgba(59, 130, 246, 0.05)');
+
+      // Draw area under line first
+      ctx.beginPath();
+      ctx.moveTo(padding, height - padding);
+      
+      displayData.forEach((candle, index) => {
+        const x = padding + (index * spacing);
+        const price = Number(candle.close);
+        const y = padding + ((adjustedMaxPrice - price) / adjustedPriceRange) * chartHeight;
+        
+        if (index === 0) {
+          ctx.lineTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      });
+      
+      ctx.lineTo(padding + ((displayData.length - 1) * spacing), height - padding);
+      ctx.closePath();
+      ctx.fillStyle = gradient;
+      ctx.fill();
+
+      // Draw main line with animation effect
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+
+      displayData.forEach((candle, index) => {
+        const x = padding + (index * spacing);
+        const price = Number(candle.close);
+        const y = padding + ((adjustedMaxPrice - price) / adjustedPriceRange) * chartHeight;
+        
+        if (index === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      });
+      
+      ctx.stroke();
+
+      // Draw data points
+      displayData.forEach((candle, index) => {
+        const x = padding + (index * spacing);
+        const price = Number(candle.close);
+        const y = padding + ((adjustedMaxPrice - price) / adjustedPriceRange) * chartHeight;
+        
+        // Draw point
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, 2 * Math.PI);
+        ctx.fillStyle = '#3b82f6';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Highlight latest point with animation
+        if (index === displayData.length - 1) {
+          const pulseIntensity = Math.sin(Date.now() * 0.01) * 0.5 + 0.5;
+          ctx.beginPath();
+          ctx.arc(x, y, 6 + pulseIntensity * 3, 0, 2 * Math.PI);
+          ctx.fillStyle = `rgba(59, 130, 246, ${0.3 + pulseIntensity * 0.7})`;
+          ctx.fill();
+        }
+      });
+
+      // Draw current price extension if available
+      if (currentPrice > 0 && isRealTimeMode && currentPrice >= adjustedMinPrice && currentPrice <= adjustedMaxPrice) {
+        const lastX = padding + ((displayData.length - 1) * spacing);
+        const currentY = padding + ((adjustedMaxPrice - currentPrice) / adjustedPriceRange) * chartHeight;
+        const nextX = lastX + spacing;
+        
+        // Draw projection line
+        ctx.strokeStyle = 'rgba(243, 156, 18, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(lastX, displayData.length > 0 ? 
+          padding + ((adjustedMaxPrice - Number(displayData[displayData.length - 1].close)) / adjustedPriceRange) * chartHeight : 
+          currentY);
+        ctx.lineTo(nextX, currentY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Draw current price point with glow
+        ctx.beginPath();
+        ctx.arc(nextX, currentY, 6, 0, 2 * Math.PI);
+        ctx.fillStyle = '#f39c12';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Add glow effect
+        const glowIntensity = Math.sin(Date.now() * 0.005) * 0.5 + 0.5;
+        ctx.beginPath();
+        ctx.arc(nextX, currentY, 10 + glowIntensity * 5, 0, 2 * Math.PI);
+        ctx.fillStyle = `rgba(243, 156, 18, ${0.1 + glowIntensity * 0.2})`;
+        ctx.fill();
+      }
+    }
+
+    // Draw labels and legend
+    drawLabelsAndLegend(ctx, width, height, padding, displayData, adjustedMaxPrice, adjustedMinPrice, adjustedPriceRange, chartHeight);
+  };
+
+  // Helper function for drawing grid
+  const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number, padding: number, chartWidth: number, chartHeight: number, displayData: any[], adjustedMaxPrice: number, adjustedMinPrice: number, adjustedPriceRange: number) => {
+    // Draw horizontal grid lines (가격선)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 0.5;
+    
+    for (let i = 0; i <= 8; i++) {
+      const y = padding + (chartHeight * i / 8);
+      ctx.beginPath();
+      ctx.moveTo(padding, y);
+      ctx.lineTo(width - padding, y);
+      ctx.stroke();
+    }
+    
+    // Draw vertical grid lines (시간선)
+    const dataLength = displayData.length;
+    let gridSpacing;
+    if (dataLength <= 50) {
+      gridSpacing = Math.max(1, Math.ceil(dataLength / 10));
+    } else if (dataLength <= 100) {
+      gridSpacing = Math.max(1, Math.ceil(dataLength / 8));
+    } else {
+      gridSpacing = Math.max(1, Math.ceil(dataLength / 6));
+    }
+    
+    displayData.forEach((_, index) => {
+      if (index % gridSpacing === 0) {
+        const x = padding + (index * (chartWidth / displayData.length));
+        ctx.beginPath();
+        ctx.moveTo(x, padding);
+        ctx.lineTo(x, height - padding);
+        ctx.stroke();
+      }
+    });
+  };
+
+  // Helper function for drawing labels and legend
+  const drawLabelsAndLegend = (ctx: CanvasRenderingContext2D, width: number, height: number, padding: number, displayData: any[], adjustedMaxPrice: number, adjustedMinPrice: number, adjustedPriceRange: number, chartHeight: number) => {
+    // Draw price labels
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '11px Inter';
+    ctx.textAlign = 'right';
+    
+    for (let i = 0; i <= 8; i++) {
+      const price = adjustedMaxPrice - (adjustedPriceRange * i / 8);
+      const y = padding + (chartHeight * i / 8) + 4;
+      
+      let priceText;
+      if (price >= 10000) {
+        priceText = `₩${Math.round(price).toLocaleString()}`;
+      } else if (price >= 1000) {
+        priceText = `₩${price.toFixed(0)}`;
+      } else {
+        priceText = `₩${price.toFixed(1)}`;
+      }
+      
+      ctx.fillText(priceText, padding - 5, y);
+    }
+
+    // Draw time labels for X-axis
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '10px Inter';
+    ctx.textAlign = 'center';
+    
+    const dataLength = displayData.length;
+    let labelInterval;
+    if (dataLength <= 30) {
+      labelInterval = Math.max(1, Math.ceil(dataLength / 6));
+    } else {
+      labelInterval = Math.max(1, Math.ceil(dataLength / 4));
+    }
+    
+    displayData.forEach((candle: any, index: number) => {
+      if (index % labelInterval === 0 || index === dataLength - 1) {
+        const x = padding + (index * ((width - 2 * padding) / displayData.length)) + (width - 2 * padding) / (displayData.length * 2);
+        const date = new Date(candle.timestamp);
+        let timeLabel = '';
+        
+        switch(timeframe) {
+          case 'realtime':
+            timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+            break;
+          case '1m':
+          case '3m':
+          case '5m':
+          case '10m':
+          case '15m':
+          case '30m':
+            timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+            break;
+          case '1h':
+          case '2h':
+          case '4h':
+            timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit' }) + ':00';
+            break;
+          case '1d':
+            timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+            break;
+          default:
+            timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+        }
+        
+        ctx.fillText(timeLabel, x, height - 25);
+      }
+    });
+    
+    // Add legend
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '12px Inter';
+    ctx.textAlign = 'left';
+    
+    const latestCandle = displayData[displayData.length - 1];
+    if (latestCandle) {
+      const latestClose = Number(latestCandle?.close || 0);
+      const legendText = `${symbol} | 현재가: ₩${latestClose.toLocaleString()}`;
+      ctx.fillText(legendText, padding, height - 10);
+    }
+    
+    // Show price change if available
+    if (priceChange !== 0) {
+      ctx.fillStyle = priceChange > 0 ? '#ef4444' : '#3b82f6';
+      ctx.font = 'bold 12px Inter';
+      ctx.textAlign = 'right';
+      const changeText = `${priceChange > 0 ? '+' : ''}${priceChange.toFixed(2)}%`;
+      ctx.fillText(changeText, width - padding, height - 10);
+    }
+  };
+
+  const drawCandlestickChart = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx || !candlestickData || candlestickData.length === 0) return;
+
+    const { width, height } = canvas;
+    ctx.clearRect(0, 0, width, height);
+
+    // Chart styling
+    ctx.fillStyle = '#2c2f33';
+    ctx.fillRect(0, 0, width, height);
+
+    const padding = 60;
+    const chartWidth = width - 2 * padding;
+    const chartHeight = height - 2 * padding;
     
     // 실시간 모드에서는 최대 100개 캔들만 표시 (오른쪽으로 밀리는 효과)
     // 데이터는 시간 순서대로 정렬 (오래된 것부터 최신 것까지)
@@ -207,20 +538,6 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     const displayData = sortedData.slice(-itemsToShow); // 최신 데이터부터 표시
     
     const dataToUse = displayData;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const { width, height } = canvas;
-    ctx.clearRect(0, 0, width, height);
-
-    // Chart styling
-    ctx.fillStyle = '#2c2f33';
-    ctx.fillRect(0, 0, width, height);
-
-    const padding = 60; // 더 많은 여백으로 축 레이블 공간 확보
-    const chartWidth = width - 2 * padding;
-    const chartHeight = height - 2 * padding;
 
     // Calculate price range - use consistent data source
     const prices = dataToUse.flatMap(d => [
