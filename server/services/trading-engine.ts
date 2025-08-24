@@ -65,8 +65,10 @@ export class TradingEngine {
       // Update candlestick data
       await this.updateCandlestickData(guildId, symbol, price, shares);
       
-      // Apply market impact - individual trades affect stock price
-      await this.applyMarketImpact(guildId, symbol, type, shares, price);
+      // Apply minimal market impact only for large trades
+      if (shares > 1000) { // Only for trades over 1000 shares
+        await this.applyMarketImpact(guildId, symbol, type, shares, price);
+      }
       
       // Broadcast to websocket clients
       this.wsManager.broadcast('trade_executed', result);
@@ -85,8 +87,10 @@ export class TradingEngine {
       // Update candlestick data
       await this.updateCandlestickData(guildId, symbol, price, shares);
       
-      // Apply market impact - individual trades affect stock price
-      await this.applyMarketImpact(guildId, symbol, type, shares, price);
+      // Apply minimal market impact only for large trades
+      if (shares > 1000) { // Only for trades over 1000 shares
+        await this.applyMarketImpact(guildId, symbol, type, shares, price);
+      }
       
       // Broadcast to websocket clients
       this.wsManager.broadcast('trade_executed', result);
@@ -121,24 +125,21 @@ export class TradingEngine {
           const currentPrice = Number(stock.price);
           const volatility = Number(stock.volatility || 1); // 기본 변동률 1%
           
-          // 더 현실적인 가격 변동 - 큰 변동은 드물게
+          // 극도로 안전한 가격 변동 (플래시 크래시 완전 방지)
           const randomFactor = Math.random();
           let changePercent;
           
-          if (randomFactor < 0.95) {
-            // 95% 확률로 극소 변동 (volatility의 2% 이내)
-            changePercent = (Math.random() - 0.5) * (volatility * 0.02) / 100;
-          } else if (randomFactor < 0.999) {
-            // 4.9% 확률로 소규모 변동 (volatility의 10% 이내)
-            changePercent = (Math.random() - 0.5) * (volatility * 0.1) / 100;
+          if (randomFactor < 0.98) {
+            // 98% 확률로 극소 변동 (0.05% 이내)
+            changePercent = (Math.random() - 0.5) * 0.001; // ±0.05%
           } else {
-            // 0.1% 확률로 작은 변동 (volatility의 30% 이내)
-            changePercent = (Math.random() - 0.5) * (volatility * 0.3) / 100;
+            // 2% 확률로 소규모 변동 (0.2% 이내)
+            changePercent = (Math.random() - 0.5) * 0.004; // ±0.2%
           }
           
-          // 안전한 가격 범위 설정 (현재가 기준 ±5%)
-          const minPrice = Math.max(100, Math.round(currentPrice * 0.95));
-          const maxPrice = Math.round(currentPrice * 1.05);
+          // 극도로 안전한 가격 범위 설정 (현재가 기준 ±1%)
+          const minPrice = Math.max(100, Math.round(currentPrice * 0.99));
+          const maxPrice = Math.round(currentPrice * 1.01);
           const newPrice = Math.max(minPrice, Math.min(maxPrice, Math.round(currentPrice * (1 + changePercent))));
           
           // 거래량도 더 현실적으로 계산
@@ -417,8 +418,18 @@ export class TradingEngine {
         }
 
         if (shouldExecute) {
-          // Execute the limit order at current market price
-          await this.executeLimitOrderAtMarketPrice(order, currentPrice);
+          // SAFETY CHECK: Prevent extreme price execution
+          // Only execute if the current price is within reasonable range of target
+          const priceDeviation = Math.abs(currentPrice - targetPrice) / targetPrice;
+          
+          // If price deviation exceeds 15%, don't execute (flash crash protection)
+          if (priceDeviation > 0.15) {
+            console.log(`🚫 Flash crash protection: Blocking limit order execution for ${symbol} at ${currentPrice} (target: ${targetPrice}, deviation: ${(priceDeviation * 100).toFixed(1)}%)`);
+            continue;
+          }
+          
+          // Execute the limit order at target price (not market price for safety)
+          await this.executeLimitOrderAtMarketPrice(order, targetPrice);
         }
       }
     } catch (error) {

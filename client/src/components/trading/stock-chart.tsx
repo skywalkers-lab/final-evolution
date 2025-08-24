@@ -722,8 +722,9 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                 </Button>
               </div>
               
-              <div className="text-xs text-gray-500">
-                📈 상승: <span className="text-red-500">빨간색</span> | 📉 하락: <span className="text-blue-500">파란색</span>
+              <div className="text-xs text-gray-400 space-y-1">
+                <div>📈 상승: <span className="text-red-500">빨간색</span> | 📉 하락: <span className="text-blue-500">파란색</span></div>
+                <div>🖱️ <span className="text-yellow-400">마우스 휠로 확대/축소</span> | 🎯 <span className="text-green-400">차트 위로 마우스를 올리면 상세 정보</span></div>
               </div>
             </div>
 
@@ -734,10 +735,11 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                     ref={canvasRef} 
                     width={1200} 
                     height={600} 
-                    className="max-w-full max-h-full cursor-crosshair"
+                    className="max-w-full max-h-full cursor-crosshair border-2 border-discord-light/20 rounded"
                     data-testid="canvas-stock-chart"
                     onMouseMove={handleMouseMove}
                     onMouseLeave={handleMouseLeave}
+                    title="마우스 휠로 확대/축소, 마우스를 올리면 상세 정보를 볼 수 있습니다"
                   />
                   
                   {/* 마우스 오버 툴팁 */}
