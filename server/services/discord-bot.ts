@@ -702,7 +702,7 @@ export class DiscordBot {
 
   private async checkBalance(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
     const targetUser = interaction.options.getUser('사용자');
-    const queryUserId = targetUser ? targetUser.id : userId;
+    const queryDiscordId = targetUser ? targetUser.id : userId;
 
     // Check if querying another user and if user is admin
     if (targetUser && targetUser.id !== userId) {
@@ -714,7 +714,15 @@ export class DiscordBot {
     }
 
     try {
-      const account = await this.storage.getAccountByUser(guildId, queryUserId);
+      // First get user by Discord ID to get database user ID
+      const user = await this.storage.getUserByDiscordId(queryDiscordId);
+      if (!user) {
+        await interaction.reply('계좌를 찾을 수 없습니다. /은행 계좌개설 명령으로 계좌를 먼저 개설해주세요.');
+        return;
+      }
+
+      // Now get account using database user ID
+      const account = await this.storage.getAccountByUser(guildId, user.id);
       if (!account) {
         await interaction.reply('계좌를 찾을 수 없습니다. /은행 계좌개설 명령으로 계좌를 먼저 개설해주세요.');
         return;
@@ -734,34 +742,36 @@ export class DiscordBot {
     const amount = interaction.options.getInteger('금액', true);
     const memo = interaction.options.getString('메모') || '';
 
-    // 계좌번호로 받는사람 찾기
-    const targetAccount = await this.storage.getAccountByUniqueCode(guildId, accountNumber);
-    if (!targetAccount) {
-      await interaction.reply(`❌ 계좌번호 ${accountNumber}를 찾을 수 없습니다.`);
-      return;
-    }
-
-    if (targetAccount.userId === userId) {
-      await interaction.reply('❌ 자신의 계좌로는 송금할 수 없습니다.');
-      return;
-    }
-
     if (amount <= 0) {
       await interaction.reply('송금 금액은 0보다 커야 합니다.');
       return;
     }
 
     try {
-      const fromAccount = await this.storage.getAccountByUser(guildId, userId);
-      const toAccount = await this.storage.getAccountByUser(guildId, targetAccount.userId);
-
-      if (!fromAccount) {
+      // First get sender user by Discord ID
+      const senderUser = await this.storage.getUserByDiscordId(userId);
+      if (!senderUser) {
         await interaction.reply('계좌를 찾을 수 없습니다. /은행 계좌개설 명령으로 계좌를 먼저 개설해주세요.');
         return;
       }
 
-      if (!toAccount) {
-        await interaction.reply('받는 사람의 계좌를 찾을 수 없습니다.');
+      // 계좌번호로 받는사람 찾기
+      const targetAccount = await this.storage.getAccountByUniqueCode(guildId, accountNumber);
+      if (!targetAccount) {
+        await interaction.reply(`❌ 계좌번호 ${accountNumber}를 찾을 수 없습니다.`);
+        return;
+      }
+
+      // Check if trying to send to own account (using database user IDs)
+      if (targetAccount.userId === senderUser.id) {
+        await interaction.reply('❌ 자신의 계좌로는 송금할 수 없습니다.');
+        return;
+      }
+
+      // Get sender account using database user ID
+      const fromAccount = await this.storage.getAccountByUser(guildId, senderUser.id);
+      if (!fromAccount) {
+        await interaction.reply('계좌를 찾을 수 없습니다. /은행 계좌개설 명령으로 계좌를 먼저 개설해주세요.');
         return;
       }
 
@@ -777,13 +787,20 @@ export class DiscordBot {
         return;
       }
 
-      // Get target user info
-      const targetUser = await this.client.users.fetch(targetAccount.userId);
-      
-      // Execute transfer
-      await this.storage.transferMoney(guildId, userId, targetAccount.userId, amount, memo);
+      // Get target user by database user ID to get their Discord ID
+      const targetUser = await this.storage.getUser(targetAccount.userId);
+      if (!targetUser) {
+        await interaction.reply('받는 사람의 정보를 찾을 수 없습니다.');
+        return;
+      }
 
-      await interaction.reply(`✅ ₩${amount.toLocaleString()}을 ${targetUser.username}에게 송금했습니다.\n메모: ${memo}`);
+      // Get Discord user info for display
+      const targetDiscordUser = await this.client.users.fetch(targetUser.discordId);
+      
+      // Execute transfer using database user IDs
+      await this.storage.transferMoney(guildId, senderUser.id, targetAccount.userId, amount, memo);
+
+      await interaction.reply(`✅ ₩${amount.toLocaleString()}을 ${targetDiscordUser.username}에게 송금했습니다.\n메모: ${memo}`);
       
       this.wsManager.broadcast('transaction_completed', {
         type: 'transfer',

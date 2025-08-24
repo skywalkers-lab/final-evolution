@@ -88,6 +88,14 @@ export interface IStorage {
   removeGuildAdmin(guildId: string, userId: string): Promise<void>;
   isGuildAdmin(guildId: string, discordUserId: string): Promise<boolean>;
   getGuildAdmins(guildId: string): Promise<GuildAdmin[]>;
+  
+  // Additional admin methods needed by Discord bot
+  isAdmin(guildId: string, discordUserId: string): Promise<boolean>;
+  grantAdminPermission(guildId: string, targetDiscordId: string, grantedBy: string): Promise<void>;
+  removeAdminPermission(guildId: string, targetDiscordId: string): Promise<void>;
+  setTaxRate(guildId: string, rate: number): Promise<void>;
+  hasActiveAccount(guildId: string, discordUserId: string): Promise<boolean>;
+  deleteUserAccount(guildId: string, discordUserId: string): Promise<void>;
 
   // Auctions
   createAuction(auction: InsertAuction): Promise<Auction>;
@@ -210,7 +218,7 @@ export class DatabaseStorage implements IStorage {
       await tx.delete(auctions).where(eq(auctions.guildId, guildId));
 
       // 6. Delete all news analysis in this guild
-      await tx.delete(newsAnalysis).where(eq(newsAnalysis.guildId, guildId));
+      await tx.delete(newsAnalyses).where(eq(newsAnalyses.guildId, guildId));
 
       // 7. Delete all candlestick data in this guild
       await tx.delete(candlestickData).where(eq(candlestickData.guildId, guildId));
@@ -1087,6 +1095,87 @@ export class DatabaseStorage implements IStorage {
         eq(limitOrders.status, 'pending'),
         lt(limitOrders.expiresAt, sql`now()`)
       ));
+  }
+
+  // Additional admin methods needed by Discord bot
+  async isAdmin(guildId: string, discordUserId: string): Promise<boolean> {
+    return this.isGuildAdmin(guildId, discordUserId);
+  }
+
+  async grantAdminPermission(guildId: string, targetDiscordId: string, grantedBy: string): Promise<void> {
+    // First get or create the target user
+    let targetUser = await this.getUserByDiscordId(targetDiscordId);
+    if (!targetUser) {
+      // Create a basic user record if it doesn't exist
+      targetUser = await this.createUser({
+        discordId: targetDiscordId,
+        username: `User-${targetDiscordId.slice(-4)}`,
+        discriminator: '0000',
+        avatar: null
+      });
+    }
+
+    await this.grantGuildAdmin(guildId, targetUser.id, targetDiscordId, grantedBy);
+  }
+
+  async removeAdminPermission(guildId: string, targetDiscordId: string): Promise<void> {
+    const targetUser = await this.getUserByDiscordId(targetDiscordId);
+    if (targetUser) {
+      await this.removeGuildAdmin(guildId, targetUser.id);
+    }
+  }
+
+  async setTaxRate(guildId: string, rate: number): Promise<void> {
+    await this.updateGuildSetting(guildId, 'taxRate', rate.toString());
+  }
+
+  async hasActiveAccount(guildId: string, discordUserId: string): Promise<boolean> {
+    const user = await this.getUserByDiscordId(discordUserId);
+    if (!user) return false;
+    
+    const account = await this.getAccountByUser(guildId, user.id);
+    return account !== undefined && !account.frozen;
+  }
+
+  async deleteUserAccount(guildId: string, discordUserId: string): Promise<void> {
+    const user = await this.getUserByDiscordId(discordUserId);
+    if (!user) return;
+    
+    const account = await this.getAccountByUser(guildId, user.id);
+    if (!account) return;
+    
+    // Delete all related data first
+    await db.transaction(async (tx) => {
+      // Delete transactions
+      await tx.delete(transactions).where(
+        and(
+          eq(transactions.guildId, guildId),
+          or(
+            eq(transactions.fromUserId, user.id),
+            eq(transactions.toUserId, user.id)
+          )
+        )
+      );
+
+      // Delete holdings
+      await tx.delete(holdings).where(
+        and(
+          eq(holdings.guildId, guildId),
+          eq(holdings.userId, user.id)
+        )
+      );
+
+      // Delete stock transactions
+      await tx.delete(stockTransactions).where(
+        and(
+          eq(stockTransactions.guildId, guildId),
+          eq(stockTransactions.userId, user.id)
+        )
+      );
+
+      // Finally delete the account
+      await tx.delete(accounts).where(eq(accounts.id, account.id));
+    });
   }
 }
 
