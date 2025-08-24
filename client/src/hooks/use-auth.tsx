@@ -46,12 +46,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log('🔍 Checking authentication...');
       console.log('Document cookies:', document.cookie);
+      console.log('LocalStorage auth_token:', localStorage.getItem('auth_token'));
       
-      const response = await fetch("/api/me", {
+      // Try with cookie first, then localStorage backup
+      let response = await fetch("/api/me", {
         credentials: "include",
       });
       
-      console.log('Auth response status:', response.status);
+      console.log('Auth response status (cookies):', response.status);
+      
+      // If cookie auth fails, try with localStorage token
+      if (!response.ok) {
+        const authToken = localStorage.getItem('auth_token');
+        if (authToken) {
+          console.log('🔄 Trying with localStorage token...');
+          response = await fetch("/api/me", {
+            headers: {
+              'Authorization': `Bearer ${authToken}`
+            }
+          });
+          console.log('Auth response status (localStorage):', response.status);
+        }
+      }
 
       if (response.ok) {
         const userData = await response.json();

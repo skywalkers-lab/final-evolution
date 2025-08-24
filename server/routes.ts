@@ -193,14 +193,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userInfo: { username: discordUser.username, id: user.id }
       });
       
-      // Set cookie with Safari-compatible settings
+      // Set multiple cookies with different strategies
+      // Strategy 1: Simple cookie without domain
       res.cookie('session_token', sessionToken, { 
-        httpOnly: false, // Allow JavaScript access for debugging
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        secure: false, // HTTP environment
-        sameSite: 'lax', // Safari-compatible
+        httpOnly: false,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        secure: false,
+        sameSite: 'lax',
+        path: '/'
+      });
+      
+      // Strategy 2: Set as backup with different name
+      res.cookie('auth_backup', sessionToken, { 
+        httpOnly: false,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        secure: false,
+        sameSite: 'none',
+        path: '/'
+      });
+      
+      // Strategy 3: Try with explicit domain
+      res.cookie('session_fallback', sessionToken, { 
+        httpOnly: false,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        secure: false,
+        sameSite: 'strict',
         path: '/',
-        domain: undefined // Let browser set automatically
+        domain: '.replit.app'
       });
       
       console.log('✅ OAuth success, redirecting to dashboard');
@@ -210,8 +229,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'Set-Cookie': res.getHeaders()['set-cookie']
       });
       
-      res.redirect('/');
-    } catch (error) {
+      // Instead of redirect, send HTML with JavaScript redirect
+      // This helps with Safari cookie issues
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Login Successful</title>
+          <script>
+            console.log('🍪 OAuth success, setting session token in localStorage as backup');
+            localStorage.setItem('auth_token', '${sessionToken}');
+            console.log('🔄 Redirecting to dashboard...');
+            window.location.href = '/';
+          </script>
+        </head>
+        <body>
+          <p>Login successful, redirecting...</p>
+        </body>
+        </html>
+      `);
+    } catch (error: any) {
       console.error('❌ Discord OAuth error:', error);
       if (error.response) {
         console.error('Discord API Error Response:', error.response.data);
@@ -222,11 +259,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/me", async (req, res) => {
     try {
-      const sessionToken = req.cookies.session_token;
+      // Try all cookie strategies first
+      let sessionToken = req.cookies.session_token || req.cookies.auth_backup || req.cookies.session_fallback;
+      
+      // If no cookie token, check Authorization header for localStorage token
+      if (!sessionToken) {
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          sessionToken = authHeader.substring(7);
+        }
+      }
+      
       console.log('🔍 Checking session:', { 
-        hasToken: !!sessionToken, 
-        cookies: Object.keys(req.cookies),
-        host: req.get('host')
+        hasMainToken: !!req.cookies.session_token,
+        hasBackup: !!req.cookies.auth_backup,
+        hasFallback: !!req.cookies.session_fallback,
+        hasAuthHeader: !!req.headers.authorization,
+        finalToken: !!sessionToken,
+        allCookies: req.cookies,
+        host: req.get('host'),
+        userAgent: req.get('User-Agent')
       });
       
       if (!sessionToken) {
@@ -260,7 +312,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/guilds", async (req, res) => {
     try {
-      const sessionToken = req.cookies.session_token;
+      // Try all authentication methods
+      let sessionToken = req.cookies.session_token || req.cookies.auth_backup || req.cookies.session_fallback;
+      if (!sessionToken) {
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          sessionToken = authHeader.substring(7);
+        }
+      }
+      
       if (!sessionToken) {
         return res.status(401).json({ message: "Not authenticated" });
       }
