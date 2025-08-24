@@ -647,6 +647,14 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
+  async getNewsAnalysesByGuild(guildId: string, options?: { limit?: number }): Promise<NewsAnalysis[]> {
+    const limit = options?.limit || 50;
+    return await db.select().from(newsAnalyses)
+      .where(eq(newsAnalyses.guildId, guildId))
+      .orderBy(desc(newsAnalyses.createdAt))
+      .limit(limit);
+  }
+
   async analyzeNews(guildId: string, title: string, content: string, symbol?: string, createdBy?: string): Promise<NewsAnalysis> {
     // 실제 뉴스 감정 분석 구현
     const sentiment = this.analyzeSentiment(title, content);

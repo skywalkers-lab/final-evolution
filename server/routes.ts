@@ -1075,9 +1075,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { guildId } = req.params;
       const { title, content, symbol } = req.body;
       
-      const analysis = await newsAnalyzer.analyzeNews(guildId, title, content, symbol);
+      // Use storage's analyzeNews method directly
+      const analysis = await storage.analyzeNews(guildId, title, content, symbol, 'web-dashboard');
+      
+      // Broadcast the analysis to WebSocket clients for real-time updates
+      wsManager.broadcast('news_analyzed', analysis);
+      wsManager.broadcast('stock_price_updated', { guildId });
+      
       res.json(analysis);
     } catch (error: any) {
+      console.error('News analysis error:', error);
       res.status(400).json({ message: error.message });
     }
   });

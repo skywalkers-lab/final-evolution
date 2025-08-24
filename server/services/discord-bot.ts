@@ -1743,7 +1743,9 @@ export class DiscordBot {
       
       await interaction.reply(message);
       
+      // Broadcast to WebSocket for real-time dashboard updates
       this.wsManager.broadcast('news_analyzed', analysis);
+      this.wsManager.broadcast('stock_price_updated', { guildId });
     } catch (error: any) {
       await interaction.reply(`뉴스 분석 실패: ${error.message}`);
     }
