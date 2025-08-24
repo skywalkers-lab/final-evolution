@@ -1,8 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
+import { apiRequest } from "@/lib/queryClient";
 
 interface PortfolioProps {
   guildId: string;
@@ -11,8 +12,10 @@ interface PortfolioProps {
 
 export default function Portfolio({ guildId, userId }: PortfolioProps) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [totalValue, setTotalValue] = useState(0);
   const [profitLoss, setProfitLoss] = useState(0);
+  const [isTrading, setIsTrading] = useState<string | null>(null);
 
   const { data: portfolio, refetch } = useQuery({
     queryKey: ['/api/web-client/guilds', guildId, 'portfolio'],
@@ -84,6 +87,54 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
         </span>
       </div>
     );
+  };
+
+  const executeTrade = async (symbol: string, type: 'buy' | 'sell', currentPrice: number) => {
+    const tradeKey = `${symbol}-${type}`;
+    if (isTrading === tradeKey) return; // 이미 거래 중인 경우 무시
+
+    setIsTrading(tradeKey);
+    try {
+      const tradeData = {
+        userId,
+        symbol,
+        type,
+        shares: 1, // 1주씩 거래
+        price: currentPrice,
+        orderType: 'market'
+      };
+
+      await apiRequest('POST', `/api/web-client/guilds/${guildId}/trades`, tradeData);
+
+      // 성공 토스트
+      toast({
+        title: type === 'buy' ? "매수 완료" : "매도 완료",
+        description: `${symbol} 1주를 ₩${currentPrice.toLocaleString()}에 ${type === 'buy' ? '매수' : '매도'}했습니다.`,
+        variant: "default",
+      });
+
+      // 포트폴리오와 계좌 정보 다시 로드
+      refetch();
+      refetchAccount();
+      
+      // 관련 쿼리 무효화
+      queryClient.invalidateQueries({
+        queryKey: ['/api/web-client/guilds', guildId, 'portfolio']
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/web-client/guilds', guildId, 'account']
+      });
+
+    } catch (error: any) {
+      // 에러 토스트
+      toast({
+        title: "거래 실패",
+        description: error.message || `${type === 'buy' ? '매수' : '매도'} 중 오류가 발생했습니다.`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsTrading(null);
+    }
   };
 
   const holdings = (portfolio as any)?.holdings || [];
@@ -201,17 +252,21 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
                         <div className="flex space-x-1">
                           <Button 
                             size="sm"
-                            className="bg-discord-blue hover:bg-blue-600 text-white px-3 py-1 text-xs"
+                            className="bg-discord-blue hover:bg-blue-600 text-white px-3 py-1 text-xs disabled:opacity-50"
                             data-testid={`button-buy-more-${index}`}
+                            disabled={isTrading === `${holding.symbol}-buy`}
+                            onClick={() => executeTrade(holding.symbol, 'buy', holding.currentPrice)}
                           >
-                            매수
+                            {isTrading === `${holding.symbol}-buy` ? '매수중...' : '매수'}
                           </Button>
                           <Button 
                             size="sm"
-                            className="bg-discord-red hover:bg-red-600 text-white px-3 py-1 text-xs"
+                            className="bg-discord-red hover:bg-red-600 text-white px-3 py-1 text-xs disabled:opacity-50"
                             data-testid={`button-sell-holding-${index}`}
+                            disabled={isTrading === `${holding.symbol}-sell` || holding.shares <= 0}
+                            onClick={() => executeTrade(holding.symbol, 'sell', holding.currentPrice)}
                           >
-                            매도
+                            {isTrading === `${holding.symbol}-sell` ? '매도중...' : '매도'}
                           </Button>
                         </div>
                       </td>
