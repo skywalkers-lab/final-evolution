@@ -38,48 +38,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    // Check for auth token in URL first (Safari workaround)
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlToken = urlParams.get('auth_token');
-    
-    if (urlToken) {
-      console.log('🔗 Found auth token in URL, storing in localStorage');
-      localStorage.setItem('auth_token', urlToken);
-      // Clean URL
-      const cleanUrl = window.location.pathname;
-      window.history.replaceState({}, document.title, cleanUrl);
-    }
-    
     // Check for existing session on mount
     checkAuth();
   }, []);
 
   const checkAuth = async () => {
     try {
-      console.log('🔍 Checking authentication...');
-      console.log('Document cookies:', document.cookie);
-      console.log('LocalStorage auth_token:', localStorage.getItem('auth_token'));
-      
-      // Try with cookie first, then localStorage backup
-      let response = await fetch("/api/me", {
+      const response = await fetch("/api/me", {
         credentials: "include",
       });
-      
-      console.log('Auth response status (cookies):', response.status);
-      
-      // If cookie auth fails, try with localStorage token
-      if (!response.ok) {
-        const authToken = localStorage.getItem('auth_token');
-        if (authToken) {
-          console.log('🔄 Trying with localStorage token...');
-          response = await fetch("/api/me", {
-            headers: {
-              'Authorization': `Bearer ${authToken}`
-            }
-          });
-          console.log('Auth response status (localStorage):', response.status);
-        }
-      }
 
       if (response.ok) {
         const userData = await response.json();
@@ -115,27 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = () => {
-    console.log('🚀 Starting Discord login...');
-    console.log('Current location:', window.location.href);
-    console.log('Redirecting to:', '/api/auth/discord');
-    console.log('User agent:', navigator.userAgent);
-    
-    try {
-      // Multiple fallback methods for Safari
-      console.log('Method 1: window.location.assign');
-      window.location.assign('/api/auth/discord');
-      
-      // Fallback for Safari
-      setTimeout(() => {
-        console.log('Method 2: window.location.href (fallback)');
-        window.location.href = '/api/auth/discord';
-      }, 100);
-      
-    } catch (error) {
-      console.error('❌ Navigation error:', error);
-      // Last resort
-      window.open('/api/auth/discord', '_self');
-    }
+    window.location.href = "/auth/discord";
   };
 
   const logout = async () => {

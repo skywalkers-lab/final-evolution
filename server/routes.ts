@@ -14,22 +14,6 @@ import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import "./types";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // 🚨 ABSOLUTE PRIORITY: API 라우트를 가장 먼저 등록 (Vite보다 절대 우선)
-  console.log('🔥 REGISTERING API ROUTES FIRST - HIGHEST PRIORITY!');
-  
-  // 테스트 라우트들 - 최우선
-  app.get("/test", (req, res) => {
-    console.log('🧪 TEST ROUTE HIT! URL:', req.originalUrl);
-    res.json({ message: 'Test route working!', timestamp: new Date().toISOString(), success: true });
-  });
-  
-  app.get("/api/test", (req, res) => {
-    console.log('🧪 API TEST ROUTE HIT!');
-    res.json({ message: 'API test route working!', timestamp: new Date().toISOString() });
-  });
-  
-  console.log('✅ API ROUTES REGISTERED FIRST!');
-
   const httpServer = createServer(app);
   
   // Initialize WebSocket server with proper cleanup
@@ -101,60 +85,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-
-  // Discord OAuth routes - /api prefix로 이동
-  app.get("/api/auth/discord", (req, res) => {
+  // Discord OAuth routes
+  app.get("/auth/discord", (req, res) => {
     const clientId = process.env.DISCORD_CLIENT_ID;
-    
-    console.log('🚀 Discord OAuth initiated:', {
-      clientId,
-      host: req.get('host'),
-      originalUrl: req.originalUrl,
-      headers: {
-        'User-Agent': req.get('User-Agent'),
-        'Referer': req.get('Referer')
-      }
-    });
-    
-    // Use current domain (development or production)
-    const domain = req.get('host');
-    const redirectUri = `https://${domain}/api/auth/discord/callback`;
+    // Use proper domain for Replit environment
+    const domain = process.env.REPLIT_DOMAINS || `${process.env.REPL_SLUG}.${process.env.REPL_OWNER || 'dev'}.replit.app`;
+    const redirectUri = `https://${domain}/auth/discord/callback`;
     const scopes = "identify guilds";
     
-    console.log('📍 Discord OAuth redirect URI:', redirectUri);
+    console.log('Discord OAuth redirect URI:', redirectUri);
     
     const authUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}`;
     
-    console.log('🔗 Full Discord OAuth URL:', authUrl);
     res.redirect(authUrl);
   });
 
-  app.get("/api/auth/discord/callback", async (req, res) => {
-    console.log('🔥 Discord OAuth callback triggered!', { 
-      query: req.query, 
-      host: req.get('host'),
-      userAgent: req.get('User-Agent')
-    });
-    
+  app.get("/auth/discord/callback", async (req, res) => {
     try {
       const { code } = req.query;
       
       if (!code) {
-        console.log('❌ No code provided in callback');
         return res.redirect("/?error=no_code");
       }
 
       const clientId = process.env.DISCORD_CLIENT_ID;
       const clientSecret = process.env.DISCORD_CLIENT_SECRET;
       // Use REPLIT_DOMAINS environment variable for correct redirect URI
-      let domain = process.env.REPLIT_DOMAINS;
-      if (domain && domain.includes(',')) {
-        // If multiple domains, use the first one
-        domain = domain.split(',')[0];
-      }
-      // Fallback to request host
-      domain = domain || req.get('host');
-      const redirectUri = `https://${domain}/api/auth/discord/callback`;
+      const domain = process.env.REPLIT_DOMAINS || req.get('host');
+      const redirectUri = `https://${domain}/auth/discord/callback`;
 
       // Exchange code for token
       const tokenResponse = await axios.post('https://discord.com/api/oauth2/token', {
@@ -202,87 +160,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })).toString('base64');
 
       // Set session cookie and redirect
-      const host = req.get('host') || '';
-      const isSecure = host.includes('replit.app');
-      console.log('🍪 Setting session cookie:', { 
-        isSecure, 
-        host,
-        userInfo: { username: discordUser.username, id: user.id }
-      });
-      
-      // Set multiple cookies with different strategies
-      // Strategy 1: Simple cookie without domain
-      res.cookie('session_token', sessionToken, { 
-        httpOnly: false,
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        secure: false,
-        sameSite: 'lax',
-        path: '/'
-      });
-      
-      // Strategy 2: Set as backup with different name
-      res.cookie('auth_backup', sessionToken, { 
-        httpOnly: false,
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        secure: false,
-        sameSite: 'none',
-        path: '/'
-      });
-      
-      // Strategy 3: Try with explicit domain
-      res.cookie('session_fallback', sessionToken, { 
-        httpOnly: false,
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        secure: false,
-        sameSite: 'strict',
-        path: '/',
-        domain: '.replit.app'
-      });
-      
-      console.log('✅ OAuth success, redirecting to dashboard');
-      
-      // Add debug headers to see if cookie is being set
-      console.log('📝 Response headers will include:', {
-        'Set-Cookie': res.getHeaders()['set-cookie']
-      });
-      
-      // Safari workaround: Use URL parameter method
-      console.log('🔄 Redirecting with URL token for Safari compatibility');
-      res.redirect(`/?auth_token=${encodeURIComponent(sessionToken)}`);
-    } catch (error: any) {
-      console.error('❌ Discord OAuth error:', error);
-      if (error.response) {
-        console.error('Discord API Error Response:', error.response.data);
-      }
+      res.cookie('session_token', sessionToken, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 }); // 7 days
+      res.redirect('/');
+    } catch (error) {
+      console.error('Discord OAuth error:', error);
       res.redirect('/?error=auth_failed');
     }
   });
 
-
   app.get("/api/me", async (req, res) => {
     try {
-      // Try all cookie strategies first
-      let sessionToken = req.cookies.session_token || req.cookies.auth_backup || req.cookies.session_fallback;
-      
-      // If no cookie token, check Authorization header for localStorage token
-      if (!sessionToken) {
-        const authHeader = req.headers.authorization;
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-          sessionToken = authHeader.substring(7);
-        }
-      }
-      
-      console.log('🔍 Checking session:', { 
-        hasMainToken: !!req.cookies.session_token,
-        hasBackup: !!req.cookies.auth_backup,
-        hasFallback: !!req.cookies.session_fallback,
-        hasAuthHeader: !!req.headers.authorization,
-        finalToken: !!sessionToken,
-        allCookies: req.cookies,
-        host: req.get('host'),
-        userAgent: req.get('User-Agent')
-      });
-      
+      const sessionToken = req.cookies.session_token;
       if (!sessionToken) {
         return res.status(401).json({ message: "Not authenticated" });
       }
@@ -314,15 +202,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/guilds", async (req, res) => {
     try {
-      // Try all authentication methods
-      let sessionToken = req.cookies.session_token || req.cookies.auth_backup || req.cookies.session_fallback;
-      if (!sessionToken) {
-        const authHeader = req.headers.authorization;
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-          sessionToken = authHeader.substring(7);
-        }
-      }
-      
+      const sessionToken = req.cookies.session_token;
       if (!sessionToken) {
         return res.status(401).json({ message: "Not authenticated" });
       }
