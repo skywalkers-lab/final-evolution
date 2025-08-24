@@ -146,8 +146,10 @@ export class TradingEngine {
           const volumeMultiplier = Math.abs(changePercent) * 10 + 1; // 변동이 클수록 거래량 증가
           const finalVolume = Math.round(baseVolume * volumeMultiplier);
           
-          // Always update candlestick data with current price (for real-time progression)
-          await this.updateCandlestickData(stock.guildId, stock.symbol, newPrice, finalVolume);
+          // Only update candlestick data if price actually changed
+          if (newPrice !== currentPrice) {
+            await this.updateCandlestickData(stock.guildId, stock.symbol, newPrice, finalVolume);
+          }
           
           if (newPrice !== currentPrice) {
             await this.storage.updateStockPrice(stock.guildId, stock.symbol, newPrice);
@@ -213,10 +215,24 @@ export class TradingEngine {
             volume
           });
         } else {
-          // Update existing candlestick
+          // Update existing candlestick with more conservative high/low updates
+          const currentHigh = Number(candlestick.high);
+          const currentLow = Number(candlestick.low);
+          const openPrice = Number(candlestick.open);
+          
+          // Only update high/low if the change is significant enough (more than 0.1% from open)
+          const significantChange = Math.abs(price - openPrice) / openPrice;
+          let newHigh = currentHigh;
+          let newLow = currentLow;
+          
+          if (significantChange > 0.001) { // 0.1% threshold
+            newHigh = Math.max(currentHigh, price);
+            newLow = Math.min(currentLow, price);
+          }
+          
           await this.storage.updateCandlestick(guildId, symbol, tf, timestamp, {
-            high: Math.max(Number(candlestick.high), price).toString(),
-            low: Math.min(Number(candlestick.low), price).toString(),
+            high: newHigh.toString(),
+            low: newLow.toString(),
             close: price.toString(),
             volume: (candlestick.volume || 0) + volume
           });
