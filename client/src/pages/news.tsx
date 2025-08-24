@@ -73,13 +73,7 @@ export default function NewsPage() {
         symbol: selectedSymbol || undefined,
       };
 
-      await apiRequest(`/api/guilds/${selectedGuildId}/news/analyze`, {
-        method: 'POST',
-        body: JSON.stringify(analysisData),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      await apiRequest('POST', `/api/guilds/${selectedGuildId}/news/analyze`, analysisData);
 
       toast({
         title: "뉴스 분석 완료",

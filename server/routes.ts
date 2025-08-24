@@ -64,7 +64,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   // Authentication middleware
-  const requireAuth = async (req: Express.Request, res: Express.Response, next: Express.NextFunction) => {
+  const requireAuth = async (req: any, res: any, next: any) => {
     const authHeader = req.headers.authorization;
     if (!authHeader) {
       return res.status(401).json({ message: "No authorization header" });
