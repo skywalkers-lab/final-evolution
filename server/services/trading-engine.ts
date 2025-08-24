@@ -117,50 +117,9 @@ export class TradingEngine {
 
   private async simulatePriceMovements() {
     try {
-      // Get all active stocks across all guilds
-      const activeStocks = await this.storage.getAllActiveStocks();
-      
-      for (const stock of activeStocks) {
-        if (stock.status === 'active') {
-          const currentPrice = Number(stock.price);
-          const volatility = Number(stock.volatility || 1); // 기본 변동률 1%
-          
-          // 완전 안전 가격 변동 (극소 변동만)
-          const changePercent = (Math.random() - 0.5) * 0.0005; // ±0.025% (극소!)
-          
-          // 절대적 안전 범위 (현재가 기준 ±0.5%)
-          const minPrice = Math.max(1000, Math.round(currentPrice * 0.995));
-          const maxPrice = Math.round(currentPrice * 1.005);
-          const targetPrice = Math.round(currentPrice * (1 + changePercent));
-          const newPrice = Math.max(minPrice, Math.min(maxPrice, targetPrice));
-          
-          // 거래량도 더 현실적으로 계산
-          const baseVolume = Math.floor(Math.random() * 5000) + 500; // 500~5500주
-          const volumeMultiplier = Math.abs(changePercent) * 10 + 1; // 변동이 클수록 거래량 증가
-          const finalVolume = Math.round(baseVolume * volumeMultiplier);
-          
-          // Only update candlestick data if price actually changed
-          if (newPrice !== currentPrice) {
-            await this.updateCandlestickData(stock.guildId, stock.symbol, newPrice, finalVolume);
-          }
-          
-          if (newPrice !== currentPrice) {
-            await this.storage.updateStockPrice(stock.guildId, stock.symbol, newPrice);
-            
-            // Check and execute limit orders after price update
-            await this.checkAndExecuteLimitOrders(stock.guildId, stock.symbol, newPrice);
-            
-            // Broadcast price update
-            this.wsManager.broadcast('stock_price_updated', {
-              guildId: stock.guildId,
-              symbol: stock.symbol,
-              oldPrice: currentPrice,
-              newPrice,
-              changePercent: changePercent * 100
-            });
-          }
-        }
-      }
+      // 가격 시뮬레이션 완전 정지 (문제 해결까지)
+      console.log('⏸️ Price simulation paused for stability');
+      return;
     } catch (error) {
       console.error('Error in price simulation:', error);
     }
