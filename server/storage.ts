@@ -688,77 +688,183 @@ export class DatabaseStorage implements IStorage {
     return analysis;
   }
 
-  // 감정 분석 (한국어 키워드 기반)
+  // 감정 분석 (한국어 키워드 기반) - 대폭 확장된 키워드 학습
   private analyzeSentiment(title: string, content: string): 'positive' | 'negative' | 'neutral' {
     const text = (title + ' ' + content).toLowerCase();
     
-    // 긍정적 키워드
+    // 강력한 긍정적 키워드 (높은 가중치)
+    const strongPositiveWords = [
+      '급등', '급상승', '최고가', '신고가', '신기록', '역대급', '대박', '폭등', '강력한상승', 
+      '돌파성공', '목표달성', '수익극대화', '최대이익', '완전승리', '대성공', '핵심성과',
+      '혁신적', '획기적', '파격적', '전례없는', '기록적', '놀라운', '대단한', '엄청난'
+    ];
+    
+    // 일반 긍정적 키워드
     const positiveWords = [
-      '호조', '상승', '급등', '최고', '신기록', '흑자', '성장', '증가', '개선', '좋은', '성공', '승리', 
-      '이익', '활성화', '상승세', '돌파', '강세', '최적', '완벽', '우수', '최상', '발전', '확대', 
-      '신규', '증대', '향상', '도약', '수익', '플러스', '+', '↑', '📈', '긍정', '호재', '랠리'
+      '호조', '상승', '증가', '성장', '개선', '좋은', '성공', '승리', '이익', '흑자', '수익',
+      '활성화', '상승세', '돌파', '강세', '최적', '완벽', '우수', '최상', '발전', '확대',
+      '신규', '증대', '향상', '도약', '플러스', '긍정', '호재', '랠리', '회복', '반등',
+      '호황', '번영', '풍년', '대풍', '풍족', '풍성', '활발', '활기', '생동', '역동',
+      '도약', '비상', '전진', '진보', '발달', '성숙', '완성', '달성', '실현', '성취',
+      '우위', '선도', '주도', '리드', '앞서', '1위', '선두', '최선', '최고', '최상',
+      '효과적', '효율적', '생산적', '건전', '건실', '튼튼', '견고', '안정적', '신뢰',
+      '기대', '희망', '낙관', '밝음', '유망', '전망좋음', '가능성', '잠재력', '기회',
+      '투자', '매수', '보유', '축적', '저장', '비축', '확보', '유지', '지속', '계속',
+      '혜택', '특전', '우대', '지원', '도움', '협력', '제휴', '파트너십', '동반성장'
     ];
     
-    // 부정적 키워드
+    // 강력한 부정적 키워드 (높은 가중치)
+    const strongNegativeWords = [
+      '급락', '폭락', '대폭하락', '최저가', '신저가', '바닥', '붕괴', '파산', '도산', '부도',
+      '위기', '재앙', '참사', '대참사', '치명적', '파멸', '파괴', '절망', '암담', '최악',
+      '전멸', '몰락', '멸망', '끝', '종료', '중단', '정지', '마비', '불가능', '실패',
+      '손실막대', '적자폭대', '파격하락', '충격적', '경악', '당황', '공포', '패닉'
+    ];
+    
+    // 일반 부정적 키워드
     const negativeWords = [
-      '부진', '하락', '급락', '최저', '적자', '감소', '악화', '나쁜', '실패', '패배', '손실', 
-      '침체', '하락세', '붕괴', '약세', '최악', '불완전', '악화', '위기', '손해', '마이너스', 
-      '파산', '부실', '하향', '감축', '축소', '-', '↓', '📉', '부정', '악재', '폭락', '타격'
+      '부진', '하락', '감소', '악화', '나쁜', '실패', '패배', '손실', '적자', '침체',
+      '하락세', '약세', '불완전', '손해', '마이너스', '부실', '하향', '감축', '축소',
+      '부정', '악재', '타격', '충격', '피해', '위험', '불안', '우려', '걱정', '근심',
+      '어려움', '곤란', '문제', '장애', '제약', '한계', '제한', '저해', '방해', '지연',
+      '둔화', '정체', '멈춤', '중단', '취소', '포기', '철회', '철수', '탈퇴', '이탈',
+      '약화', '위축', '수축', '축소', '줄어듬', '떨어짐', '내려감', '밀림', '뒤처짐',
+      '낙후', '뒤떨어짐', '열세', '불리', '손실', '비용', '부담', '압박', '스트레스',
+      '혼란', '복잡', '어수선', '불안정', '불확실', '모호', '애매', '불분명', '의심',
+      '반대', '거부', '거절', '배척', '무시', '외면', '소홀', '방치', '버림', '포기',
+      '예상밑돌아', '목표미달', '기대이하', '실망', '좌절', '낙담', '포기', '체념'
     ];
     
-    let positiveCount = 0;
-    let negativeCount = 0;
+    // 경제/금융 전문 긍정 키워드
+    const financialPositiveWords = [
+      'ipo', '상장', '분할', '배당', '보너스', '인센티브', '리워드', '환급', '할인', '혜택',
+      'roi증가', '수익률상승', '매출증가', '순이익증가', 'ebitda개선', '현금흐름개선',
+      '자본확충', '유동성개선', '신용등급상승', '투자등급', '우량주', '성장주', '가치주',
+      '시장점유율증가', '경쟁력강화', '브랜드가치상승', '고객만족도향상', '직원만족도향상',
+      '혁신', '신기술', '특허', '독점', '신제품', '신서비스', '시장개척', '해외진출'
+    ];
     
-    positiveWords.forEach(word => {
-      if (text.includes(word)) positiveCount++;
+    // 경제/금융 전문 부정 키워드
+    const financialNegativeWords = [
+      '상장폐지', '거래정지', '관리종목', '투자주의', '투자경고', '불성실공시', '감리',
+      'roi감소', '수익률하락', '매출감소', '순손실', 'ebitda악화', '현금흐름악화',
+      '자본잠식', '유동성위기', '신용등급하락', '투기등급', '정크본드', '부실채권',
+      '시장점유율감소', '경쟁력약화', '브랜드가치하락', '고객불만', '직원불만',
+      '리콜', '결함', '하자', '소송', '분쟁', '갈등', '대립', '반발', '저항', '보이콧'
+    ];
+    
+    let positiveScore = 0;
+    let negativeScore = 0;
+    
+    // 강력한 긍정 키워드 (3점)
+    strongPositiveWords.forEach(word => {
+      const matches = (text.match(new RegExp(word, 'g')) || []).length;
+      positiveScore += matches * 3;
     });
     
-    negativeWords.forEach(word => {
-      if (text.includes(word)) negativeCount++;
+    // 일반 긍정 키워드 (1점)
+    [...positiveWords, ...financialPositiveWords].forEach(word => {
+      const matches = (text.match(new RegExp(word, 'g')) || []).length;
+      positiveScore += matches * 1;
     });
     
-    if (positiveCount > negativeCount) return 'positive';
-    if (negativeCount > positiveCount) return 'negative';
+    // 강력한 부정 키워드 (3점)
+    strongNegativeWords.forEach(word => {
+      const matches = (text.match(new RegExp(word, 'g')) || []).length;
+      negativeScore += matches * 3;
+    });
+    
+    // 일반 부정 키워드 (1점)
+    [...negativeWords, ...financialNegativeWords].forEach(word => {
+      const matches = (text.match(new RegExp(word, 'g')) || []).length;
+      negativeScore += matches * 1;
+    });
+    
+    // 점수 차이가 2점 이상이면 해당 감정, 아니면 중립
+    if (positiveScore - negativeScore >= 2) return 'positive';
+    if (negativeScore - positiveScore >= 2) return 'negative';
     return 'neutral';
   }
   
-  // 감정 점수 계산 (-1 ~ 1)
+  // 감정 점수 계산 (-1 ~ 1) - 대폭 확장된 키워드로 정교한 분석
   private calculateSentimentScore(title: string, content: string): number {
-    const text = (title + ' ' + content).toLowerCase();
+    const titleLower = title.toLowerCase();
+    const contentLower = content.toLowerCase();
     
     let score = 0;
-    const titleWeight = 2; // 제목의 가중치를 높게
+    const titleWeight = 3; // 제목의 가중치를 더 높게
     const contentWeight = 1;
     
-    // 강력한 긍정 키워드 (높은 점수)
-    const strongPositive = ['급등', '최고', '신기록', '흑자', '성공', '활성화', '돌파', '도약', '호재'];
+    // 초강력 긍정 키워드 (0.5점)
+    const ultraPositive = [
+      '급등', '폭등', '신고가', '역대급', '대박', '최고가갱신', '돌파성공', '목표달성',
+      '수익극대화', '대성공', '혁신적성과', '획기적발전', '전례없는성장'
+    ];
+    ultraPositive.forEach(word => {
+      const titleMatches = (titleLower.match(new RegExp(word, 'g')) || []).length;
+      const contentMatches = (contentLower.match(new RegExp(word, 'g')) || []).length;
+      score += (titleMatches * titleWeight * 0.5) + (contentMatches * contentWeight * 0.5);
+    });
+    
+    // 강력한 긍정 키워드 (0.3점)
+    const strongPositive = [
+      '최고', '신기록', '흑자', '성공', '활성화', '돌파', '도약', '호재', '호황', '번영',
+      '급상승', '강력한상승', '완전승리', '핵심성과', '놀라운', '대단한', '엄청난',
+      '투자증가', 'roi증가', '매출증가', '순이익증가', '시장점유율증가', '경쟁력강화'
+    ];
     strongPositive.forEach(word => {
-      const titleMatches = (title.toLowerCase().match(new RegExp(word, 'g')) || []).length;
-      const contentMatches = (content.toLowerCase().match(new RegExp(word, 'g')) || []).length;
+      const titleMatches = (titleLower.match(new RegExp(word, 'g')) || []).length;
+      const contentMatches = (contentLower.match(new RegExp(word, 'g')) || []).length;
       score += (titleMatches * titleWeight * 0.3) + (contentMatches * contentWeight * 0.3);
     });
     
-    // 일반 긍정 키워드
-    const positive = ['호조', '상승', '증가', '개선', '좋은', '이익', '상승세', '강세', '향상', '수익'];
+    // 일반 긍정 키워드 (0.15점)
+    const positive = [
+      '호조', '상승', '증가', '개선', '좋은', '이익', '상승세', '강세', '향상', '수익',
+      '회복', '반등', '풍성', '활발', '활기', '전진', '진보', '발달', '성숙', '달성',
+      '우위', '선도', '효과적', '효율적', '건실', '튼튼', '안정적', '신뢰', '기대',
+      '희망', '낙관', '밝음', '유망', '투자', '매수', '혜택', '지원', 'ipo', '상장',
+      '배당', '보너스', '할인', '신기술', '특허', '독점', '신제품', '혁신'
+    ];
     positive.forEach(word => {
-      const titleMatches = (title.toLowerCase().match(new RegExp(word, 'g')) || []).length;
-      const contentMatches = (content.toLowerCase().match(new RegExp(word, 'g')) || []).length;
+      const titleMatches = (titleLower.match(new RegExp(word, 'g')) || []).length;
+      const contentMatches = (contentLower.match(new RegExp(word, 'g')) || []).length;
       score += (titleMatches * titleWeight * 0.15) + (contentMatches * contentWeight * 0.15);
     });
     
-    // 강력한 부정 키워드 (낮은 점수)
-    const strongNegative = ['급락', '최저', '적자', '실패', '붕괴', '약세', '최악', '파산', '악재', '폭락'];
+    // 초강력 부정 키워드 (-0.5점)
+    const ultraNegative = [
+      '급락', '폭락', '대폭하락', '신저가', '바닥', '붕괴', '파산', '도산', '부도',
+      '위기', '재앙', '참사', '치명적', '파멸', '절망', '최악', '전멸', '몰락', '끝'
+    ];
+    ultraNegative.forEach(word => {
+      const titleMatches = (titleLower.match(new RegExp(word, 'g')) || []).length;
+      const contentMatches = (contentLower.match(new RegExp(word, 'g')) || []).length;
+      score -= (titleMatches * titleWeight * 0.5) + (contentMatches * contentWeight * 0.5);
+    });
+    
+    // 강력한 부정 키워드 (-0.3점)
+    const strongNegative = [
+      '최저', '적자', '실패', '약세', '악재', '타격', '충격', '피해', '위험', '불안',
+      '어려움', '문제', '장애', '제약', '손실막대', '적자폭대', '충격적', '경악', '공포',
+      '상장폐지', '거래정지', '관리종목', '투자주의', '수익률하락', '매출감소', '순손실'
+    ];
     strongNegative.forEach(word => {
-      const titleMatches = (title.toLowerCase().match(new RegExp(word, 'g')) || []).length;
-      const contentMatches = (content.toLowerCase().match(new RegExp(word, 'g')) || []).length;
+      const titleMatches = (titleLower.match(new RegExp(word, 'g')) || []).length;
+      const contentMatches = (contentLower.match(new RegExp(word, 'g')) || []).length;
       score -= (titleMatches * titleWeight * 0.3) + (contentMatches * contentWeight * 0.3);
     });
     
-    // 일반 부정 키워드
-    const negative = ['부진', '하락', '감소', '악화', '나쁜', '손실', '침체', '하락세', '위기', '손해'];
+    // 일반 부정 키워드 (-0.15점)
+    const negative = [
+      '부진', '하락', '감소', '악화', '나쁜', '손실', '침체', '하락세', '손해', '우려',
+      '걱정', '곤란', '지연', '둔화', '정체', '중단', '취소', '포기', '철회', '약화',
+      '위축', '축소', '떨어짐', '밀림', '뒤처짐', '불리', '부담', '압박', '혼란',
+      '불안정', '불확실', '반대', '거부', '실망', '좌절', '리콜', '결함', '소송'
+    ];
     negative.forEach(word => {
-      const titleMatches = (title.toLowerCase().match(new RegExp(word, 'g')) || []).length;
-      const contentMatches = (content.toLowerCase().match(new RegExp(word, 'g')) || []).length;
+      const titleMatches = (titleLower.match(new RegExp(word, 'g')) || []).length;
+      const contentMatches = (contentLower.match(new RegExp(word, 'g')) || []).length;
       score -= (titleMatches * titleWeight * 0.15) + (contentMatches * contentWeight * 0.15);
     });
     
@@ -766,31 +872,76 @@ export class DatabaseStorage implements IStorage {
     return Math.max(-1, Math.min(1, score));
   }
   
-  // 종목 자동 감지
+  // 종목 자동 감지 - 대폭 확장된 매핑
   private detectSymbolFromContent(title: string, content: string): string | undefined {
-    const text = title + ' ' + content;
+    const text = (title + ' ' + content).toLowerCase();
     
     // 종목 코드 직접 언급 감지
-    const symbolPatterns = ['BOK', 'KRBNE', 'GSG', 'GOLD', 'BTC'];
+    const symbolPatterns = ['bok', 'krbne', 'gsg', 'gold', 'btc'];
     for (const symbol of symbolPatterns) {
-      if (text.toUpperCase().includes(symbol)) {
+      if (text.includes(symbol)) {
+        return symbol.toUpperCase();
+      }
+    }
+    
+    // 대폭 확장된 회사명/키워드 기반 종목 매핑
+    const companyMappings: { [key: string]: string } = {
+      // 한국은행 관련
+      '한국은행': 'BOK', '중앙은행': 'BOK', '기준금리': 'BOK', '통화정책': 'BOK', 
+      '금융통화위원회': 'BOK', '금통위': 'BOK', '이창용': 'BOK', '총재': 'BOK',
+      '원화': 'BOK', '환율': 'BOK', '인플레이션': 'BOK', '물가': 'BOK',
+      
+      // 코리아네이션 관련
+      '코리아네이션': 'KRBNE', '한국': 'KRBNE', '국가': 'KRBNE', '정부': 'KRBNE',
+      '대통령': 'KRBNE', '청와대': 'KRBNE', '국정원': 'KRBNE', '외교부': 'KRBNE',
+      '통일부': 'KRBNE', '국방부': 'KRBNE', 'korea': 'KRBNE', 'korean': 'KRBNE',
+      
+      // GSG 관련  
+      'gsg': 'GSG', '글로벌': 'GSG', '해외': 'GSG', '국제': 'GSG', '수출': 'GSG',
+      '무역': 'GSG', '외국인투자': 'GSG', '다국적': 'GSG', '해외진출': 'GSG',
+      '글로벌기업': 'GSG', '국제기업': 'GSG', '세계시장': 'GSG',
+      
+      // 금 관련
+      '금': 'GOLD', '골드': 'GOLD', '귀금속': 'GOLD', '금값': 'GOLD', '금시세': 'GOLD',
+      '금거래': 'GOLD', '금투자': 'GOLD', '금괴': 'GOLD', '금고': 'GOLD', '안전자산': 'GOLD',
+      'gold': 'GOLD', '24k': 'GOLD', '18k': 'GOLD', '순금': 'GOLD', '금채굴': 'GOLD',
+      '금광': 'GOLD', '금제품': 'GOLD', '금반지': 'GOLD', '금목걸이': 'GOLD',
+      
+      // 비트코인 관련
+      '비트코인': 'BTC', '비트': 'BTC', '암호화폐': 'BTC', '가상화폐': 'BTC', 
+      '디지털자산': 'BTC', '블록체인': 'BTC', '채굴': 'BTC', '마이닝': 'BTC',
+      'bitcoin': 'BTC', 'btc': 'BTC', 'crypto': 'BTC', '사토시': 'BTC',
+      '지갑': 'BTC', '거래소': 'BTC', '업비트': 'BTC', '빗썸': 'BTC', '코인원': 'BTC',
+      '코인베이스': 'BTC', '바이낸스': 'BTC', '가상자산': 'BTC', '디파이': 'BTC',
+      'nft': 'BTC', '메타버스': 'BTC', 'web3': 'BTC', '스테이킹': 'BTC'
+    };
+    
+    // 키워드 우선순위 매핑 (더 구체적인 키워드가 우선)
+    const sortedMappings = Object.entries(companyMappings).sort((a, b) => b[0].length - a[0].length);
+    
+    for (const [keyword, symbol] of sortedMappings) {
+      if (text.includes(keyword)) {
         return symbol;
       }
     }
     
-    // 회사명 기반 종목 매핑
-    const companyMappings: { [key: string]: string } = {
-      '한국은행': 'BOK',
-      '코리아네이션': 'KRBNE', 
-      'GSG': 'GSG',
-      '금': 'GOLD',
-      '골드': 'GOLD',
-      '비트코인': 'BTC',
-      'bitcoin': 'BTC'
+    // 경제 섹터별 추가 매핑
+    const sectorMappings: { [key: string]: string } = {
+      // 금융/은행 → BOK
+      '은행': 'BOK', '금융': 'BOK', '대출': 'BOK', '예금': 'BOK', '적금': 'BOK',
+      '신용': 'BOK', '금리': 'BOK', '이자': 'BOK', '투자': 'BOK', '증권': 'BOK',
+      
+      // IT/기술 → GSG (글로벌 기술 기업)
+      '기술': 'GSG', '혁신': 'GSG', 'ai': 'GSG', '인공지능': 'GSG', '소프트웨어': 'GSG',
+      '클라우드': 'GSG', '빅데이터': 'GSG', 'iot': 'GSG', '5g': 'GSG', '반도체': 'GSG',
+      
+      // 원자재/commodities → GOLD
+      '원자재': 'GOLD', '상품': 'GOLD', '석유': 'GOLD', '구리': 'GOLD', '은': 'GOLD',
+      '백금': 'GOLD', '팔라듐': 'GOLD', '철': 'GOLD', '알루미늄': 'GOLD', '곡물': 'GOLD'
     };
     
-    for (const [company, symbol] of Object.entries(companyMappings)) {
-      if (text.includes(company)) {
+    for (const [keyword, symbol] of Object.entries(sectorMappings)) {
+      if (text.includes(keyword)) {
         return symbol;
       }
     }
@@ -832,14 +983,14 @@ export class DatabaseStorage implements IStorage {
     const stock = await this.getStockBySymbol(guildId, symbol);
     if (!stock) return;
     
-    const currentPrice = parseFloat(stock.currentPrice);
+    const currentPrice = parseFloat(stock.price);
     const impactAmount = currentPrice * Math.abs(priceImpact);
     const newPrice = currentPrice + (currentPrice * priceImpact);
     
     // 최소 가격 보호 (0 이하로 떨어지지 않도록)
     const finalPrice = Math.max(1, Math.round(newPrice));
     
-    await this.updateStockPrice(guildId, symbol, finalPrice.toString());
+    await this.updateStockPrice(guildId, symbol, finalPrice);
     
     // 뉴스 영향 로그
     const impactType = priceImpact > 0 ? '긍정적' : '부정적';
@@ -1315,7 +1466,7 @@ export class DatabaseStorage implements IStorage {
     await this.updateGuildSetting(guildId, 'taxRate', rate.toString());
   }
 
-  async hasActiveAccount(guildId: string, discordUserId: string): Promise<boolean> {
+  async hasActiveAccountByDiscordId(guildId: string, discordUserId: string): Promise<boolean> {
     const user = await this.getUserByDiscordId(discordUserId);
     if (!user) return false;
     
@@ -1323,7 +1474,7 @@ export class DatabaseStorage implements IStorage {
     return account !== undefined && !account.frozen;
   }
 
-  async deleteUserAccount(guildId: string, discordUserId: string): Promise<void> {
+  async deleteUserAccountByDiscordId(guildId: string, discordUserId: string): Promise<void> {
     const user = await this.getUserByDiscordId(discordUserId);
     if (!user) return;
     
