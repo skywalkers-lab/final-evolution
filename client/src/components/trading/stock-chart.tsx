@@ -1372,7 +1372,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
             <div className="mt-4 text-center">
               <div className="inline-flex items-center space-x-2 px-4 py-2 bg-discord-darker rounded-lg border border-yellow-600/30">
                 <i className="fas fa-bolt text-yellow-500"></i>
-                <span className="text-sm text-yellow-300 font-medium">실시간 시뮬레이션 - 5초마다 자동 업데이트</span>
+                <span className="text-sm text-yellow-300 font-medium">실시간 시뮬레이션 - 2초마다 자동 업데이트</span>
                 <i className="fas fa-university text-yellow-500"></i>
               </div>
               <p className="text-xs text-gray-500 mt-2">🏦 한국은행 종합서비스센터 가상경제시스템</p>

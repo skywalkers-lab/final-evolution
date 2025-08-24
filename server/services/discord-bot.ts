@@ -795,6 +795,10 @@ export class DiscordBot {
       }
 
       // Get Discord user info for display
+      if (!targetUser.discordId) {
+        await interaction.reply('받는 사람의 Discord 정보를 찾을 수 없습니다.');
+        return;
+      }
       const targetDiscordUser = await this.client.users.fetch(targetUser.discordId);
       
       // Execute transfer using database user IDs
@@ -1660,11 +1664,16 @@ export class DiscordBot {
       return;
     }
 
-    const adminList = admins.map((admin, index) => 
-      `${index + 1}. ${admin.username} (ID: ${admin.discordId})`
-    ).join('\n');
+    const adminList = await Promise.all(admins.map(async (admin, index) => {
+      try {
+        const discordUser = await this.client.users.fetch(admin.discordUserId);
+        return `${index + 1}. ${discordUser.username} (ID: ${admin.discordUserId})`;
+      } catch (error) {
+        return `${index + 1}. Unknown User (ID: ${admin.discordUserId})`;
+      }
+    }));
 
-    await interaction.editReply(`**관리자 목록**\n\`\`\`\n${adminList}\n\`\`\``);
+    await interaction.editReply(`**관리자 목록**\n\`\`\`\n${adminList.join('\n')}\n\`\`\``);
   }
 
   private async setTaxRateDeferred(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
