@@ -515,11 +515,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/guilds/:guildId/stocks", requireAuth, async (req, res) => {
     try {
       const { guildId } = req.params;
-      const stockData = { ...req.body, guildId };
+      const { symbol } = req.body;
+      
+      // 중복 체크
+      const existingStock = await storage.getStockBySymbol(guildId, symbol.toUpperCase());
+      if (existingStock) {
+        return res.status(400).json({ message: `종목코드 ${symbol}이 이미 존재합니다.` });
+      }
+      
+      const stockData = { ...req.body, guildId, symbol: symbol.toUpperCase() };
       const stock = await storage.createStock(stockData);
       wsManager.broadcast('stock_created', stock);
       res.json(stock);
     } catch (error) {
+      console.error('Stock creation error:', error);
       res.status(500).json({ message: "Failed to create stock" });
     }
   });

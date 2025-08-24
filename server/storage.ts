@@ -12,7 +12,7 @@ import {
   type AuctionPassword, type InsertAuctionPassword, type LimitOrder, type InsertLimitOrder
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, desc, sql, gt, lt, asc } from "drizzle-orm";
+import { eq, and, or, desc, sql, gt, lt, asc, gte, lte } from "drizzle-orm";
 import bcrypt from "bcrypt";
 
 export interface IStorage {

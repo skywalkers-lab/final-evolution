@@ -183,6 +183,22 @@ export default function AdminControls() {
       name: newStock.name,
       price: parseFloat(newStock.price),
       totalShares: parseInt(newStock.totalShares),
+    }, {
+      onError: (error: any) => {
+        console.error('Stock creation error:', error);
+        toast({
+          title: "주식 생성 실패",
+          description: error.response?.data?.message || "주식 생성 중 오류가 발생했습니다.",
+          variant: "destructive",
+        });
+      },
+      onSuccess: () => {
+        toast({
+          title: "주식 생성 성공",
+          description: `${newStock.symbol} 주식이 성공적으로 생성되었습니다.`,
+        });
+        setNewStock({ symbol: '', name: '', price: '', totalShares: '1000000' });
+      }
     });
   };
 
