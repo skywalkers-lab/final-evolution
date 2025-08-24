@@ -1947,8 +1947,26 @@ export class DiscordBot {
       });
     }
 
+    // Check if the user granting permission exists in our database, create if not
+    let grantingDbUser = await this.storage.getUserByDiscordId(grantedBy);
+    if (!grantingDbUser) {
+      // Get Discord user info for the granting user
+      try {
+        const discordGrantingUser = await this.client.users.fetch(grantedBy);
+        grantingDbUser = await this.storage.createUser({
+          discordId: grantedBy,
+          username: discordGrantingUser.username,
+          discriminator: discordGrantingUser.discriminator || '0',
+          avatar: discordGrantingUser.avatar,
+        });
+      } catch (error) {
+        await interaction.editReply('권한 부여 실패: 관리자 사용자 정보를 가져올 수 없습니다.');
+        return;
+      }
+    }
+
     // Grant admin permission
-    await this.storage.grantAdminPermission(guildId, dbUser.id, grantedBy);
+    await this.storage.grantAdminPermission(guildId, dbUser.id, grantingDbUser.id);
     await interaction.editReply(`✅ ${targetUser.username}님에게 이 서버에서의 관리자 권한을 부여했습니다.`);
   }
 
