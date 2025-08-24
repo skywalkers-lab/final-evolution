@@ -85,6 +85,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
+  // 간단한 테스트 라우트
+  app.get("/test", (req, res) => {
+    console.log('🧪 TEST ROUTE HIT!');
+    res.json({ message: 'Test route working!', timestamp: new Date().toISOString() });
+  });
+
   // Discord OAuth routes
   app.get("/auth/discord", (req, res) => {
     const clientId = process.env.DISCORD_CLIENT_ID;
