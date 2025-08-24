@@ -140,33 +140,6 @@ export default function TradingPage() {
             userId={user.id}
           />
           
-          {/* 시장 현황 */}
-          <Card className="discord-bg-darker border-discord-dark">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center space-x-2">
-                <i className="fas fa-globe text-blue-500"></i>
-                <span>시장 현황</span>
-              </CardTitle>
-              <CardDescription>주요 지수 및 시장 동향</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {[
-                { name: 'KOSPI', value: '2,485.67', change: '+1.2%', positive: true },
-                { name: 'KOSDAQ', value: '745.32', change: '-0.8%', positive: false },
-                { name: 'USD/KRW', value: '1,327.50', change: '+0.3%', positive: true },
-              ].map((index, i) => (
-                <div key={i} className="flex justify-between items-center p-2 bg-discord-dark rounded">
-                  <span className="text-white font-medium">{index.name}</span>
-                  <div className="text-right">
-                    <div className="text-white">{index.value}</div>
-                    <div className={index.positive ? 'text-red-400' : 'text-blue-400'}>
-                      {index.change}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
         </div>
       </div>
         </div>

@@ -8,7 +8,6 @@ import TopBar from "@/components/layout/top-bar";
 import OverviewCards from "@/components/dashboard/overview-cards";
 import StockChart from "@/components/trading/stock-chart";
 import TradingPanel from "@/components/trading/trading-panel";
-import MarketOverview from "@/components/dashboard/market-overview";
 import Portfolio from "@/components/trading/portfolio";
 import RecentActivity from "@/components/dashboard/recent-activity";
 import AuctionCard from "@/components/auctions/auction-card";
@@ -137,10 +136,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Market Overview & Live Auctions */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-            <MarketOverview stocks={Array.isArray(stocks) ? stocks : []} />
-            
+          {/* Live Auctions */}
+          <div className="grid grid-cols-1 gap-8 mb-8">
             <div className="discord-bg-darker rounded-xl border border-discord-dark">
               <div className="p-6 border-b border-discord-dark">
                 <div className="flex items-center justify-between">
