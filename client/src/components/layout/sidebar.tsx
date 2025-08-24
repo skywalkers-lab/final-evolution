@@ -9,11 +9,46 @@ export default function Sidebar() {
   const selectedGuild = guilds.find(g => g.id === selectedGuildId);
 
   const menuItems = [
-    { path: "/", icon: "fas fa-chart-line", label: "대시보드" },
-    { path: "/bank", icon: "fas fa-university", label: "은행 & 계좌" },
-    { path: "/trading", icon: "fas fa-chart-candlestick", label: "주식 거래" },
-    { path: "/auctions", icon: "fas fa-gavel", label: "경매" },
-    { path: "/news", icon: "fas fa-newspaper", label: "뉴스 분석" },
+    { 
+      path: "/", 
+      icon: "fas fa-chart-line", 
+      label: "대시보드",
+      gradient: "from-blue-500 to-purple-600",
+      iconColor: "text-blue-400",
+      glowColor: "shadow-blue-500/30"
+    },
+    { 
+      path: "/bank", 
+      icon: "fas fa-university", 
+      label: "은행 & 계좌",
+      gradient: "from-green-500 to-emerald-600",
+      iconColor: "text-green-400", 
+      glowColor: "shadow-green-500/30"
+    },
+    { 
+      path: "/trading", 
+      icon: "fas fa-chart-candlestick", 
+      label: "주식 거래",
+      gradient: "from-orange-500 to-red-600",
+      iconColor: "text-orange-400",
+      glowColor: "shadow-orange-500/30"
+    },
+    { 
+      path: "/auctions", 
+      icon: "fas fa-gavel", 
+      label: "경매",
+      gradient: "from-purple-500 to-pink-600",
+      iconColor: "text-purple-400",
+      glowColor: "shadow-purple-500/30"
+    },
+    { 
+      path: "/news", 
+      icon: "fas fa-newspaper", 
+      label: "뉴스 분석",
+      gradient: "from-cyan-500 to-teal-600",
+      iconColor: "text-cyan-400",
+      glowColor: "shadow-cyan-500/30"
+    },
   ];
 
   const adminItems = [
@@ -80,20 +115,48 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation Menu */}
-      <nav className="flex-1 px-4 py-6 space-y-2">
+      <nav className="flex-1 px-4 py-6 space-y-3">
         {menuItems.map((item) => (
           <button
             key={item.path}
             onClick={() => setLocation(item.path)}
-            className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left ${
+            className={`group relative w-full flex items-center space-x-4 p-4 rounded-xl transition-all duration-300 text-left overflow-hidden ${
               location === item.path
-                ? 'bg-discord-blue text-white'
-                : 'text-gray-300 hover:bg-discord-dark hover:text-white'
+                ? `bg-gradient-to-r ${item.gradient} text-white shadow-lg ${item.glowColor} transform scale-[1.02]`
+                : 'text-gray-300 hover:text-white hover:bg-discord-dark/60 hover:scale-[1.01] hover:shadow-md'
             }`}
             data-testid={`nav-${item.label.replace(/\s+/g, '-').toLowerCase()}`}
           >
-            <i className={`${item.icon} w-5`}></i>
-            <span>{item.label}</span>
+            {/* Background overlay for hover effect */}
+            <div className={`absolute inset-0 bg-gradient-to-r ${item.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300 ${location === item.path ? 'opacity-100' : ''}`}></div>
+            
+            {/* Active indicator */}
+            {location === item.path && (
+              <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-white rounded-r-full"></div>
+            )}
+            
+            {/* Icon container */}
+            <div className={`relative z-10 w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-300 ${
+              location === item.path 
+                ? 'bg-white/20 shadow-lg' 
+                : 'bg-gray-700/50 group-hover:bg-gray-600/80'
+            }`}>
+              <i className={`${item.icon} text-lg ${
+                location === item.path ? 'text-white' : item.iconColor + ' group-hover:text-white'
+              } transition-colors duration-300`}></i>
+            </div>
+            
+            {/* Label */}
+            <span className="relative z-10 font-medium transition-all duration-300">
+              {item.label}
+            </span>
+            
+            {/* Sparkle effect for active item */}
+            {location === item.path && (
+              <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+              </div>
+            )}
           </button>
         ))}
         
