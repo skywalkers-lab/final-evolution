@@ -155,7 +155,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     // 데이터 정렬 로직을 마우스 핸들러에도 적용
     const sortedData = candlestickData.slice().sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     const displayData = isRealTimeMode 
-      ? sortedData.slice(-100) // 최근 100개만 표시
+      ? sortedData.slice(-100) // 최근 100개만 표시, 오른쪽에 최신 데이터
       : sortedData;
     
     const rect = canvas.getBoundingClientRect();
@@ -245,7 +245,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     const sortedData = candlestickData.slice().sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     const baseItemCount = isRealTimeMode ? 100 : sortedData.length;
     const itemsToShow = Math.max(10, Math.floor(baseItemCount / zoomLevel));
-    const displayData = sortedData.slice(-itemsToShow); // 최신 데이터부터 표시
+    const displayData = sortedData.slice(-itemsToShow); // 최신 데이터를 오른쪽에 표시
 
     // Calculate price range
     const prices = displayData.map(d => Number(d.close));
@@ -535,7 +535,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     const baseItemCount = isRealTimeMode ? 100 : sortedData.length;
     const itemsToShow = Math.max(10, Math.floor(baseItemCount / zoomLevel)); // 최소 10개는 표시
     
-    const displayData = sortedData.slice(-itemsToShow); // 최신 데이터부터 표시
+    const displayData = sortedData.slice(-itemsToShow); // 최신 데이터가 오른쪽에 표시
     
     const dataToUse = displayData;
 
