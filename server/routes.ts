@@ -172,16 +172,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })).toString('base64');
 
       // Set session cookie and redirect
-      const isProduction = process.env.NODE_ENV === 'production' || req.get('host')?.includes('replit.app');
+      const isProduction = req.get('host')?.includes('replit.app') || false;
+      console.log('🍪 Setting session cookie:', { 
+        isProduction, 
+        host: req.get('host'),
+        userInfo: { username: discordUser.username, id: user.id }
+      });
+      
       res.cookie('session_token', sessionToken, { 
         httpOnly: true, 
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         secure: isProduction, // HTTPS only in production
-        sameSite: isProduction ? 'none' : 'lax' // Allow cross-site in production
+        sameSite: isProduction ? 'lax' : 'lax', // Use lax for both
+        path: '/' // Ensure cookie is available for all paths
       });
+      
+      console.log('✅ OAuth success, redirecting to dashboard');
       res.redirect('/');
     } catch (error) {
-      console.error('Discord OAuth error:', error);
+      console.error('❌ Discord OAuth error:', error);
       res.redirect('/?error=auth_failed');
     }
   });
@@ -189,6 +198,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/me", async (req, res) => {
     try {
       const sessionToken = req.cookies.session_token;
+      console.log('🔍 Checking session:', { 
+        hasToken: !!sessionToken, 
+        cookies: Object.keys(req.cookies),
+        host: req.get('host')
+      });
+      
       if (!sessionToken) {
         return res.status(401).json({ message: "Not authenticated" });
       }
