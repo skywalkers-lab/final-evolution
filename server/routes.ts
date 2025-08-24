@@ -384,48 +384,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { guildId } = req.params;
       console.log(`Web client portfolio request for guild: ${guildId}`);
       
-      // Get all accounts for this guild to show the most recent one (for demo purposes)
+      // Get all accounts for this guild to show the most recent one
       const accounts = await storage.getAccountsByGuild(guildId);
       let account = null;
       let user = null;
       
       if (accounts.length > 0) {
-        // Always get account 5677 specifically for this user
-        account = accounts.find(acc => acc.uniqueCode === '5677');
-        if (!account) {
-          console.log('Account 5677 not found, available accounts:', accounts.map(a => a.uniqueCode));
-          account = accounts[0]; // fallback
-        }
+        // Use the most recent account (last user to create one)
+        account = accounts[accounts.length - 1];
         user = await storage.getUser(account.userId);
       }
       
-      // If no accounts exist, create a demo web-client account
+      // If no accounts exist, return empty portfolio
       if (!account) {
-        try {
-          // First ensure web-client user exists
-          user = await storage.getUserByDiscordId('web-client');
-          if (!user) {
-            user = await storage.createUser({
-              discordId: 'web-client',
-              username: 'Web Client',
-              discriminator: '0000',
-              avatar: null
-            });
-          }
-          
-          account = await storage.getAccountByUser(guildId, user.id);
-          if (!account) {
-            account = await storage.createAccount({
-              guildId,
-              userId: user.id,
-              balance: '1000000',
-              uniqueCode: Math.floor(1000 + Math.random() * 9000).toString()
-            });
-          }
-        } catch (error) {
-          console.error('Error getting web client portfolio:', error);
-          throw error;
-        }
+        console.log('Web client portfolio response: no account found, returning empty');
+        return res.json({
+          holdings: [],
+          account: null,
+          balance: '0.00',
+          totalValue: 0
+        });
       }
       
       // Get holdings from database and enrich with current prices
