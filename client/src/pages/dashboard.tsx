@@ -77,11 +77,12 @@ export default function Dashboard() {
     }
   });
 
-  useEffect(() => {
-    if (!isLoading && !user) {
-      setLocation("/login");
-    }
-  }, [user, isLoading, setLocation]);
+  // Commented out for demo purposes to allow access without login
+  // useEffect(() => {
+  //   if (!isLoading && !user) {
+  //     setLocation("/login");
+  //   }
+  // }, [user, isLoading, setLocation]);
 
   useEffect(() => {
     // Set default selected stock

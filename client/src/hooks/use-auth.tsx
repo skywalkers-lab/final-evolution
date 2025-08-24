@@ -67,9 +67,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
       } else {
+        // For demo purposes, set default guild when not authenticated
         setUser(null);
         setGuilds([]);
-        setSelectedGuildId(null);
+        if (!selectedGuildId) {
+          setSelectedGuildId('1284053249057620018');
+        }
       }
     } catch (error) {
       console.error("Auth check error:", error);
