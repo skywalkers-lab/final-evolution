@@ -1133,7 +1133,10 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                     >
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart
-                          data={candlestickData && candlestickData.length > 0 ? (() => {
+                          key={`line-chart-${zoomLevel}`}
+                          data={(() => {
+                            if (!candlestickData || candlestickData.length === 0) return [];
+                            
                             const sortedData = candlestickData.slice().sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
                             const baseItemCount = isRealTimeMode ? 100 : sortedData.length;
                             const itemsToShow = Math.max(10, Math.floor(baseItemCount / zoomLevel));
@@ -1195,7 +1198,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                               change: index > 0 ? Number(item.close) - Number(arr[index - 1].close) : 0
                             };
                           });
-                          })() : []}
+                          })()}
                           margin={{
                             top: 20,
                             right: 30,
@@ -1208,7 +1211,14 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                             dataKey="time" 
                             stroke="#9ca3af"
                             fontSize={12}
-                            interval={candlestickData.length > 50 ? Math.ceil(candlestickData.length / 8) : 'preserveStartEnd'}
+                            interval={(() => {
+                              if (!candlestickData || candlestickData.length === 0) return 'preserveStartEnd';
+                              const sortedData = candlestickData.slice().sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                              const baseItemCount = isRealTimeMode ? 100 : sortedData.length;
+                              const itemsToShow = Math.max(10, Math.floor(baseItemCount / zoomLevel));
+                              const displayLength = Math.min(itemsToShow, sortedData.length);
+                              return displayLength > 50 ? Math.ceil(displayLength / 8) : 'preserveStartEnd';
+                            })()}
                             tick={{ fontSize: 11 }}
                           />
                           <YAxis 
