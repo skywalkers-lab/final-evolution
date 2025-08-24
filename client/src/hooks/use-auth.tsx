@@ -38,6 +38,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
+    // Check for auth token in URL first (Safari workaround)
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get('auth_token');
+    
+    if (urlToken) {
+      console.log('🔗 Found auth token in URL, storing in localStorage');
+      localStorage.setItem('auth_token', urlToken);
+      // Clean URL
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+    
     // Check for existing session on mount
     checkAuth();
   }, []);

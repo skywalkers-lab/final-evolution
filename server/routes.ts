@@ -229,25 +229,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'Set-Cookie': res.getHeaders()['set-cookie']
       });
       
-      // Instead of redirect, send HTML with JavaScript redirect
-      // This helps with Safari cookie issues
-      res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Login Successful</title>
-          <script>
-            console.log('🍪 OAuth success, setting session token in localStorage as backup');
-            localStorage.setItem('auth_token', '${sessionToken}');
-            console.log('🔄 Redirecting to dashboard...');
-            window.location.href = '/';
-          </script>
-        </head>
-        <body>
-          <p>Login successful, redirecting...</p>
-        </body>
-        </html>
-      `);
+      // Safari workaround: Use URL parameter method
+      console.log('🔄 Redirecting with URL token for Safari compatibility');
+      res.redirect(`/?auth_token=${encodeURIComponent(sessionToken)}`);
     } catch (error: any) {
       console.error('❌ Discord OAuth error:', error);
       if (error.response) {
