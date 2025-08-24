@@ -85,21 +85,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  // 🚨 CRITICAL: httpServer 생성 후 라우트 등록
-  console.log('🔧 Registering critical routes after httpServer creation...');
-  
-  // 테스트 라우트들
-  app.get("/test", (req, res) => {
-    console.log('🧪 TEST ROUTE HIT! URL:', req.originalUrl);
-    res.json({ message: 'Test route working!', timestamp: new Date().toISOString(), success: true });
-  });
-  
-  app.get("/api/test", (req, res) => {
-    console.log('🧪 API TEST ROUTE HIT!');
-    res.json({ message: 'API test route working!', timestamp: new Date().toISOString() });
-  });
-  
-  console.log('✅ Critical routes registered after httpServer');
 
   // Discord OAuth routes - /api prefix로 이동
   app.get("/api/auth/discord", (req, res) => {
@@ -256,6 +241,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.redirect('/?error=auth_failed');
     }
   });
+
+  // 🚨 CRITICAL: 모든 서비스 초기화 완료 후 라우트 등록
+  console.log('🔧 Registering critical routes after all services initialized...');
+  
+  // 테스트 라우트들
+  app.get("/test", (req, res) => {
+    console.log('🧪 TEST ROUTE HIT! URL:', req.originalUrl);
+    res.json({ message: 'Test route working!', timestamp: new Date().toISOString(), success: true });
+  });
+  
+  app.get("/api/test", (req, res) => {
+    console.log('🧪 API TEST ROUTE HIT!');
+    res.json({ message: 'API test route working!', timestamp: new Date().toISOString() });
+  });
+  
+  console.log('✅ Critical routes registered after all services');
 
   app.get("/api/me", async (req, res) => {
     try {
