@@ -482,9 +482,9 @@ export class DiscordBot {
           subcommand
             .setName('부여')
             .setDescription('특정 사용자에게 관리자 권한을 부여합니다')
-            .addUserOption(option =>
-              option.setName('사용자')
-                .setDescription('관리자 권한을 부여할 사용자')
+            .addStringOption(option =>
+              option.setName('사용자id')
+                .setDescription('관리자 권한을 부여할 사용자의 Discord ID')
                 .setRequired(true)
             )
         )
@@ -492,9 +492,9 @@ export class DiscordBot {
           subcommand
             .setName('제거')
             .setDescription('특정 사용자의 관리자 권한을 제거합니다')
-            .addUserOption(option =>
-              option.setName('사용자')
-                .setDescription('관리자 권한을 제거할 사용자')
+            .addStringOption(option =>
+              option.setName('사용자id')
+                .setDescription('관리자 권한을 제거할 사용자의 Discord ID')
                 .setRequired(true)
             )
         )
@@ -1929,60 +1929,69 @@ export class DiscordBot {
   }
 
   private async grantAdminPermissionDeferred(interaction: ChatInputCommandInteraction, guildId: string, grantedBy: string) {
-    const targetUser = interaction.options.getUser('사용자', true);
+    const targetUserId = interaction.options.getString('사용자id', true);
 
     // Check if user already has admin privileges
-    const isAlreadyAdmin = await this.storage.isAdmin(guildId, targetUser.id);
+    const isAlreadyAdmin = await this.storage.isAdmin(guildId, targetUserId);
     if (isAlreadyAdmin) {
-      await interaction.editReply(`${targetUser.username}님은 이미 관리자 권한을 가지고 있습니다.`);
+      await interaction.editReply(`사용자 ID ${targetUserId}는 이미 관리자 권한을 가지고 있습니다.`);
       return;
     }
 
-    // Get or create target user in database
-    let dbUser = await this.storage.getUserByDiscordId(targetUser.id);
-    if (!dbUser) {
-      dbUser = await this.storage.createUser({
-        discordId: targetUser.id,
-        username: targetUser.username
-      });
-    }
-
-    // Check if the user granting permission exists in our database, create if not
-    let grantingDbUser = await this.storage.getUserByDiscordId(grantedBy);
-    if (!grantingDbUser) {
-      // Get Discord user info for the granting user
-      try {
-        const discordGrantingUser = await this.client.users.fetch(grantedBy);
-        grantingDbUser = await this.storage.createUser({
-          discordId: grantedBy,
-          username: discordGrantingUser.username,
-          discriminator: discordGrantingUser.discriminator || '0',
-          avatar: discordGrantingUser.avatar,
-        });
-      } catch (error) {
-        await interaction.editReply('권한 부여 실패: 관리자 사용자 정보를 가져올 수 없습니다.');
+    try {
+      // Validate Discord ID format
+      if (!/^\d{17,19}$/.test(targetUserId)) {
+        await interaction.editReply('올바른 Discord 사용자 ID를 입력해주세요. (17-19자리 숫자)');
         return;
       }
-    }
 
-    // Grant admin permission
-    await this.storage.grantAdminPermission(guildId, targetUser.id, grantedBy);
-    await interaction.editReply(`✅ ${targetUser.username}님에게 이 서버에서의 관리자 권한을 부여했습니다.`);
+      // Fetch Discord user to validate ID
+      const discordUser = await this.client.users.fetch(targetUserId);
+      
+      // Grant admin permission - this will automatically create the user if needed
+      await this.storage.grantAdminPermission(guildId, targetUserId, grantedBy);
+      await interaction.editReply(`✅ ${discordUser.username}님(ID: ${targetUserId})에게 이 서버에서의 관리자 권한을 부여했습니다.`);
+    } catch (error) {
+      console.error('Grant admin permission error:', error);
+      if (error.code === 10013) { // Discord API error: Unknown User
+        await interaction.editReply('해당 사용자 ID를 찾을 수 없습니다. 올바른 Discord 사용자 ID를 입력해주세요.');
+      } else {
+        await interaction.editReply(`권한 부여 실패: ${error.message}`);
+      }
+    }
   }
 
   private async removeAdminPermissionDeferred(interaction: ChatInputCommandInteraction, guildId: string, removedBy: string) {
-    const targetUser = interaction.options.getUser('사용자', true);
+    const targetUserId = interaction.options.getString('사용자id', true);
 
     // Check if user has admin privileges
-    const isAdmin = await this.storage.isAdmin(guildId, targetUser.id);
+    const isAdmin = await this.storage.isAdmin(guildId, targetUserId);
     if (!isAdmin) {
-      await interaction.editReply(`${targetUser.username}님은 관리자 권한을 가지고 있지 않습니다.`);
+      await interaction.editReply(`사용자 ID ${targetUserId}는 관리자 권한을 가지고 있지 않습니다.`);
       return;
     }
 
-    // Remove admin permission
-    await this.storage.removeAdminPermission(guildId, targetUser.id);
-    await interaction.editReply(`✅ ${targetUser.username}님의 관리자 권한을 제거했습니다.`);
+    try {
+      // Validate Discord ID format
+      if (!/^\d{17,19}$/.test(targetUserId)) {
+        await interaction.editReply('올바른 Discord 사용자 ID를 입력해주세요. (17-19자리 숫자)');
+        return;
+      }
+
+      // Fetch Discord user for display name
+      const discordUser = await this.client.users.fetch(targetUserId);
+      
+      // Remove admin permission
+      await this.storage.removeAdminPermission(guildId, targetUserId);
+      await interaction.editReply(`✅ ${discordUser.username}님(ID: ${targetUserId})의 관리자 권한을 제거했습니다.`);
+    } catch (error) {
+      console.error('Remove admin permission error:', error);
+      if (error.code === 10013) { // Discord API error: Unknown User
+        await interaction.editReply('해당 사용자 ID를 찾을 수 없습니다. 올바른 Discord 사용자 ID를 입력해주세요.');
+      } else {
+        await interaction.editReply(`권한 제거 실패: ${error.message}`);
+      }
+    }
   }
 
   private async listAdminsDeferred(interaction: ChatInputCommandInteraction, guildId: string) {
