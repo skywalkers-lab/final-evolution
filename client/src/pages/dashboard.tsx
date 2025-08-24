@@ -170,12 +170,12 @@ export default function Dashboard() {
           </div>
 
           {/* Portfolio & Recent Activity */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
               <Portfolio guildId={selectedGuildId || ''} userId="web-client" />
             </div>
             
-            <div>
+            <div className="flex flex-col">
               <RecentActivity guildId={selectedGuildId || ''} />
             </div>
           </div>
