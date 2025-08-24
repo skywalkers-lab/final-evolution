@@ -11,43 +11,48 @@ export default function Sidebar() {
   const menuItems = [
     { 
       path: "/", 
-      icon: "fas fa-chart-line", 
+      icon: "fas fa-tachometer-alt", 
       label: "대시보드",
       gradient: "from-blue-500 to-purple-600",
       iconColor: "text-blue-400",
-      glowColor: "shadow-blue-500/30"
+      glowColor: "shadow-blue-500/30",
+      bgIcon: "📊"
     },
     { 
       path: "/bank", 
-      icon: "fas fa-university", 
+      icon: "fas fa-coins", 
       label: "은행 & 계좌",
       gradient: "from-green-500 to-emerald-600",
       iconColor: "text-green-400", 
-      glowColor: "shadow-green-500/30"
+      glowColor: "shadow-green-500/30",
+      bgIcon: "🏦"
     },
     { 
       path: "/trading", 
-      icon: "fas fa-chart-candlestick", 
+      icon: "fas fa-chart-line", 
       label: "주식 거래",
       gradient: "from-orange-500 to-red-600",
       iconColor: "text-orange-400",
-      glowColor: "shadow-orange-500/30"
+      glowColor: "shadow-orange-500/30",
+      bgIcon: "📈"
     },
     { 
       path: "/auctions", 
-      icon: "fas fa-gavel", 
+      icon: "fas fa-hammer", 
       label: "경매",
       gradient: "from-purple-500 to-pink-600",
       iconColor: "text-purple-400",
-      glowColor: "shadow-purple-500/30"
+      glowColor: "shadow-purple-500/30",
+      bgIcon: "🔨"
     },
     { 
       path: "/news", 
-      icon: "fas fa-newspaper", 
+      icon: "fas fa-rss", 
       label: "뉴스 분석",
       gradient: "from-cyan-500 to-teal-600",
       iconColor: "text-cyan-400",
-      glowColor: "shadow-cyan-500/30"
+      glowColor: "shadow-cyan-500/30",
+      bgIcon: "📰"
     },
   ];
 
@@ -136,14 +141,27 @@ export default function Sidebar() {
             )}
             
             {/* Icon container */}
-            <div className={`relative z-10 w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-300 ${
+            <div className={`relative z-10 w-12 h-12 flex items-center justify-center rounded-xl transition-all duration-300 overflow-hidden ${
               location === item.path 
-                ? 'bg-white/20 shadow-lg' 
+                ? `bg-gradient-to-br ${item.gradient} shadow-lg ${item.glowColor} shadow-2xl` 
                 : 'bg-gray-700/50 group-hover:bg-gray-600/80'
             }`}>
-              <i className={`${item.icon} text-lg ${
-                location === item.path ? 'text-white' : item.iconColor + ' group-hover:text-white'
-              } transition-colors duration-300`}></i>
+              {/* Background emoji */}
+              {location === item.path && (
+                <div className="absolute inset-0 flex items-center justify-center text-2xl opacity-20 animate-pulse">
+                  {item.bgIcon}
+                </div>
+              )}
+              
+              {/* Main icon */}
+              <i className={`${item.icon} text-xl ${
+                location === item.path ? 'text-white drop-shadow-sm' : item.iconColor + ' group-hover:text-white'
+              } transition-all duration-300 relative z-10`}></i>
+              
+              {/* Shine effect */}
+              {location === item.path && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+              )}
             </div>
             
             {/* Label */}
