@@ -116,8 +116,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
     
-    // Force use of the deployed domain
-    const domain = 'bankofkorea.replit.app';
+    // Use current domain (development or production)
+    const domain = req.get('host');
     const redirectUri = `https://${domain}/api/auth/discord/callback`;
     const scopes = "identify guilds";
     
@@ -152,9 +152,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // If multiple domains, use the first one
         domain = domain.split(',')[0];
       }
-      // Fallback to known deployed domain or request host
-      domain = domain || 'bankofkorea.replit.app' || req.get('host');
-      const redirectUri = `https://${domain}/auth/discord/callback`;
+      // Fallback to request host
+      domain = domain || req.get('host');
+      const redirectUri = `https://${domain}/api/auth/discord/callback`;
 
       // Exchange code for token
       const tokenResponse = await axios.post('https://discord.com/api/oauth2/token', {
