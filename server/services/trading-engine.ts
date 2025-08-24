@@ -12,10 +12,10 @@ export class TradingEngine {
   }
 
   start() {
-    // Start price simulation every 1.25 seconds
+    // Start realistic price simulation every 5 seconds like real stock market
     this.priceSimulationInterval = setInterval(() => {
       this.simulatePriceMovements();
-    }, 1250); // 1.25초마다 업데이트
+    }, 5000); // 5초마다 업데이트 (실제 주식시장처럼)
 
     console.log('Trading engine started');
   }
@@ -117,11 +117,134 @@ export class TradingEngine {
 
   private async simulatePriceMovements() {
     try {
-      // 가격 시뮬레이션 완전 정지 (문제 해결까지)
-      console.log('⏸️ Price simulation paused for stability');
-      return;
+      // 모든 활성 주식에 대해 가격 시뮬레이션
+      const activeStocks = await this.storage.getAllActiveStocks();
+      console.log(`📊 Simulating prices for ${activeStocks.length} active stocks`);
+      
+      for (const stock of activeStocks) {
+        if (stock.status === 'active') {
+          await this.simulateStockPrice(stock);
+        }
+      }
     } catch (error) {
       console.error('Error in price simulation:', error);
+    }
+  }
+
+  private async simulateStockPrice(stock: any) {
+    try {
+      const currentPrice = Number(stock.price);
+      const volatility = Number(stock.volatility || 1); // 관리자가 설정한 변동률 (기본 1%)
+      
+      // 1. 기본 무작위 변동 (작고 현실적인 변동)
+      const baseChangePercent = (Math.random() - 0.5) * 2 * (volatility / 100); // ±변동률%
+      
+      // 2. 매수/매도량에 따른 영향 계산
+      const tradeImpact = await this.calculateTradeImpact(stock.guildId, stock.symbol);
+      
+      // 3. 뉴스 영향 계산 (향후 확장 가능)
+      const newsImpact = await this.calculateNewsImpact(stock.guildId, stock.symbol);
+      
+      // 4. 총 변동률 계산 (기본 + 거래량 + 뉴스)
+      const totalChangePercent = baseChangePercent + tradeImpact + newsImpact;
+      
+      // 5. 안전 범위 제한 (일일 변동률의 3배 이내)
+      const maxDailyChange = volatility * 3 / 100; // 예: 1% 변동률 → ±3% 일일 최대
+      const safeChangePercent = Math.max(-maxDailyChange, Math.min(maxDailyChange, totalChangePercent));
+      
+      // 6. 새 가격 계산
+      const targetPrice = Math.round(currentPrice * (1 + safeChangePercent));
+      const minPrice = Math.max(1000, Math.round(currentPrice * 0.95)); // 절대 최소값
+      const maxPrice = Math.round(currentPrice * 1.05); // 절대 최대값 
+      const newPrice = Math.max(minPrice, Math.min(maxPrice, targetPrice));
+      
+      // 7. 거래량 계산 (변동률에 비례)
+      const baseVolume = Math.floor(Math.random() * 1000) + 100; // 100~1100주
+      const volumeMultiplier = Math.abs(safeChangePercent) * 20 + 1;
+      const volume = Math.round(baseVolume * volumeMultiplier);
+      
+      // 8. 가격이 실제로 변경된 경우만 업데이트
+      if (newPrice !== currentPrice) {
+        await this.storage.updateStockPrice(stock.guildId, stock.symbol, newPrice);
+        await this.updateCandlestickData(stock.guildId, stock.symbol, newPrice, volume);
+        await this.checkAndExecuteLimitOrders(stock.guildId, stock.symbol, newPrice);
+        
+        // WebSocket으로 실시간 가격 변동 알림
+        this.wsManager.broadcast('stock_price_updated', {
+          guildId: stock.guildId,
+          symbol: stock.symbol,
+          oldPrice: currentPrice,
+          newPrice,
+          changePercent: safeChangePercent * 100,
+          volume
+        });
+        
+        console.log(`💹 ${stock.symbol}: ${currentPrice.toLocaleString()}원 → ${newPrice.toLocaleString()}원 (${(safeChangePercent * 100).toFixed(3)}%)`);
+      }
+    } catch (error) {
+      console.error(`Error simulating price for ${stock.symbol}:`, error);
+    }
+  }
+
+  // 매수/매도 압력에 따른 가격 영향 계산
+  private async calculateTradeImpact(guildId: string, symbol: string): Promise<number> {
+    try {
+      // 최근 1분간의 거래량 분석 (매수 vs 매도)
+      const recentTrades = await this.storage.getRecentTradesBySymbol(guildId, symbol, 1); // 1분간
+      
+      let buyVolume = 0;
+      let sellVolume = 0;
+      
+      for (const trade of recentTrades) {
+        if (trade.type === 'buy') {
+          buyVolume += trade.shares;
+        } else if (trade.type === 'sell') {
+          sellVolume += trade.shares;
+        }
+      }
+      
+      const totalVolume = buyVolume + sellVolume;
+      if (totalVolume === 0) return 0;
+      
+      // 매수 압력이 강하면 상승, 매도 압력이 강하면 하락
+      const buyPressure = buyVolume / totalVolume;
+      const sellPressure = sellVolume / totalVolume;
+      const pressureDiff = buyPressure - sellPressure;
+      
+      // 최대 ±0.1% 영향 (거래량에 따라)
+      const maxImpact = Math.min(totalVolume / 10000, 0.001); // 거래량이 많을수록 영향 증가
+      return pressureDiff * maxImpact;
+      
+    } catch (error) {
+      console.error('Error calculating trade impact:', error);
+      return 0;
+    }
+  }
+
+  // 뉴스/이벤트에 따른 가격 영향 계산 (향후 확장)
+  private async calculateNewsImpact(guildId: string, symbol: string): Promise<number> {
+    try {
+      // 향후 뉴스 시스템과 연동 가능
+      // 현재는 간단한 랜덤 이벤트로 구현
+      const randomEvent = Math.random();
+      
+      // 0.1% 확률로 긍정적 뉴스 (+0.2%~+0.5%)
+      if (randomEvent < 0.001) {
+        console.log(`📰 ${symbol}: 긍정적 뉴스 영향`);
+        return (Math.random() * 0.003 + 0.002); // +0.2%~+0.5%
+      }
+      
+      // 0.1% 확률로 부정적 뉴스 (-0.2%~-0.5%)
+      if (randomEvent > 0.999) {
+        console.log(`📰 ${symbol}: 부정적 뉴스 영향`);
+        return -(Math.random() * 0.003 + 0.002); // -0.2%~-0.5%
+      }
+      
+      return 0; // 대부분의 경우 뉴스 영향 없음
+      
+    } catch (error) {
+      console.error('Error calculating news impact:', error);
+      return 0;
     }
   }
 
@@ -327,7 +450,7 @@ export class TradingEngine {
         guildId,
         fromUserId: userId,
         type: 'admin_freeze', // Temporary freeze for limit order
-        amount: totalAmount,
+        amount: totalAmount.toString(),
         description: `지정가 매수 주문 예약: ${symbol} ${shares}주 @ ${targetPrice}원`
       });
 
@@ -432,14 +555,12 @@ export class TradingEngine {
       await this.storage.executeLimitOrder(order.id, executionPrice, shares);
 
       // Log the stock transaction
-      await this.storage.addStockTransaction({
+      await this.storage.addTransaction({
         guildId: order.guildId,
-        userId: order.userId,
-        symbol: order.symbol,
-        type: order.type,
-        shares,
-        price: executionPrice.toString(),
-        totalAmount: totalExecutionAmount.toString()
+        fromUserId: order.userId,
+        type: `stock_${order.type}`, // stock_buy 또는 stock_sell
+        amount: totalExecutionAmount.toString(),
+        description: `지정가 ${order.type === 'buy' ? '매수' : '매도'} 체결: ${order.symbol} ${shares}주 @ ${executionPrice}원`
       });
 
       // Update candlestick data for the execution

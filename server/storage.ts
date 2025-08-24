@@ -59,6 +59,7 @@ export interface IStorage {
   getHoldingsByStock(guildId: string, symbol: string): Promise<Holding[]>;
   updateHolding(guildId: string, userId: string, symbol: string, shares: number, avgPrice: number): Promise<void>;
   getStockTransactionsByUser(guildId: string, userId: string): Promise<StockTransaction[]>;
+  getRecentTradesBySymbol(guildId: string, symbol: string, minutes: number): Promise<StockTransaction[]>;
   executeTrade(guildId: string, userId: string, symbol: string, type: 'buy' | 'sell', shares: number, price: number): Promise<StockTransaction>;
   transferStock(guildId: string, fromUserId: string, toUserId: string, symbol: string, shares: number): Promise<void>;
 
@@ -416,6 +417,17 @@ export class DatabaseStorage implements IStorage {
   async getStockTransactionsByUser(guildId: string, userId: string): Promise<StockTransaction[]> {
     return await db.select().from(stockTransactions)
       .where(and(eq(stockTransactions.guildId, guildId), eq(stockTransactions.userId, userId)))
+      .orderBy(desc(stockTransactions.createdAt));
+  }
+
+  async getRecentTradesBySymbol(guildId: string, symbol: string, minutes: number): Promise<StockTransaction[]> {
+    const cutoffTime = new Date(Date.now() - minutes * 60 * 1000);
+    return await db.select().from(stockTransactions)
+      .where(and(
+        eq(stockTransactions.guildId, guildId), 
+        eq(stockTransactions.symbol, symbol),
+        gte(stockTransactions.createdAt, cutoffTime)
+      ))
       .orderBy(desc(stockTransactions.createdAt));
   }
 
