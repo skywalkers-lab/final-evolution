@@ -138,15 +138,45 @@ export default function Sidebar() {
             )}
             
             {/* Icon container */}
-            <div className={`relative z-10 w-12 h-12 flex items-center justify-center rounded-lg transition-all duration-300 border ${
+            <div className={`relative z-10 w-12 h-12 flex items-center justify-center rounded-lg transition-all duration-300 border overflow-hidden ${
               location === item.path 
                 ? `${item.bgColor} border-gray-500/30 ${item.glowColor} shadow-lg` 
                 : 'bg-gray-700/40 border-gray-600/30 group-hover:bg-gray-600/60 group-hover:border-gray-500/40'
-            }`}>              
+            }`}>
+              
+              {/* Background illustration */}
+              <div className="absolute inset-0 flex items-center justify-center opacity-10">
+                {item.path === "/" && (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
+                  </svg>
+                )}
+                {item.path === "/bank" && (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l7 3.5v3L12 12 5 8.5v-3L12 2zM5 10v6l7 3.5 7-3.5v-6l-7 3.5L5 10z"/>
+                  </svg>
+                )}
+                {item.path === "/trading" && (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/>
+                  </svg>
+                )}
+                {item.path === "/auctions" && (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M21 3H3v6h18V3zM12 7c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM3 10v11h6v-9H3zm8 11h6v-6h-6v6zm0-8h10v-3H11v3z"/>
+                  </svg>
+                )}
+                {item.path === "/news" && (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z"/>
+                  </svg>
+                )}
+              </div>
+              
               {/* Main icon */}
               <i className={`${item.icon} text-lg ${
                 location === item.path ? 'text-white' : item.iconColor + ' group-hover:text-white'
-              } transition-all duration-300`}></i>
+              } transition-all duration-300 relative z-10`}></i>
             </div>
             
             {/* Label */}
