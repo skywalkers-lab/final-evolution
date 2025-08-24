@@ -125,22 +125,14 @@ export class TradingEngine {
           const currentPrice = Number(stock.price);
           const volatility = Number(stock.volatility || 1); // 기본 변동률 1%
           
-          // 극도로 안전한 가격 변동 (플래시 크래시 완전 방지)
-          const randomFactor = Math.random();
-          let changePercent;
+          // 완전 안전 가격 변동 (극소 변동만)
+          const changePercent = (Math.random() - 0.5) * 0.0005; // ±0.025% (극소!)
           
-          if (randomFactor < 0.98) {
-            // 98% 확률로 극소 변동 (0.05% 이내)
-            changePercent = (Math.random() - 0.5) * 0.001; // ±0.05%
-          } else {
-            // 2% 확률로 소규모 변동 (0.2% 이내)
-            changePercent = (Math.random() - 0.5) * 0.004; // ±0.2%
-          }
-          
-          // 극도로 안전한 가격 범위 설정 (현재가 기준 ±1%)
-          const minPrice = Math.max(100, Math.round(currentPrice * 0.99));
-          const maxPrice = Math.round(currentPrice * 1.01);
-          const newPrice = Math.max(minPrice, Math.min(maxPrice, Math.round(currentPrice * (1 + changePercent))));
+          // 절대적 안전 범위 (현재가 기준 ±0.5%)
+          const minPrice = Math.max(1000, Math.round(currentPrice * 0.995));
+          const maxPrice = Math.round(currentPrice * 1.005);
+          const targetPrice = Math.round(currentPrice * (1 + changePercent));
+          const newPrice = Math.max(minPrice, Math.min(maxPrice, targetPrice));
           
           // 거래량도 더 현실적으로 계산
           const baseVolume = Math.floor(Math.random() * 5000) + 500; // 500~5500주
@@ -221,14 +213,19 @@ export class TradingEngine {
           const currentLow = Number(candlestick.low);
           const openPrice = Number(candlestick.open);
           
-          // Only update high/low if the change is significant enough (more than 0.1% from open)
+          // EXTREME SAFETY: Only allow minimal high/low updates (0.01% threshold)
           const significantChange = Math.abs(price - openPrice) / openPrice;
           let newHigh = currentHigh;
           let newLow = currentLow;
           
-          if (significantChange > 0.001) { // 0.1% threshold
-            newHigh = Math.max(currentHigh, price);
-            newLow = Math.min(currentLow, price);
+          // 극도로 제한적인 High/Low 업데이트 (0.01% 이상 변동시만)
+          if (significantChange > 0.0001) { 
+            // 추가 안전장치: High/Low도 기존 값에서 ±0.5% 이내만
+            const safeHigh = Math.min(price, currentHigh * 1.005);
+            const safeLow = Math.max(price, currentLow * 0.995);
+            
+            newHigh = Math.max(currentHigh, Math.min(safeHigh, price));
+            newLow = Math.min(currentLow, Math.max(safeLow, price));
           }
           
           await this.storage.updateCandlestick(guildId, symbol, tf, timestamp, {
