@@ -153,8 +153,23 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
                     <tr key={holding.symbol} className="border-t border-discord-dark" data-testid={`row-holding-${index}`}>
                       <td className="py-4">
                         <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-discord-blue rounded-full flex items-center justify-center text-xs font-bold">
-                            {holding.symbol.substring(0, 2)}
+                          <div className="w-8 h-8 rounded-full overflow-hidden bg-discord-dark border border-discord-light flex items-center justify-center">
+                            {holding.logoUrl ? (
+                              <img 
+                                src={holding.logoUrl} 
+                                alt={`${holding.symbol} 로고`}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  // 로고 로드 실패 시 fallback
+                                  const target = e.target as HTMLImageElement;
+                                  target.style.display = 'none';
+                                  target.nextElementSibling!.style.display = 'flex';
+                                }}
+                              />
+                            ) : null}
+                            <div className={`w-full h-full bg-discord-blue rounded-full flex items-center justify-center text-xs font-bold text-white ${holding.logoUrl ? 'hidden' : ''}`}>
+                              {holding.symbol.substring(0, 2)}
+                            </div>
                           </div>
                           <div>
                             <p className="text-white font-medium" data-testid={`text-holding-symbol-${index}`}>

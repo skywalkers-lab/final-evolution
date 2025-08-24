@@ -525,13 +525,55 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
           </div>
           <div className="flex items-center space-x-4">
             <Select value={symbol} onValueChange={onSymbolChange} data-testid="select-stock-symbol">
-              <SelectTrigger className="w-32 bg-discord-dark border-discord-dark text-white">
-                <SelectValue placeholder="종목 선택" />
+              <SelectTrigger className="w-48 bg-discord-dark border-discord-dark text-white">
+                <SelectValue placeholder="종목 선택">
+                  {selectedStock && (
+                    <div className="flex items-center space-x-2">
+                      <div className="w-6 h-6 rounded-full overflow-hidden bg-discord-darker border border-discord-light flex items-center justify-center">
+                        {selectedStock.logoUrl ? (
+                          <img 
+                            src={selectedStock.logoUrl} 
+                            alt={`${selectedStock.symbol} 로고`}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                              target.nextElementSibling!.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div className={`w-full h-full bg-discord-blue rounded-full flex items-center justify-center text-xs font-bold text-white ${selectedStock.logoUrl ? 'hidden' : ''}`}>
+                          {selectedStock.symbol.substring(0, 2)}
+                        </div>
+                      </div>
+                      <span>{selectedStock.symbol}</span>
+                    </div>
+                  )}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-discord-dark border-discord-dark">
                 {stocks.map((stock) => (
                   <SelectItem key={stock.symbol} value={stock.symbol} className="text-white hover:bg-discord-darker">
-                    {stock.symbol}
+                    <div className="flex items-center space-x-2">
+                      <div className="w-6 h-6 rounded-full overflow-hidden bg-discord-darker border border-discord-light flex items-center justify-center">
+                        {stock.logoUrl ? (
+                          <img 
+                            src={stock.logoUrl} 
+                            alt={`${stock.symbol} 로고`}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                              target.nextElementSibling!.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div className={`w-full h-full bg-discord-blue rounded-full flex items-center justify-center text-xs font-bold text-white ${stock.logoUrl ? 'hidden' : ''}`}>
+                          {stock.symbol.substring(0, 2)}
+                        </div>
+                      </div>
+                      <span>{stock.symbol}</span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>

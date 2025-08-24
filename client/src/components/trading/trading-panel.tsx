@@ -181,9 +181,29 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
             {/* Selected Stock Info */}
             <div className="bg-discord-dark rounded-lg p-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-white font-medium">{selectedStockData.name}</p>
-                  <p className="text-gray-400 text-sm">{selectedStockData.symbol}</p>
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-discord-darker border border-discord-light flex items-center justify-center">
+                    {selectedStockData.logoUrl ? (
+                      <img 
+                        src={selectedStockData.logoUrl} 
+                        alt={`${selectedStockData.symbol} 로고`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // 로고 로드 실패 시 fallback
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          target.nextElementSibling!.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div className={`w-full h-full bg-discord-blue rounded-full flex items-center justify-center text-sm font-bold text-white ${selectedStockData.logoUrl ? 'hidden' : ''}`}>
+                      {selectedStockData.symbol.substring(0, 2)}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-white font-medium">{selectedStockData.name}</p>
+                    <p className="text-gray-400 text-sm">{selectedStockData.symbol}</p>
+                  </div>
                 </div>
                 <div className="text-right">
                   <p className="text-white font-medium">₩{Number(selectedStockData.price).toLocaleString()}</p>
