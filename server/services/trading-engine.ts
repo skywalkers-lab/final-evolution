@@ -126,14 +126,14 @@ export class TradingEngine {
           let changePercent;
           
           if (randomFactor < 0.95) {
-            // 95% 확률로 극소 변동 (volatility의 2% 이내, 최대 0.02%)
-            changePercent = (Math.random() - 0.5) * (volatility * 0.02 / 100);
+            // 95% 확률로 극소 변동 (volatility의 2% 이내)
+            changePercent = (Math.random() - 0.5) * (volatility * 0.02) / 100;
           } else if (randomFactor < 0.999) {
-            // 4.9% 확률로 소규모 변동 (volatility의 10% 이내, 최대 0.1%)
-            changePercent = (Math.random() - 0.5) * (volatility * 0.1 / 100);
+            // 4.9% 확률로 소규모 변동 (volatility의 10% 이내)
+            changePercent = (Math.random() - 0.5) * (volatility * 0.1) / 100;
           } else {
-            // 0.1% 확률로 작은 변동 (volatility의 30% 이내, 최대 0.3%)
-            changePercent = (Math.random() - 0.5) * (volatility * 0.3 / 100);
+            // 0.1% 확률로 작은 변동 (volatility의 30% 이내)
+            changePercent = (Math.random() - 0.5) * (volatility * 0.3) / 100;
           }
           
           // 최소가격을 원래 가격의 50%로 설정하여 과도한 하락 방지
