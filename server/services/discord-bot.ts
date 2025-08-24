@@ -885,9 +885,16 @@ export class DiscordBot {
         return;
       }
 
-      const account = await this.storage.getAccountByUser(guildId, userId);
+      // First get user by Discord ID to get database user ID
+      const user = await this.storage.getUserByDiscordId(userId);
+      if (!user) {
+        await interaction.reply('계좌를 찾을 수 없습니다. /은행 계좌개설 명령으로 계좌를 먼저 개설해주세요.');
+        return;
+      }
+
+      const account = await this.storage.getAccountByUser(guildId, user.id);
       if (!account) {
-        await interaction.reply('계좌를 찾을 수 없습니다.');
+        await interaction.reply('계좌를 찾을 수 없습니다. /은행 계좌개설 명령으로 계좌를 먼저 개설해주세요.');
         return;
       }
 
@@ -909,8 +916,8 @@ export class DiscordBot {
         return;
       }
 
-      // Execute trade through trading engine
-      const result = await this.storage.executeTrade(guildId, userId, symbol, 'buy', shares, Number(stock.price));
+      // Execute trade through trading engine using database user ID
+      const result = await this.storage.executeTrade(guildId, user.id, symbol, 'buy', shares, Number(stock.price));
       
       await interaction.reply(`✅ ${shares}주 매수 완료!\n종목: ${stock.name} (${symbol})\n가격: ₩${Number(stock.price).toLocaleString()}\n총액: ₩${totalCost.toLocaleString()}`);
       
@@ -937,13 +944,20 @@ export class DiscordBot {
         return;
       }
 
-      const holding = await this.storage.getHolding(guildId, userId, symbol);
+      // First get user by Discord ID to get database user ID
+      const user = await this.storage.getUserByDiscordId(userId);
+      if (!user) {
+        await interaction.reply('계좌를 찾을 수 없습니다. /은행 계좌개설 명령으로 계좌를 먼저 개설해주세요.');
+        return;
+      }
+
+      const holding = await this.storage.getHolding(guildId, user.id, symbol);
       if (!holding || holding.shares < shares) {
         await interaction.reply('보유 수량이 부족합니다.');
         return;
       }
 
-      const result = await this.storage.executeTrade(guildId, userId, symbol, 'sell', shares, Number(stock.price));
+      const result = await this.storage.executeTrade(guildId, user.id, symbol, 'sell', shares, Number(stock.price));
       
       const totalAmount = Number(stock.price) * shares;
       await interaction.reply(`✅ ${shares}주 매도 완료!\n종목: ${stock.name} (${symbol})\n가격: ₩${Number(stock.price).toLocaleString()}\n총액: ₩${totalAmount.toLocaleString()}`);
