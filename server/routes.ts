@@ -89,7 +89,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/auth/discord", (req, res) => {
     const clientId = process.env.DISCORD_CLIENT_ID;
     // Use proper domain for Replit environment
-    const domain = process.env.REPLIT_DOMAINS || `${process.env.REPL_SLUG}.${process.env.REPL_OWNER || 'dev'}.replit.app`;
+    let domain = process.env.REPLIT_DOMAINS;
+    if (domain && domain.includes(',')) {
+      // If multiple domains, use the first one
+      domain = domain.split(',')[0];
+    }
+    // Fallback to known deployed domain or construct from env vars
+    domain = domain || 'BankofKorea.replit.app' || `${process.env.REPL_SLUG}.${process.env.REPL_OWNER || 'dev'}.replit.app`;
     const redirectUri = `https://${domain}/auth/discord/callback`;
     const scopes = "identify guilds";
     
@@ -111,7 +117,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const clientId = process.env.DISCORD_CLIENT_ID;
       const clientSecret = process.env.DISCORD_CLIENT_SECRET;
       // Use REPLIT_DOMAINS environment variable for correct redirect URI
-      const domain = process.env.REPLIT_DOMAINS || req.get('host');
+      let domain = process.env.REPLIT_DOMAINS;
+      if (domain && domain.includes(',')) {
+        // If multiple domains, use the first one
+        domain = domain.split(',')[0];
+      }
+      // Fallback to known deployed domain or request host
+      domain = domain || 'BankofKorea.replit.app' || req.get('host');
       const redirectUri = `https://${domain}/auth/discord/callback`;
 
       // Exchange code for token
