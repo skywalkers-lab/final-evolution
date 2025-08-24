@@ -1002,34 +1002,101 @@ export class DiscordBot {
     let chart = `📊 **${stock.name} (${stock.symbol})** - 가상 경제 시스템\n`;
     chart += `💰 현재가: ₩${Number(stock.price).toLocaleString()}\n`;
     chart += `📈 상태: ${this.getStatusText(stock.status)}\n\n`;
-    chart += `🎮 **가상 주식 차트** (ASCII)\n`;
+    chart += `📈 **꺾은선 그래프** (ASCII)\n`;
     
-    // Enhanced ASCII chart
-    const height = 12;
-    for (let row = height - 1; row >= 0; row--) {
-      let line = '';
-      for (let i = 0; i < Math.min(data.length, 25); i++) {
-        const price = Number(data[i].close);
-        const normalizedPrice = range > 0 ? ((price - minPrice) / range) * (height - 1) : height / 2;
-        
-        if (Math.round(normalizedPrice) === row) {
-          line += '▓';
-        } else if (Math.abs(normalizedPrice - row) < 0.5) {
-          line += '░';
-        } else {
-          line += ' ';
-        }
-      }
-      const priceLevel = range > 0 ? (minPrice + (range * row / (height - 1))) : stock.price;
-      chart += `₩${priceLevel.toFixed(0).padStart(7)} │${line}\n`;
+    // Generate line chart
+    const height = 15;
+    const width = Math.min(data.length, 30);
+    const grid: string[][] = Array(height).fill(null).map(() => Array(width).fill(' '));
+    
+    // Calculate normalized positions for each data point
+    const points: Array<{x: number, y: number}> = [];
+    for (let i = 0; i < width; i++) {
+      const price = prices[i];
+      const normalizedPrice = range > 0 ? ((price - minPrice) / range) * (height - 1) : height / 2;
+      const y = Math.round(normalizedPrice);
+      points.push({ x: i, y: height - 1 - y }); // Flip Y axis for display
     }
     
-    chart += '         └' + '─'.repeat(Math.min(data.length, 25)) + '\n';
-    chart += '          시간 (최근 24시간)\n\n';
+    // Draw line connecting points
+    for (let i = 0; i < points.length; i++) {
+      const point = points[i];
+      
+      // Mark current point
+      grid[point.y][point.x] = '●';
+      
+      // Draw line to next point
+      if (i < points.length - 1) {
+        const nextPoint = points[i + 1];
+        this.drawLine(grid, point.x, point.y, nextPoint.x, nextPoint.y);
+      }
+    }
+    
+    // Build chart output
+    for (let row = 0; row < height; row++) {
+      const priceLevel = range > 0 ? (maxPrice - (range * row / (height - 1))) : stock.price;
+      const line = grid[row].join('');
+      chart += `₩${priceLevel.toFixed(0).padStart(8)} │${line}\n`;
+    }
+    
+    chart += '          └' + '─'.repeat(width) + '\n';
+    chart += '           시간 (최근 24시간)\n\n';
+    
+    // Calculate price change
+    const firstPrice = prices[0];
+    const lastPrice = prices[prices.length - 1];
+    const change = lastPrice - firstPrice;
+    const changePercent = (change / firstPrice) * 100;
+    const changeIcon = change >= 0 ? '📈' : '📉';
+    const changeText = change >= 0 ? '+' : '';
+    
+    chart += `${changeIcon} **변동**: ${changeText}₩${change.toLocaleString()} (${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)\n`;
     chart += '⚡ **가상 시뮬레이션**: 5초마다 자동 업데이트\n';
     chart += '🏦 **한국은행 종합 서비스센터**';
     
     return chart;
+  }
+
+  private drawLine(grid: string[][], x0: number, y0: number, x1: number, y1: number) {
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+    
+    let x = x0;
+    let y = y0;
+    
+    while (true) {
+      // Don't overwrite the endpoint markers
+      if (grid[y] && grid[y][x] !== undefined && grid[y][x] === ' ') {
+        // Choose line character based on direction
+        if (dx > dy) {
+          grid[y][x] = '─';  // More horizontal
+        } else if (dy > dx) {
+          grid[y][x] = '│';  // More vertical
+        } else {
+          // Diagonal
+          if ((x1 - x0) * (y1 - y0) > 0) {
+            grid[y][x] = '╲';  // Down-right or up-left
+          } else {
+            grid[y][x] = '╱';  // Up-right or down-left
+          }
+        }
+      }
+      
+      if (x === x1 && y === y1) break;
+      
+      const e2 = 2 * err;
+      if (e2 > -dy) {
+        err -= dy;
+        x += sx;
+      }
+      if (e2 < dx) {
+        err += dx;
+        y += sy;
+      }
+    }
   }
 
   private getStatusText(status: string): string {
