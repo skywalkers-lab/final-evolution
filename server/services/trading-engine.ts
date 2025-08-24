@@ -125,18 +125,21 @@ export class TradingEngine {
           const randomFactor = Math.random();
           let changePercent;
           
-          if (randomFactor < 0.85) {
-            // 85% 확률로 매우 작은 변동 (volatility의 5% 이내)
+          if (randomFactor < 0.95) {
+            // 95% 확률로 극소 변동 (volatility의 2% 이내, 최대 0.02%)
+            changePercent = (Math.random() - 0.5) * (volatility * 0.02 / 100);
+          } else if (randomFactor < 0.999) {
+            // 4.9% 확률로 소규모 변동 (volatility의 10% 이내, 최대 0.1%)
             changePercent = (Math.random() - 0.5) * (volatility * 0.1 / 100);
-          } else if (randomFactor < 0.97) {
-            // 12% 확률로 작은 변동 (volatility의 25% 이내)
-            changePercent = (Math.random() - 0.5) * (volatility * 0.5 / 100);
           } else {
-            // 3% 확률로 중간 변동 (volatility의 100% 이내, 최대 1%)
-            changePercent = (Math.random() - 0.5) * (volatility * 1 / 100);
+            // 0.1% 확률로 작은 변동 (volatility의 30% 이내, 최대 0.3%)
+            changePercent = (Math.random() - 0.5) * (volatility * 0.3 / 100);
           }
           
-          const newPrice = Math.max(100, Math.round(currentPrice * (1 + changePercent))); // 최소 100원
+          // 최소가격을 원래 가격의 50%로 설정하여 과도한 하락 방지
+          const minPrice = Math.max(100, Math.round(Number(stock.basePrice || currentPrice) * 0.5));
+          const maxPrice = Math.round(Number(stock.basePrice || currentPrice) * 2.0);
+          const newPrice = Math.max(minPrice, Math.min(maxPrice, Math.round(currentPrice * (1 + changePercent))));
           
           // 거래량도 더 현실적으로 계산
           const baseVolume = Math.floor(Math.random() * 5000) + 500; // 500~5500주

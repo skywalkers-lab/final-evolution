@@ -52,14 +52,18 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
     }
   });
   
-  // Set current price when stock changes
+  // Set current price when stock changes (only for market orders)
   useEffect(() => {
-    if (selectedStockData) {
+    if (selectedStockData && orderType === 'market') {
       const currentPrice = realtimePrice || Number(selectedStockData.price);
       setPrice(currentPrice.toString());
       setRealtimePrice(null); // Clear realtime price after setting
+    } else if (selectedStockData && orderType === 'limit' && !price) {
+      // Only set initial price for limit orders if price is empty
+      const currentPrice = Number(selectedStockData.price);
+      setPrice(currentPrice.toString());
     }
-  }, [selectedStockData, realtimePrice]);
+  }, [selectedStockData, realtimePrice, orderType]);
 
   const tradeMutation = useMutation({
     mutationFn: async (tradeData: any) => {
