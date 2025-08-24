@@ -17,10 +17,10 @@ function Router() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/login" component={Login} />
-      <Route path="/bank" component={BankPage} />
-      <Route path="/stock" component={TradingPage} />
-      <Route path="/auction" component={AuctionsPage} />
-      <Route path="/news" component={NewsPage} />
+      <Route path="/b" component={BankPage} />
+      <Route path="/s" component={TradingPage} />
+      <Route path="/a" component={AuctionsPage} />
+      <Route path="/n" component={NewsPage} />
       <Route component={NotFound} />
     </Switch>
   );

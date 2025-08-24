@@ -19,16 +19,16 @@ export default function Sidebar() {
       bgColor: "bg-blue-500/10"
     },
     { 
-      path: "/bank", 
+      path: "/b", 
       icon: "fas fa-wallet", 
-      label: "은행 & 계좌",
+      label: "은행",
       gradient: "from-slate-600 to-slate-700",
       iconColor: "text-green-300", 
       glowColor: "shadow-slate-500/20",
       bgColor: "bg-green-500/10"
     },
     { 
-      path: "/stock", 
+      path: "/s", 
       icon: "fas fa-trending-up", 
       label: "주식",
       gradient: "from-slate-600 to-slate-700",
@@ -37,7 +37,7 @@ export default function Sidebar() {
       bgColor: "bg-orange-500/10"
     },
     { 
-      path: "/auction", 
+      path: "/a", 
       icon: "fas fa-gavel", 
       label: "경매",
       gradient: "from-slate-600 to-slate-700",
@@ -46,9 +46,9 @@ export default function Sidebar() {
       bgColor: "bg-purple-500/10"
     },
     { 
-      path: "/news", 
+      path: "/n", 
       icon: "fas fa-newspaper", 
-      label: "뉴스 분석",
+      label: "뉴스",
       gradient: "from-slate-600 to-slate-700",
       iconColor: "text-cyan-300",
       glowColor: "shadow-slate-500/20",
@@ -151,22 +151,22 @@ export default function Sidebar() {
                     <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
                   </svg>
                 )}
-                {item.path === "/bank" && (
+                {item.path === "/b" && (
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 2l7 3.5v3L12 12 5 8.5v-3L12 2zM5 10v6l7 3.5 7-3.5v-6l-7 3.5L5 10z"/>
                   </svg>
                 )}
-                {item.path === "/stock" && (
+                {item.path === "/s" && (
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/>
                   </svg>
                 )}
-                {item.path === "/auction" && (
+                {item.path === "/a" && (
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M21 3H3v6h18V3zM12 7c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM3 10v11h6v-9H3zm8 11h6v-6h-6v6zm0-8h10v-3H11v3z"/>
                   </svg>
                 )}
-                {item.path === "/news" && (
+                {item.path === "/n" && (
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z"/>
                   </svg>
