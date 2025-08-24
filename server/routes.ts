@@ -172,18 +172,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })).toString('base64');
 
       // Set session cookie and redirect
-      const isProduction = req.get('host')?.includes('replit.app') || false;
+      const host = req.get('host') || '';
+      const isSecure = host.includes('replit.app');
       console.log('🍪 Setting session cookie:', { 
-        isProduction, 
-        host: req.get('host'),
+        isSecure, 
+        host,
         userInfo: { username: discordUser.username, id: user.id }
       });
       
+      // Set cookie with flexible settings for both dev and prod
       res.cookie('session_token', sessionToken, { 
         httpOnly: true, 
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        secure: isProduction, // HTTPS only in production
-        sameSite: isProduction ? 'lax' : 'lax', // Use lax for both
+        secure: false, // Allow HTTP for development
+        sameSite: 'lax', // Compatible with most scenarios
         path: '/' // Ensure cookie is available for all paths
       });
       
