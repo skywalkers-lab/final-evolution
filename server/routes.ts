@@ -107,10 +107,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/auth/discord/callback", async (req, res) => {
+    console.log('🔥 Discord OAuth callback triggered!', { 
+      query: req.query, 
+      host: req.get('host'),
+      userAgent: req.get('User-Agent')
+    });
+    
     try {
       const { code } = req.query;
       
       if (!code) {
+        console.log('❌ No code provided in callback');
         return res.redirect("/?error=no_code");
       }
 
@@ -190,9 +197,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       console.log('✅ OAuth success, redirecting to dashboard');
+      
+      // Add debug headers to see if cookie is being set
+      console.log('📝 Response headers will include:', {
+        'Set-Cookie': res.getHeaders()['set-cookie']
+      });
+      
       res.redirect('/');
     } catch (error) {
       console.error('❌ Discord OAuth error:', error);
+      if (error.response) {
+        console.error('Discord API Error Response:', error.response.data);
+      }
       res.redirect('/?error=auth_failed');
     }
   });
