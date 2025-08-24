@@ -834,6 +834,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User list route  
+  app.get("/api/guilds/:guildId/users", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const users = await storage.getUsersByGuild(guildId);
+      res.json(users);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      res.status(500).json({ error: 'Failed to fetch users' });
+    }
+  });
+
   // Portfolio routes
   app.get("/api/guilds/:guildId/users/:userId/portfolio", requireAuth, async (req, res) => {
     try {

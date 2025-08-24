@@ -21,6 +21,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByDiscordId(discordId: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  getUsersByGuild(guildId: string): Promise<User[]>;
 
   // Account management
   getAccount(id: string): Promise<Account | undefined>;
@@ -1521,6 +1522,20 @@ export class DatabaseStorage implements IStorage {
       // Finally delete the account
       await tx.delete(accounts).where(eq(accounts.id, account.id));
     });
+  }
+
+  async getUsersByGuild(guildId: string): Promise<User[]> {
+    // Get all accounts for this guild, then get their users
+    const guildAccounts = await db.select().from(accounts).where(eq(accounts.guildId, guildId));
+    const userIds = [...new Set(guildAccounts.map(account => account.userId))];
+    
+    if (userIds.length === 0) return [];
+    
+    const usersResult = await db.select().from(users).where(
+      or(...userIds.map(id => eq(users.id, id)))
+    );
+    
+    return usersResult;
   }
 }
 
