@@ -193,13 +193,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userInfo: { username: discordUser.username, id: user.id }
       });
       
-      // Set cookie with simple settings
+      // Set cookie with Safari-compatible settings
       res.cookie('session_token', sessionToken, { 
         httpOnly: false, // Allow JavaScript access for debugging
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        secure: false, // Allow HTTP
-        sameSite: 'none', // Allow cross-site
-        path: '/'
+        secure: false, // HTTP environment
+        sameSite: 'lax', // Safari-compatible
+        path: '/',
+        domain: undefined // Let browser set automatically
       });
       
       console.log('✅ OAuth success, redirecting to dashboard');
