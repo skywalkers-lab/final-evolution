@@ -1966,7 +1966,7 @@ export class DiscordBot {
     }
 
     // Grant admin permission
-    await this.storage.grantAdminPermission(guildId, dbUser.id, grantingDbUser.id);
+    await this.storage.grantAdminPermission(guildId, targetUser.id, grantedBy);
     await interaction.editReply(`✅ ${targetUser.username}님에게 이 서버에서의 관리자 권한을 부여했습니다.`);
   }
 
