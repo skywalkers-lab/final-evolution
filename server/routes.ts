@@ -14,6 +14,22 @@ import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import "./types";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // 🚨 ABSOLUTE PRIORITY: API 라우트를 가장 먼저 등록 (Vite보다 절대 우선)
+  console.log('🔥 REGISTERING API ROUTES FIRST - HIGHEST PRIORITY!');
+  
+  // 테스트 라우트들 - 최우선
+  app.get("/test", (req, res) => {
+    console.log('🧪 TEST ROUTE HIT! URL:', req.originalUrl);
+    res.json({ message: 'Test route working!', timestamp: new Date().toISOString(), success: true });
+  });
+  
+  app.get("/api/test", (req, res) => {
+    console.log('🧪 API TEST ROUTE HIT!');
+    res.json({ message: 'API test route working!', timestamp: new Date().toISOString() });
+  });
+  
+  console.log('✅ API ROUTES REGISTERED FIRST!');
+
   const httpServer = createServer(app);
   
   // Initialize WebSocket server with proper cleanup
@@ -242,21 +258,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // 🚨 CRITICAL: 모든 서비스 초기화 완료 후 라우트 등록
-  console.log('🔧 Registering critical routes after all services initialized...');
-  
-  // 테스트 라우트들
-  app.get("/test", (req, res) => {
-    console.log('🧪 TEST ROUTE HIT! URL:', req.originalUrl);
-    res.json({ message: 'Test route working!', timestamp: new Date().toISOString(), success: true });
-  });
-  
-  app.get("/api/test", (req, res) => {
-    console.log('🧪 API TEST ROUTE HIT!');
-    res.json({ message: 'API test route working!', timestamp: new Date().toISOString() });
-  });
-  
-  console.log('✅ Critical routes registered after all services');
 
   app.get("/api/me", async (req, res) => {
     try {
