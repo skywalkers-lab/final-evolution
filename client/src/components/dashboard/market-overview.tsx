@@ -33,11 +33,11 @@ export default function MarketOverview({ stocks }: MarketOverviewProps) {
     return sortedStocks.slice(0, 5);
   };
 
-  const getStockIcon = (symbol: string) => {
-    // Generate consistent color based on symbol
+  const getStockIcon = (symbol: string, logoUrl?: string) => {
+    // Generate consistent color based on symbol as fallback
     const colors = ['bg-discord-blue', 'bg-blue-600', 'bg-orange-600', 'bg-red-600', 'bg-green-600', 'bg-purple-600'];
     const index = symbol.charCodeAt(0) % colors.length;
-    return colors[index];
+    return logoUrl ? null : colors[index];
   };
 
   const getChangeIcon = (change: number) => {
@@ -108,9 +108,27 @@ export default function MarketOverview({ stocks }: MarketOverviewProps) {
                   data-testid={`stock-item-${index}`}
                 >
                   <div className="flex items-center space-x-3">
-                    <div className={`w-8 h-8 ${getStockIcon(stock.symbol)} rounded-full flex items-center justify-center text-sm font-bold text-white`}>
-                      {stock.symbol.substring(0, 2)}
-                    </div>
+                    {stock.logoUrl ? (
+                      <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-700 flex items-center justify-center">
+                        <img 
+                          src={stock.logoUrl} 
+                          alt={`${stock.symbol} logo`}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // Fallback to colored icon if image fails to load
+                            const target = e.target as HTMLImageElement;
+                            const parent = target.parentElement;
+                            if (parent) {
+                              parent.innerHTML = `<div class="${getStockIcon(stock.symbol)} w-full h-full rounded-full flex items-center justify-center text-sm font-bold text-white">${stock.symbol.substring(0, 2)}</div>`;
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className={`w-8 h-8 ${getStockIcon(stock.symbol)} rounded-full flex items-center justify-center text-sm font-bold text-white`}>
+                        {stock.symbol.substring(0, 2)}
+                      </div>
+                    )}
                     <div>
                       <p className="font-medium text-white" data-testid={`text-stock-symbol-${index}`}>
                         {stock.symbol}
