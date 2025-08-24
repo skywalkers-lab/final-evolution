@@ -490,9 +490,12 @@ export class TradingEngine {
         const targetPrice = Number(order.targetPrice);
         let shouldExecute = false;
 
-        if (order.type === 'buy' && currentPrice <= targetPrice) {
+        // ±500원 범위 내에서 체결 허용
+        const priceRange = 500;
+        
+        if (order.type === 'buy' && currentPrice <= (targetPrice + priceRange)) {
           shouldExecute = true;
-        } else if (order.type === 'sell' && currentPrice >= targetPrice) {
+        } else if (order.type === 'sell' && currentPrice >= (targetPrice - priceRange)) {
           shouldExecute = true;
         }
 

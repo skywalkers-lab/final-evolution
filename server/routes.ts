@@ -466,12 +466,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let stocksValue = 0;
       
       for (const holding of holdings || []) {
+        // Skip holdings with zero shares
+        if (holding.shares <= 0) {
+          continue;
+        }
+        
         const stock = await storage.getStockBySymbol(guildId, holding.symbol);
         const currentPrice = stock ? Number(stock.price) : 0;
         const enrichedHolding = {
           ...holding,
           name: stock?.name || holding.symbol,
           currentPrice,
+          logoUrl: stock?.logoUrl, // 로고 URL 추가
         };
         enrichedHoldings.push(enrichedHolding);
         stocksValue += holding.shares * currentPrice;
