@@ -648,19 +648,205 @@ export class DatabaseStorage implements IStorage {
   }
 
   async analyzeNews(guildId: string, title: string, content: string, symbol?: string, createdBy?: string): Promise<NewsAnalysis> {
-    // This would be implemented with the news analyzer service
-    // For now, just save the raw analysis
+    // 실제 뉴스 감정 분석 구현
+    const sentiment = this.analyzeSentiment(title, content);
+    const sentimentScore = this.calculateSentimentScore(title, content);
+    
+    let priceImpact = "0";
+    let actualSymbol = symbol;
+    
+    // 종목 코드가 없으면 자동 감지
+    if (!symbol) {
+      actualSymbol = this.detectSymbolFromContent(title, content);
+    }
+    
+    // 가격 영향도 계산 (실제 주가에 반영)
+    if (actualSymbol) {
+      priceImpact = this.calculatePriceImpact(sentiment, sentimentScore, actualSymbol);
+      
+      // 실제 주가에 영향 적용 (비동기로 처리)
+      setTimeout(async () => {
+        try {
+          await this.applyNewsImpactToStock(guildId, actualSymbol!, parseFloat(priceImpact), title);
+        } catch (error) {
+          console.error(`뉴스 영향 적용 실패: ${error}`);
+        }
+      }, 1000); // 1초 후 적용
+    }
+    
     const analysis = await this.addNewsAnalysis({
       guildId,
-      symbol,
+      symbol: actualSymbol,
       title,
       content,
-      sentiment: 'neutral',
-      sentimentScore: "0",
-      priceImpact: "0",
+      sentiment,
+      sentimentScore: sentimentScore.toString(),
+      priceImpact,
       createdBy
     });
+    
     return analysis;
+  }
+
+  // 감정 분석 (한국어 키워드 기반)
+  private analyzeSentiment(title: string, content: string): 'positive' | 'negative' | 'neutral' {
+    const text = (title + ' ' + content).toLowerCase();
+    
+    // 긍정적 키워드
+    const positiveWords = [
+      '호조', '상승', '급등', '최고', '신기록', '흑자', '성장', '증가', '개선', '좋은', '성공', '승리', 
+      '이익', '활성화', '상승세', '돌파', '강세', '최적', '완벽', '우수', '최상', '발전', '확대', 
+      '신규', '증대', '향상', '도약', '수익', '플러스', '+', '↑', '📈', '긍정', '호재', '랠리'
+    ];
+    
+    // 부정적 키워드
+    const negativeWords = [
+      '부진', '하락', '급락', '최저', '적자', '감소', '악화', '나쁜', '실패', '패배', '손실', 
+      '침체', '하락세', '붕괴', '약세', '최악', '불완전', '악화', '위기', '손해', '마이너스', 
+      '파산', '부실', '하향', '감축', '축소', '-', '↓', '📉', '부정', '악재', '폭락', '타격'
+    ];
+    
+    let positiveCount = 0;
+    let negativeCount = 0;
+    
+    positiveWords.forEach(word => {
+      if (text.includes(word)) positiveCount++;
+    });
+    
+    negativeWords.forEach(word => {
+      if (text.includes(word)) negativeCount++;
+    });
+    
+    if (positiveCount > negativeCount) return 'positive';
+    if (negativeCount > positiveCount) return 'negative';
+    return 'neutral';
+  }
+  
+  // 감정 점수 계산 (-1 ~ 1)
+  private calculateSentimentScore(title: string, content: string): number {
+    const text = (title + ' ' + content).toLowerCase();
+    
+    let score = 0;
+    const titleWeight = 2; // 제목의 가중치를 높게
+    const contentWeight = 1;
+    
+    // 강력한 긍정 키워드 (높은 점수)
+    const strongPositive = ['급등', '최고', '신기록', '흑자', '성공', '활성화', '돌파', '도약', '호재'];
+    strongPositive.forEach(word => {
+      const titleMatches = (title.toLowerCase().match(new RegExp(word, 'g')) || []).length;
+      const contentMatches = (content.toLowerCase().match(new RegExp(word, 'g')) || []).length;
+      score += (titleMatches * titleWeight * 0.3) + (contentMatches * contentWeight * 0.3);
+    });
+    
+    // 일반 긍정 키워드
+    const positive = ['호조', '상승', '증가', '개선', '좋은', '이익', '상승세', '강세', '향상', '수익'];
+    positive.forEach(word => {
+      const titleMatches = (title.toLowerCase().match(new RegExp(word, 'g')) || []).length;
+      const contentMatches = (content.toLowerCase().match(new RegExp(word, 'g')) || []).length;
+      score += (titleMatches * titleWeight * 0.15) + (contentMatches * contentWeight * 0.15);
+    });
+    
+    // 강력한 부정 키워드 (낮은 점수)
+    const strongNegative = ['급락', '최저', '적자', '실패', '붕괴', '약세', '최악', '파산', '악재', '폭락'];
+    strongNegative.forEach(word => {
+      const titleMatches = (title.toLowerCase().match(new RegExp(word, 'g')) || []).length;
+      const contentMatches = (content.toLowerCase().match(new RegExp(word, 'g')) || []).length;
+      score -= (titleMatches * titleWeight * 0.3) + (contentMatches * contentWeight * 0.3);
+    });
+    
+    // 일반 부정 키워드
+    const negative = ['부진', '하락', '감소', '악화', '나쁜', '손실', '침체', '하락세', '위기', '손해'];
+    negative.forEach(word => {
+      const titleMatches = (title.toLowerCase().match(new RegExp(word, 'g')) || []).length;
+      const contentMatches = (content.toLowerCase().match(new RegExp(word, 'g')) || []).length;
+      score -= (titleMatches * titleWeight * 0.15) + (contentMatches * contentWeight * 0.15);
+    });
+    
+    // -1 ~ 1 범위로 정규화
+    return Math.max(-1, Math.min(1, score));
+  }
+  
+  // 종목 자동 감지
+  private detectSymbolFromContent(title: string, content: string): string | undefined {
+    const text = title + ' ' + content;
+    
+    // 종목 코드 직접 언급 감지
+    const symbolPatterns = ['BOK', 'KRBNE', 'GSG', 'GOLD', 'BTC'];
+    for (const symbol of symbolPatterns) {
+      if (text.toUpperCase().includes(symbol)) {
+        return symbol;
+      }
+    }
+    
+    // 회사명 기반 종목 매핑
+    const companyMappings: { [key: string]: string } = {
+      '한국은행': 'BOK',
+      '코리아네이션': 'KRBNE', 
+      'GSG': 'GSG',
+      '금': 'GOLD',
+      '골드': 'GOLD',
+      '비트코인': 'BTC',
+      'bitcoin': 'BTC'
+    };
+    
+    for (const [company, symbol] of Object.entries(companyMappings)) {
+      if (text.includes(company)) {
+        return symbol;
+      }
+    }
+    
+    return undefined;
+  }
+  
+  // 가격 영향도 계산
+  private calculatePriceImpact(sentiment: string, sentimentScore: number, symbol: string): string {
+    let impact = Math.abs(sentimentScore);
+    
+    // 종목별 민감도 조정
+    const sensitivity: { [key: string]: number } = {
+      'BTC': 2.0,    // 비트코인은 변동성이 크다
+      'BOK': 0.5,    // 한국은행은 안정적
+      'KRBNE': 1.0,  // 기본
+      'GSG': 1.2,    // 약간 변동성
+      'GOLD': 0.8    // 금은 비교적 안정
+    };
+    
+    const multiplier = sensitivity[symbol] || 1.0;
+    impact *= multiplier;
+    
+    // 최대 5% 영향으로 제한
+    impact = Math.min(0.05, impact);
+    
+    // 감정에 따라 부호 결정
+    if (sentiment === 'negative') {
+      impact = -impact;
+    } else if (sentiment === 'neutral') {
+      impact = impact * 0.2; // 중립적이면 영향 최소화
+    }
+    
+    return impact.toFixed(4);
+  }
+  
+  // 실제 주가에 뉴스 영향 적용
+  private async applyNewsImpactToStock(guildId: string, symbol: string, priceImpact: number, newsTitle: string): Promise<void> {
+    const stock = await this.getStockBySymbol(guildId, symbol);
+    if (!stock) return;
+    
+    const currentPrice = parseFloat(stock.currentPrice);
+    const impactAmount = currentPrice * Math.abs(priceImpact);
+    const newPrice = currentPrice + (currentPrice * priceImpact);
+    
+    // 최소 가격 보호 (0 이하로 떨어지지 않도록)
+    const finalPrice = Math.max(1, Math.round(newPrice));
+    
+    await this.updateStockPrice(guildId, symbol, finalPrice.toString());
+    
+    // 뉴스 영향 로그
+    const impactType = priceImpact > 0 ? '긍정적' : '부정적';
+    const impactPercent = (priceImpact * 100).toFixed(2);
+    console.log(`📰 ${symbol}: ${impactType} 뉴스 영향`);
+    console.log(`   제목: ${newsTitle}`);
+    console.log(`   가격 변동: ${currentPrice.toLocaleString()}원 → ${finalPrice.toLocaleString()}원 (${impactPercent}%)`);
   }
 
   // Guild settings methods
