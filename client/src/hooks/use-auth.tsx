@@ -82,7 +82,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = () => {
-    window.location.href = "/auth/discord";
+    console.log('🚀 Starting Discord login...');
+    console.log('Current location:', window.location.href);
+    console.log('Redirecting to:', '/auth/discord');
+    
+    // Force full page navigation to ensure server receives request
+    window.location.assign('/auth/discord');
   };
 
   const logout = async () => {
