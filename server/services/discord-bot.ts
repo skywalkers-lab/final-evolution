@@ -1729,7 +1729,7 @@ export class DiscordBot {
     const symbol = interaction.options.getString('종목코드')?.toUpperCase();
 
     try {
-      const analysis = await this.storage.analyzeNews(guildId, title, content, symbol, userId);
+      const analysis = await this.storage.analyzeNews(guildId, title, content, symbol, null);
       
       let message = `📰 **뉴스 분석 완료**\n\n`;
       message += `제목: ${title}\n`;
