@@ -1070,7 +1070,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/guilds/:guildId/news/analyze", requireAuth, async (req, res) => {
+  app.post("/api/guilds/:guildId/news/analyze", async (req, res) => {
     try {
       const { guildId } = req.params;
       const { title, content, symbol } = req.body;

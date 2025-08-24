@@ -12,9 +12,20 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  // Create web client token
+  const token = btoa(JSON.stringify({ userId: "web-client", guildId: "1284053249057620018" }));
+  
+  const headers: Record<string, string> = {
+    "Authorization": `Bearer ${token}`,
+  };
+  
+  if (data) {
+    headers["Content-Type"] = "application/json";
+  }
+  
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
