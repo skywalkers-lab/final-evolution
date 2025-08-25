@@ -642,27 +642,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { guildId } = req.params;
       const { symbol, type, shares, price } = req.body;
       
-      // Get all accounts for this guild to find the most recent one (same logic as portfolio)
+      console.log('Web client trade request:', { guildId, symbol, type, shares, price });
+      
+      // Get all accounts for this guild
       const accounts = await storage.getAccountsByGuild(guildId);
       let userId = null;
       
+      console.log(`Found ${accounts.length} accounts for guild ${guildId}:`, accounts.map(acc => ({ id: acc.id, userId: acc.userId, balance: acc.balance })));
+      
       if (accounts.length > 0) {
-        // Find the Discord user account first (prefer user with specific ID)
-        let foundAccount = accounts.find(acc => acc.userId === 'ad895e98-3deb-4220-a8d4-fbdcebfccd3a');
+        // Find account with sufficient balance for buy orders, or any account for sell orders
+        let foundAccount = null;
         
-        // If not found, use the most recent account as fallback
-        if (!foundAccount) {
-          foundAccount = accounts[accounts.length - 1];
+        if (type === 'buy') {
+          // For buy orders, find account with sufficient balance
+          const requiredAmount = shares * Number(price);
+          foundAccount = accounts.find(acc => Number(acc.balance) >= requiredAmount + 1);
+          
+          // If no account has sufficient balance, use the account with highest balance
+          if (!foundAccount) {
+            foundAccount = accounts.reduce((prev, current) => 
+              Number(current.balance) > Number(prev.balance) ? current : prev
+            );
+          }
+        } else {
+          // For sell orders, prefer account with specific user ID first, then fallback to first account
+          foundAccount = accounts.find(acc => acc.userId === 'ad895e98-3deb-4220-a8d4-fbdcebfccd3a') || accounts[0];
         }
         
-        const user = await storage.getUser(foundAccount.userId);
-        if (user) {
-          userId = user.id;
+        if (foundAccount) {
+          userId = foundAccount.userId;
+          console.log('Selected account:', { id: foundAccount.id, userId: foundAccount.userId, balance: foundAccount.balance });
         }
       }
       
-      // If no accounts exist, create a demo web-client account (fallback)
+      // If no suitable account found, create a demo web-client account
       if (!userId) {
+        console.log('No suitable account found, creating web-client account...');
         let user = await storage.getUserByDiscordId('web-client');
         if (!user) {
           user = await storage.createUser({
@@ -685,6 +701,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         userId = user.id;
+        console.log('Created/found web-client account:', { userId: user.id, accountId: account.id });
       }
       
       if (!userId) {
@@ -692,6 +709,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const result = await tradingEngine.executeTrade(guildId, userId, symbol, type, shares, Number(price));
+      console.log('Trade executed successfully:', result);
       res.json(result);
     } catch (error: any) {
       console.error('Web client trade error:', error);

@@ -1673,7 +1673,7 @@ export class DatabaseStorage implements IStorage {
   async getUsersByGuild(guildId: string): Promise<User[]> {
     // Get all accounts for this guild, then get their users
     const guildAccounts = await db.select().from(accounts).where(eq(accounts.guildId, guildId));
-    const userIds = [...new Set(guildAccounts.map(account => account.userId))];
+    const userIds = Array.from(new Set(guildAccounts.map(account => account.userId)));
     
     if (userIds.length === 0) return [];
     
