@@ -243,9 +243,9 @@ export class DiscordBot {
                 .setDescription('초기 주가')
                 .setRequired(true)
             )
-            .addAttachmentOption(option =>
+            .addStringOption(option =>
               option.setName('로고')
-                .setDescription('회사 로고 이미지')
+                .setDescription('회사 로고 이미지 URL')
                 .setRequired(false)
             )
         )
@@ -1448,7 +1448,7 @@ export class DiscordBot {
     const symbol = interaction.options.getString('종목코드', true).toUpperCase();
     const name = interaction.options.getString('회사명', true);
     const price = interaction.options.getNumber('초기가격', true);
-    const logoAttachment = interaction.options.getAttachment('로고');
+    const logoUrl = interaction.options.getString('로고');
 
     if (price <= 0) {
       await interaction.reply('주가는 0보다 커야 합니다.');
@@ -1462,14 +1462,21 @@ export class DiscordBot {
         return;
       }
 
-      // 로고 업로드 처리
-      let logoUrl: string | null = null;
-      if (logoAttachment && logoAttachment.contentType?.startsWith('image/')) {
+      // 로고 URL 처리
+      let finalLogoUrl: string | null = null;
+      if (logoUrl) {
+        // URL 유효성 검사 (기본적인 URL 형식 체크)
         try {
-          logoUrl = await this.uploadLogo(logoAttachment.url, guildId, symbol);
-        } catch (logoError) {
-          console.error('Logo upload failed:', logoError);
-          // 로고 업로드 실패해도 주식 생성은 계속 진행
+          const url = new URL(logoUrl);
+          if (url.protocol === 'http:' || url.protocol === 'https:') {
+            // 이미지 URL을 Object Storage에 업로드
+            finalLogoUrl = await this.uploadLogo(logoUrl, guildId, symbol);
+          } else {
+            console.warn('Invalid protocol for logo URL:', logoUrl);
+          }
+        } catch (urlError) {
+          console.error('Invalid logo URL:', logoUrl, urlError);
+          // 잘못된 URL이어도 주식 생성은 계속 진행
         }
       }
 
@@ -1481,11 +1488,11 @@ export class DiscordBot {
         totalShares: 1000000,
         volatility: '1',
         status: 'active',
-        logoUrl
+        logoUrl: finalLogoUrl
       });
 
       let reply = `✅ 새 주식이 생성되었습니다!\n종목코드: ${symbol}\n회사명: ${name}\n초기가격: ₩${price.toLocaleString()}`;
-      if (logoUrl) {
+      if (finalLogoUrl) {
         reply += '\n🖼️ 로고가 업로드되었습니다.';
       }
       await interaction.reply(reply);
