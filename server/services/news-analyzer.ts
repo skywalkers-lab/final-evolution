@@ -53,14 +53,16 @@ export class NewsAnalyzer {
     
     // Get guild settings for max impact
     const settings = await this.storage.getGuildSettings(guildId);
-    const maxImpactPct = Number(settings?.newsMaxImpactPct || 25) / 100; // 기본값을 25%로 증가
+    const maxImpactPct = Number(settings?.newsMaxImpactPct || 50) / 100; // 기본값을 50%로 대폭 증가
     
-    // Calculate price impact with enhanced sensitivity
+    // Calculate price impact with EXTREME sensitivity for dramatic movements
     let priceImpact = 0;
-    if (Math.abs(sentimentScore) >= 0.01) { // 더 낮은 임계값으로 민감도 증가
-      // 키워드별 가중치 적용
+    if (Math.abs(sentimentScore) >= 0.001) { // 훨씬 낮은 임계값으로 초민감 반응
+      // 키워드별 가중치 적용 + 카테고리별 강화
       const enhancedScore = this.enhanceScoreBasedOnKeywords(normalizedText, sentimentScore);
-      priceImpact = Math.min(Math.max(enhancedScore * maxImpactPct, -maxImpactPct), maxImpactPct);
+      const categoryMultiplier = this.getCategoryMultiplier(title); // 말머리별 배율
+      const finalScore = enhancedScore * categoryMultiplier;
+      priceImpact = Math.min(Math.max(finalScore * maxImpactPct, -maxImpactPct), maxImpactPct);
     }
     
     let oldPrice, newPrice;
@@ -199,25 +201,42 @@ export class NewsAnalyzer {
     if (baseScore > 0) {
       for (const keyword of FINANCIAL_POSITIVE) {
         if (text.includes(keyword)) {
-          multiplier *= 1.3; // 30% 추가 증폭
+          multiplier *= 2.5; // 150% 대폭 증폭으로 변경
         }
       }
     } else if (baseScore < 0) {
       for (const keyword of FINANCIAL_NEGATIVE) {
         if (text.includes(keyword)) {
-          multiplier *= 1.3; // 30% 추가 증폭
+          multiplier *= 2.5; // 150% 대폭 증폭으로 변경
         }
       }
     }
 
-    // 강도 단어 감지
+    // 강도 단어 감지 - 극적인 효과
     for (const keyword of INTENSITY_WORDS) {
       if (text.includes(keyword)) {
-        multiplier *= 1.5; // 50% 추가 증폭
+        multiplier *= 3.0; // 200% 극대 증폭으로 변경
       }
     }
 
-    // 최대 5배까지 증폭 가능
-    return baseScore * Math.min(multiplier, 5.0);
+    // 최대 15배까지 증폭 가능 - 뉴스 임팩트 극대화
+    return baseScore * Math.min(multiplier, 15.0);
+  }
+
+  // 뉴스 카테고리별 강도 배율 계산 (말머리 기반)
+  private getCategoryMultiplier(title: string): number {
+    // 말머리에 따른 임팩트 강도
+    if (title.includes('[경제]') || title.includes('[Economy]')) {
+      return 3.0; // 경제 뉴스는 3배 강력한 영향
+    } else if (title.includes('[정치]') || title.includes('[Politics]')) {
+      return 2.5; // 정치 뉴스는 2.5배 영향
+    } else if (title.includes('[사회]') || title.includes('[Society]')) {
+      return 2.0; // 사회 뉴스는 2배 영향
+    } else if (title.includes('[연예]') || title.includes('[Entertainment]')) {
+      return 1.5; // 연예 뉴스는 1.5배 영향
+    }
+    
+    // 말머리가 없는 일반 뉴스도 기본 배율 적용
+    return 2.0;
   }
 }
