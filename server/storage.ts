@@ -38,6 +38,8 @@ export interface IStorage {
   addTransaction(transaction: InsertTransaction): Promise<Transaction>;
   getTransactionsByUser(guildId: string, userId: string, limit?: number): Promise<Transaction[]>;
   getTransactionHistory(guildId: string, options: { userId?: string; type?: string; limit?: number }): Promise<Transaction[]>;
+  getCombinedTransactionHistory(guildId: string, userId: string, limit?: number): Promise<any[]>;
+  getCombinedTransactionHistoryForAdmin(guildId: string, options: { userId?: string; type?: string; limit?: number }): Promise<any[]>;
   getRecentTransactions(guildId: string, limit: number): Promise<Transaction[]>;
   transferMoney(guildId: string, fromUserId: string, toUserId: string, amount: number, memo: string): Promise<void>;
 
@@ -129,6 +131,7 @@ export interface IStorage {
   createLimitOrder(limitOrder: InsertLimitOrder): Promise<LimitOrder>;
   getLimitOrder(id: string): Promise<LimitOrder | undefined>;
   getUserLimitOrders(guildId: string, userId: string, status?: string): Promise<LimitOrder[]>;
+  getLimitOrdersByGuild(guildId: string, status?: string): Promise<LimitOrder[]>;
   cancelLimitOrder(id: string): Promise<void>;
   executeLimitOrder(id: string, executedPrice: number, executedShares: number): Promise<LimitOrder>;
   checkPendingOrdersForSymbol(guildId: string, symbol: string, currentPrice: number): Promise<LimitOrder[]>;
@@ -263,6 +266,135 @@ export class DatabaseStorage implements IStorage {
       .where(and(...conditions))
       .orderBy(desc(transactions.createdAt))
       .limit(options.limit || 50);
+  }
+
+  async getCombinedTransactionHistory(guildId: string, userId: string, limit = 50): Promise<any[]> {
+    // Get regular transactions
+    const regularTransactions = await db.select({
+      id: transactions.id,
+      type: sql<string>`'transaction'`.as('source_type'),
+      transactionType: transactions.type,
+      amount: transactions.amount,
+      memo: transactions.memo,
+      fromUserId: transactions.fromUserId,
+      toUserId: transactions.toUserId,
+      actorId: transactions.actorId,
+      createdAt: transactions.createdAt,
+      symbol: sql<string>`null`.as('symbol'),
+      shares: sql<number>`null`.as('shares'),
+      price: sql<string>`null`.as('price')
+    }).from(transactions)
+      .where(and(
+        eq(transactions.guildId, guildId),
+        or(eq(transactions.fromUserId, userId), eq(transactions.toUserId, userId))
+      ))
+      .orderBy(desc(transactions.createdAt))
+      .limit(limit);
+
+    // Get stock transactions
+    const stockTxns = await db.select({
+      id: stockTransactions.id,
+      type: sql<string>`'stock'`.as('source_type'),
+      transactionType: sql<string>`CASE WHEN ${stockTransactions.type} = 'buy' THEN 'stock_buy' ELSE 'stock_sell' END`.as('transactionType'),
+      amount: stockTransactions.totalAmount,
+      memo: sql<string>`CONCAT(${stockTransactions.symbol}, ' ', ${stockTransactions.shares}, '주 ', CASE WHEN ${stockTransactions.type} = 'buy' THEN '매수' ELSE '매도' END)`.as('memo'),
+      fromUserId: sql<string>`null`.as('fromUserId'),
+      toUserId: stockTransactions.userId,
+      actorId: stockTransactions.userId,
+      createdAt: stockTransactions.createdAt,
+      symbol: stockTransactions.symbol,
+      shares: stockTransactions.shares,
+      price: stockTransactions.price
+    }).from(stockTransactions)
+      .where(and(
+        eq(stockTransactions.guildId, guildId),
+        eq(stockTransactions.userId, userId)
+      ))
+      .orderBy(desc(stockTransactions.createdAt))
+      .limit(limit);
+
+    // Combine and sort by date
+    const combined = [...regularTransactions, ...stockTxns];
+    combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    
+    return combined.slice(0, limit);
+  }
+
+  async getCombinedTransactionHistoryForAdmin(guildId: string, options: { userId?: string; type?: string; limit?: number }): Promise<any[]> {
+    const limit = options.limit || 50;
+    
+    // Build conditions for regular transactions
+    const regConditions = [eq(transactions.guildId, guildId)];
+    if (options.userId) {
+      regConditions.push(or(
+        eq(transactions.fromUserId, options.userId),
+        eq(transactions.toUserId, options.userId)
+      )!);
+    }
+    if (options.type && !options.type.startsWith('stock_')) {
+      regConditions.push(eq(transactions.type, options.type as any));
+    }
+
+    // Get regular transactions (exclude if filtering for stock types)
+    let regularTransactions: any[] = [];
+    if (!options.type || !options.type.startsWith('stock_')) {
+      regularTransactions = await db.select({
+        id: transactions.id,
+        type: sql<string>`'transaction'`.as('source_type'),
+        transactionType: transactions.type,
+        amount: transactions.amount,
+        memo: transactions.memo,
+        fromUserId: transactions.fromUserId,
+        toUserId: transactions.toUserId,
+        actorId: transactions.actorId,
+        createdAt: transactions.createdAt,
+        symbol: sql<string>`null`.as('symbol'),
+        shares: sql<number>`null`.as('shares'),
+        price: sql<string>`null`.as('price')
+      }).from(transactions)
+        .where(and(...regConditions))
+        .orderBy(desc(transactions.createdAt))
+        .limit(limit);
+    }
+
+    // Build conditions for stock transactions
+    const stockConditions = [eq(stockTransactions.guildId, guildId)];
+    if (options.userId) {
+      stockConditions.push(eq(stockTransactions.userId, options.userId));
+    }
+    if (options.type === 'stock_buy') {
+      stockConditions.push(eq(stockTransactions.type, 'buy'));
+    } else if (options.type === 'stock_sell') {
+      stockConditions.push(eq(stockTransactions.type, 'sell'));
+    }
+
+    // Get stock transactions (exclude if filtering for non-stock types)
+    let stockTxns: any[] = [];
+    if (!options.type || options.type.startsWith('stock_') || options.type === 'stock_buy' || options.type === 'stock_sell') {
+      stockTxns = await db.select({
+        id: stockTransactions.id,
+        type: sql<string>`'stock'`.as('source_type'),
+        transactionType: sql<string>`CASE WHEN ${stockTransactions.type} = 'buy' THEN 'stock_buy' ELSE 'stock_sell' END`.as('transactionType'),
+        amount: stockTransactions.totalAmount,
+        memo: sql<string>`CONCAT(${stockTransactions.symbol}, ' ', ${stockTransactions.shares}, '주 ', CASE WHEN ${stockTransactions.type} = 'buy' THEN '매수' ELSE '매도' END)`.as('memo'),
+        fromUserId: sql<string>`null`.as('fromUserId'),
+        toUserId: stockTransactions.userId,
+        actorId: stockTransactions.userId,
+        createdAt: stockTransactions.createdAt,
+        symbol: stockTransactions.symbol,
+        shares: stockTransactions.shares,
+        price: stockTransactions.price
+      }).from(stockTransactions)
+        .where(and(...stockConditions))
+        .orderBy(desc(stockTransactions.createdAt))
+        .limit(limit);
+    }
+
+    // Combine and sort by date
+    const combined = [...regularTransactions, ...stockTxns];
+    combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    
+    return combined.slice(0, limit);
   }
 
   async getRecentTransactions(guildId: string, limit: number): Promise<Transaction[]> {
@@ -1379,6 +1511,20 @@ export class DatabaseStorage implements IStorage {
     const conditions = [
       eq(limitOrders.guildId, guildId),
       eq(limitOrders.userId, userId)
+    ];
+    
+    if (status) {
+      conditions.push(eq(limitOrders.status, status as any));
+    }
+    
+    return await db.select().from(limitOrders)
+      .where(and(...conditions))
+      .orderBy(desc(limitOrders.createdAt));
+  }
+
+  async getLimitOrdersByGuild(guildId: string, status?: string): Promise<LimitOrder[]> {
+    const conditions = [
+      eq(limitOrders.guildId, guildId)
     ];
     
     if (status) {

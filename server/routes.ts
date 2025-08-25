@@ -756,36 +756,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Web client limit orders API
+  // Web client limit orders API - show ALL limit orders for this guild
   app.get("/api/web-client/guilds/:guildId/limit-orders", async (req, res) => {
     try {
       const { guildId } = req.params;
       const { status } = req.query;
       
-      // Get all accounts for this guild to show the most recent one (same logic as portfolio)
-      const accounts = await storage.getAccountsByGuild(guildId);
-      let user = null;
-      
-      if (accounts.length > 0) {
-        // Get the most recently created account (latest user) - same as portfolio
-        const account = accounts[accounts.length - 1];
-        user = await storage.getUser(account.userId);
-      }
-      
-      // If no accounts exist, create a demo web-client account (fallback)
-      if (!user) {
-        user = await storage.getUserByDiscordId('web-client');
-        if (!user) {
-          user = await storage.createUser({
-            discordId: 'web-client',
-            username: 'Web Client',
-            discriminator: '0000',
-            avatar: null
-          });
-        }
-      }
-      
-      const limitOrders = await storage.getUserLimitOrders(guildId, user.id, status as string);
+      // Get ALL limit orders for this guild (not just one user's orders)
+      const limitOrders = await storage.getLimitOrdersByGuild(guildId, status as string);
       res.json(limitOrders);
     } catch (error) {
       console.error("Error fetching web client limit orders:", error);
@@ -1038,7 +1016,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      const transactions = await storage.getTransactionsByUser(guildId, userId, 20);
+      const transactions = await storage.getCombinedTransactionHistory(guildId, userId, 20);
       
       res.json(transactions);
     } catch (error) {
@@ -1251,7 +1229,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { guildId } = req.params;
       const { userId, type, limit = 50 } = req.query;
       
-      const transactions = await storage.getTransactionHistory(guildId, {
+      const transactions = await storage.getCombinedTransactionHistoryForAdmin(guildId, {
         userId: userId as string,
         type: type as string,
         limit: Number(limit)
