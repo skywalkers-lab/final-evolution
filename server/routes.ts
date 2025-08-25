@@ -640,7 +640,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/web-client/guilds/:guildId/trades", async (req, res) => {
     try {
       const { guildId } = req.params;
-      const { userId, symbol, type, shares, price } = req.body;
+      const { symbol, type, shares, price } = req.body;
+      
+      // Get all accounts for this guild to find the most recent one (same logic as portfolio)
+      const accounts = await storage.getAccountsByGuild(guildId);
+      let userId = null;
+      
+      if (accounts.length > 0) {
+        // Find the Discord user account first (prefer user with specific ID)
+        let foundAccount = accounts.find(acc => acc.userId === 'ad895e98-3deb-4220-a8d4-fbdcebfccd3a');
+        
+        // If not found, use the most recent account as fallback
+        if (!foundAccount) {
+          foundAccount = accounts[accounts.length - 1];
+        }
+        
+        const user = await storage.getUser(foundAccount.userId);
+        if (user) {
+          userId = user.id;
+        }
+      }
+      
+      // If no accounts exist, create a demo web-client account (fallback)
+      if (!userId) {
+        let user = await storage.getUserByDiscordId('web-client');
+        if (!user) {
+          user = await storage.createUser({
+            discordId: 'web-client',
+            username: 'Web Client',
+            discriminator: '0000',
+            avatar: null
+          });
+        }
+        
+        // Check if account exists for this user and guild
+        let account = await storage.getAccountByUser(guildId, user.id);
+        if (!account) {
+          account = await storage.createAccount({
+            guildId,
+            userId: user.id,
+            uniqueCode: Math.floor(1000 + Math.random() * 9000).toString(),
+            balance: '1000000.00' // 1M won starting balance for demo
+          });
+        }
+        
+        userId = user.id;
+      }
+      
+      if (!userId) {
+        return res.status(400).json({ message: "사용자 계정을 찾을 수 없습니다" });
+      }
       
       const result = await tradingEngine.executeTrade(guildId, userId, symbol, type, shares, Number(price));
       res.json(result);
