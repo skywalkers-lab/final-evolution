@@ -18,8 +18,8 @@ export async function apiRequest(
   const isWebClientRoute = url.includes('/api/web-client/');
   
   if (isWebClientRoute) {
-    // Create web client token for demo/guest routes
-    const token = btoa(JSON.stringify({ userId: "web-client", guildId: "1284053249057620018" }));
+    // Create web client token for demo/guest routes using existing demo account
+    const token = btoa(JSON.stringify({ userId: "ad895e98-3deb-4220-a8d4-fbdcebfccd3a", guildId: "1284053249057620018" }));
     headers["Authorization"] = `Bearer ${token}`;
   }
   // For other routes, rely on cookie-based authentication
