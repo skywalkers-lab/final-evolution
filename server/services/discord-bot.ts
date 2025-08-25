@@ -2257,22 +2257,54 @@ export class DiscordBot {
       const settings = await this.storage.getGuildSettings(guildId);
       const taxRate = Number(settings?.taxRate || 0);
 
-      // Calculate potential tax collection
-      const potentialTax = totalBalance * (taxRate / 100);
+      // Calculate basic tax and progressive tax
+      const basicTax = totalBalance * (taxRate / 100);
+      
+      // Count users with assets over 60M won and calculate progressive tax
+      let progressiveTaxSubjects = 0;
+      let totalProgressiveTax = 0;
+      const progressiveTaxThreshold = 60000000; // 6000만원
+      
+      for (const account of accounts) {
+        // Calculate total assets for each user
+        const holdings = await this.storage.getHoldingsByUser(guildId, account.userId);
+        let totalAssets = Number(account.balance);
+        
+        for (const holding of holdings) {
+          const stock = await this.storage.getStockBySymbol(guildId, holding.symbol);
+          if (stock && stock.status !== 'delisted') {
+            totalAssets += Number(stock.price) * holding.shares;
+          }
+        }
+        
+        if (totalAssets > progressiveTaxThreshold) {
+          progressiveTaxSubjects++;
+          totalProgressiveTax += totalAssets * 0.05; // 5% progressive tax
+        }
+      }
 
       let response = '💰 **세금 집계 현황**\n\n';
       response += `📊 **기본 정보**\n`;
       response += `• 총 사용자 수: ${totalUsers}명\n`;
       response += `• 현재 세율: ${taxRate}%\n`;
-      response += `• 총 자산: ₩${totalBalance.toLocaleString()}\n\n`;
+      response += `• 총 현금 자산: ₩${totalBalance.toLocaleString()}\n\n`;
       
       response += `💸 **세금 징수 예상**\n`;
-      response += `• 징수 예상액: ₩${Math.floor(potentialTax).toLocaleString()}\n`;
-      response += `• 평균 1인당 세금: ₩${Math.floor(potentialTax / totalUsers).toLocaleString()}\n\n`;
+      response += `• 기본세 (${taxRate}%): ₩${Math.floor(basicTax).toLocaleString()}\n`;
+      
+      if (progressiveTaxSubjects > 0) {
+        response += `• 누진세 (5%): ₩${Math.floor(totalProgressiveTax).toLocaleString()}\n`;
+        response += `• 누진세 적용 대상: ${progressiveTaxSubjects}명 (자산 6000만원 이상)\n`;
+        response += `• **총 세금 징수 예상액**: ₩${Math.floor(basicTax + totalProgressiveTax).toLocaleString()}\n\n`;
+      } else {
+        response += `• 누진세 적용 대상: 없음 (자산 6000만원 이상 유저 없음)\n`;
+        response += `• **총 세금 징수 예상액**: ₩${Math.floor(basicTax).toLocaleString()}\n\n`;
+      }
 
       if (taxRate > 0) {
-        response += `⏰ **다음 세금 징수**: 매월 1일 자동 징수\n`;
-        response += `📝 세금은 각 계좌 잔액의 ${taxRate}%가 부과됩니다.`;
+        response += `⏰ **다음 세금 징수**: 매월 15일 자동 징수\n`;
+        response += `📝 기본세는 총 자산의 ${taxRate}%가 부과됩니다.\n`;
+        response += `📈 누진세는 총 자산 6000만원 초과 시 추가 5%가 부과됩니다.`;
       } else {
         response += `⚠️ **현재 세율이 0%로 설정되어 있어 세금이 징수되지 않습니다.**`;
       }

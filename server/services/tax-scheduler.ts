@@ -1,11 +1,14 @@
 import cron from 'node-cron';
 import { IStorage } from '../storage';
+import { WebSocketManager } from './websocket-manager';
 
 export class TaxScheduler {
   private storage: IStorage;
+  private wsManager: WebSocketManager;
 
-  constructor(storage: IStorage) {
+  constructor(storage: IStorage, wsManager: WebSocketManager) {
     this.storage = storage;
+    this.wsManager = wsManager;
   }
 
   start() {
@@ -41,33 +44,73 @@ export class TaxScheduler {
             continue;
           }
 
-          const taxAmount = Math.floor(totalAssets * taxRate);
           const currentBalance = Number(account.balance);
           
-          // Only collect tax from cash balance, maintain minimum 1 won
-          const collectableAmount = Math.min(taxAmount, currentBalance - 1);
+          // Calculate basic tax
+          const basicTaxAmount = Math.floor(totalAssets * taxRate);
+          const basicCollectableAmount = Math.min(basicTaxAmount, Math.floor((currentBalance - 1) * 0.7)); // Leave room for progressive tax
           
-          if (collectableAmount > 0) {
+          // Calculate progressive tax (5% for assets over 60M won)
+          const progressiveTaxThreshold = 60000000; // 6000만원
+          let progressiveTaxAmount = 0;
+          let progressiveCollectableAmount = 0;
+          
+          if (totalAssets > progressiveTaxThreshold) {
+            progressiveTaxAmount = Math.floor(totalAssets * 0.05); // 5% progressive tax
+            const remainingBalance = currentBalance - basicCollectableAmount - 1;
+            progressiveCollectableAmount = Math.min(progressiveTaxAmount, remainingBalance);
+          }
+
+          // Collect basic tax
+          if (basicCollectableAmount > 0) {
             await this.storage.addTransaction({
               guildId: guild.guildId,
               fromUserId: account.userId,
               type: 'tax',
-              amount: collectableAmount.toString(),
+              amount: basicCollectableAmount.toString(),
               memo: '월간 자동 세금 징수 - 국세청'
             });
 
-            await this.storage.updateBalance(account.id, -collectableAmount);
+            await this.storage.updateBalance(account.id, -basicCollectableAmount);
             
             // Get user info for broadcast
             const user = await this.storage.getUser(account.userId);
             if (user) {
-              // Broadcast tax collection to WebSocket clients
+              // Broadcast basic tax collection to WebSocket clients
               this.wsManager.broadcast('tax_collected', {
                 guildId: guild.guildId,
                 userId: account.userId,
                 username: user.username,
-                amount: collectableAmount,
-                timestamp: new Date().toISOString()
+                amount: basicCollectableAmount,
+                timestamp: new Date().toISOString(),
+                type: 'basic'
+              });
+            }
+          }
+
+          // Collect progressive tax
+          if (progressiveCollectableAmount > 0) {
+            await this.storage.addTransaction({
+              guildId: guild.guildId,
+              fromUserId: account.userId,
+              type: 'tax',
+              amount: progressiveCollectableAmount.toString(),
+              memo: '누진세 징수 - 고액자산 (6000만원 이상)'
+            });
+
+            await this.storage.updateBalance(account.id, -progressiveCollectableAmount);
+            
+            // Get user info for broadcast
+            const user = await this.storage.getUser(account.userId);
+            if (user) {
+              // Broadcast progressive tax collection to WebSocket clients
+              this.wsManager.broadcast('tax_collected', {
+                guildId: guild.guildId,
+                userId: account.userId,
+                username: user.username,
+                amount: progressiveCollectableAmount,
+                timestamp: new Date().toISOString(),
+                type: 'progressive'
               });
             }
           }
@@ -99,36 +142,81 @@ export class TaxScheduler {
         continue;
       }
 
-      const taxAmount = Math.floor(totalAssets * taxRate);
       const currentBalance = Number(account.balance);
-      const collectableAmount = Math.min(taxAmount, currentBalance - 1);
       
-      if (collectableAmount > 0) {
+      // Calculate basic tax
+      const basicTaxAmount = Math.floor(totalAssets * taxRate);
+      const basicCollectableAmount = Math.min(basicTaxAmount, Math.floor((currentBalance - 1) * 0.7)); // Leave room for progressive tax
+      
+      // Calculate progressive tax (5% for assets over 60M won)
+      const progressiveTaxThreshold = 60000000; // 6000만원
+      let progressiveTaxAmount = 0;
+      let progressiveCollectableAmount = 0;
+      
+      if (totalAssets > progressiveTaxThreshold) {
+        progressiveTaxAmount = Math.floor(totalAssets * 0.05); // 5% progressive tax
+        const remainingBalance = currentBalance - basicCollectableAmount - 1;
+        progressiveCollectableAmount = Math.min(progressiveTaxAmount, remainingBalance);
+      }
+
+      // Collect basic tax
+      if (basicCollectableAmount > 0) {
         await this.storage.addTransaction({
           guildId,
           fromUserId: account.userId,
           type: 'tax',
-          amount: collectableAmount.toString(),
+          amount: basicCollectableAmount.toString(),
           memo: '수동 세금 징수'
         });
 
-        await this.storage.updateBalance(account.id, -collectableAmount);
+        await this.storage.updateBalance(account.id, -basicCollectableAmount);
         
         // Get user info for broadcast
         const user = await this.storage.getUser(account.userId);
         if (user) {
-          // Broadcast manual tax collection to WebSocket clients
+          // Broadcast manual basic tax collection to WebSocket clients
           this.wsManager.broadcast('tax_collected', {
             guildId,
             userId: account.userId,
             username: user.username,
-            amount: collectableAmount,
-            timestamp: new Date().toISOString()
+            amount: basicCollectableAmount,
+            timestamp: new Date().toISOString(),
+            type: 'basic'
           });
         }
         
-        totalCollected += collectableAmount;
+        totalCollected += basicCollectableAmount;
         affectedUsers++;
+      }
+
+      // Collect progressive tax
+      if (progressiveCollectableAmount > 0) {
+        await this.storage.addTransaction({
+          guildId,
+          fromUserId: account.userId,
+          type: 'tax',
+          amount: progressiveCollectableAmount.toString(),
+          memo: '누진세 징수 - 고액자산 (6000만원 이상)'
+        });
+
+        await this.storage.updateBalance(account.id, -progressiveCollectableAmount);
+        
+        // Get user info for broadcast
+        const user = await this.storage.getUser(account.userId);
+        if (user) {
+          // Broadcast manual progressive tax collection to WebSocket clients
+          this.wsManager.broadcast('tax_collected', {
+            guildId,
+            userId: account.userId,
+            username: user.username,
+            amount: progressiveCollectableAmount,
+            timestamp: new Date().toISOString(),
+            type: 'progressive'
+          });
+        }
+        
+        totalCollected += progressiveCollectableAmount;
+        if (basicCollectableAmount === 0) affectedUsers++; // Only count once per user
       }
     }
 

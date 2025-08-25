@@ -42,7 +42,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize services
   const tradingEngine = new TradingEngine(storage, wsManager);
   const auctionManager = new AuctionManager(storage, wsManager);
-  const taxScheduler = new TaxScheduler(storage);
+  const taxScheduler = new TaxScheduler(storage, wsManager);
   const newsAnalyzer = new NewsAnalyzer(storage, wsManager);
 
   // Start services
