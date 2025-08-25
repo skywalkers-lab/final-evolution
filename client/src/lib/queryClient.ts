@@ -12,12 +12,17 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  // Create web client token
-  const token = btoa(JSON.stringify({ userId: "web-client", guildId: "1284053249057620018" }));
+  const headers: Record<string, string> = {};
   
-  const headers: Record<string, string> = {
-    "Authorization": `Bearer ${token}`,
-  };
+  // Check if this is a web-client route (routes that allow guest/demo access)
+  const isWebClientRoute = url.includes('/api/web-client/');
+  
+  if (isWebClientRoute) {
+    // Create web client token for demo/guest routes
+    const token = btoa(JSON.stringify({ userId: "web-client", guildId: "1284053249057620018" }));
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  // For other routes, rely on cookie-based authentication
   
   if (data) {
     headers["Content-Type"] = "application/json";
@@ -27,7 +32,7 @@ export async function apiRequest(
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
+    credentials: "include", // Always include cookies for session-based auth
   });
 
   await throwIfResNotOk(res);

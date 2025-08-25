@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { apiRequest } from "@/lib/queryClient";
 
 interface PortfolioProps {
@@ -27,12 +27,25 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
     enabled: !!guildId,
   });
 
+  // Debounced refetch to prevent race conditions
+  const refetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const debouncedRefetch = useCallback(() => {
+    if (refetchTimeoutRef.current) {
+      clearTimeout(refetchTimeoutRef.current);
+    }
+    
+    refetchTimeoutRef.current = setTimeout(() => {
+      refetch();
+    }, 500); // 500ms delay to batch rapid updates
+  }, [refetch]);
+
   // WebSocket handler for real-time portfolio updates
   useWebSocket((event: string, data: any) => {
     if (event === 'stock_price_updated' || event === 'trade_executed') {
-      refetch();
+      debouncedRefetch(); // Use debounced refetch for frequent events
     } else if (event === 'account_deleted') {
-      // Refetch both portfolio and account data
+      // Refetch both portfolio and account data immediately for critical events
       refetch();
       refetchAccount();
       
@@ -74,6 +87,15 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
       setProfitLoss(totalPL);
     }
   }, [portfolio]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (refetchTimeoutRef.current) {
+        clearTimeout(refetchTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const formatProfitLoss = (amount: number, percentage: number) => {
     const isPositive = amount >= 0;
