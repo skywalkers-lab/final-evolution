@@ -148,8 +148,21 @@ export class TradingEngine {
       let trend = this.stockTrends.get(stockKey) || { direction: 0, strength: 0, lastChange: 0 };
       const trendMomentum = trend.direction * trend.strength * (isBitcoin ? 0.4 : 0.3); // BTC는 트렌드가 더 강함
       
-      // 2. 기본 무작위 변동 (비트코인은 더 크게!)
-      const baseChangePercent = (Math.random() - 0.5) * 2 * (volatility / 100); // ±변동률%
+      // 2. 기본 무작위 변동 - 가우시안 분포로 더 현실적으로
+      const gaussian = () => {
+        // Box-Muller 변환으로 정규분포 생성
+        let u = 0, v = 0;
+        while(u === 0) u = Math.random(); // 0 방지
+        while(v === 0) v = Math.random();
+        const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+        return z * 0.3; // 표준편차 조정 (더 작은 변동이 자주, 큰 변동은 드물게)
+      };
+      
+      const marketHour = new Date().getHours();
+      const isMarketOpen = marketHour >= 9 && marketHour <= 15; // 9시-15시 활발
+      const marketMultiplier = isMarketOpen ? 1.2 : 0.6; // 시장 시간에 따른 변동성 조절
+      
+      const baseChangePercent = gaussian() * (volatility / 100) * marketMultiplier;
       
       // 3. 매수/매도량에 따른 영향 계산 (비트코인은 더 민감)
       const tradeImpactLimit = isBitcoin ? 0.01 : 0.002; // BTC: ±1%, 일반: ±0.2%
@@ -172,18 +185,19 @@ export class TradingEngine {
       const maxDailyChange = isBitcoin ? volatility * 2 / 100 : volatility / 100; // BTC: 6%, 일반: 0.5%
       const safeChangePercent = Math.max(-maxDailyChange, Math.min(maxDailyChange, totalChangePercent));
       
-      // 8. 새 가격 계산 (비트코인은 더 큰 변동 허용)
-      const targetPrice = Math.round(currentPrice * (1 + safeChangePercent));
+      // 8. 새 가격 계산 - 더 현실적인 변동 범위
+      const targetPrice = currentPrice * (1 + safeChangePercent);
+      
       if (isBitcoin) {
-        // 비트코인: ±5% 까지 허용
-        const minPrice = Math.max(Math.round(currentPrice * 0.01), Math.round(currentPrice * 0.95));
-        const maxPrice = Math.round(currentPrice * 1.05);
-        var newPrice = Math.max(minPrice, Math.min(maxPrice, targetPrice));
+        // 비트코인: 더 큰 변동성, 더 정밀한 가격
+        const dailyLimit = Math.abs(safeChangePercent) > 0.08 ? 0.08 : Math.abs(safeChangePercent); // 일일 최대 8%
+        const actualChange = safeChangePercent > 0 ? dailyLimit : -dailyLimit;
+        var newPrice = Math.max(1, Math.round(currentPrice * (1 + actualChange) * 100) / 100); // 소수점 2자리
       } else {
-        // 일반 주식: ±1% 까지만
-        const minPrice = Math.max(Math.round(currentPrice * 0.005), Math.round(currentPrice * 0.99));
-        const maxPrice = Math.round(currentPrice * 1.01);
-        var newPrice = Math.max(minPrice, Math.min(maxPrice, targetPrice));
+        // 일반 주식: 더 세밀한 변동, 0.01%~3% 범위
+        const maxChange = Math.min(0.03, volatility / 100); // 최대 3% 또는 설정된 변동성
+        const clampedChange = Math.max(-maxChange, Math.min(maxChange, safeChangePercent));
+        var newPrice = Math.max(currentPrice * 0.001, Math.round(currentPrice * (1 + clampedChange)));
       }
       
       // 8. 트렌드 업데이트 (관성 시스템)
