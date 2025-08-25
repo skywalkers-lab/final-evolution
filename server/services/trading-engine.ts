@@ -12,10 +12,10 @@ export class TradingEngine {
   }
 
   start() {
-    // Start realistic price simulation every 2 seconds for faster simulation
+    // Start realistic price simulation every 10 seconds for more stable simulation
     this.priceSimulationInterval = setInterval(() => {
       this.simulatePriceMovements();
-    }, 2000); // 2초마다 업데이트 (더 빠른 시뮬레이션)
+    }, 10000); // 10초마다 업데이트 (안정적인 시뮬레이션)
 
     console.log('Trading engine started');
   }
@@ -131,39 +131,68 @@ export class TradingEngine {
     }
   }
 
+  // 주식별 트렌드 기억을 위한 맵
+  private stockTrends: Map<string, { direction: number; strength: number; lastChange: number }> = new Map();
+
   private async simulateStockPrice(stock: any) {
     try {
       const currentPrice = Number(stock.price);
-      const volatility = Number(stock.volatility || 1); // 관리자가 설정한 변동률 (기본 1%)
+      const volatility = Number(stock.volatility || 0.5); // 기본 변동률을 0.5%로 낮춤
+      const stockKey = `${stock.guildId}:${stock.symbol}`;
       
-      // 1. 기본 무작위 변동 (작고 현실적인 변동)
+      // 1. 트렌드 관성 계산 (이전 방향을 기억)
+      let trend = this.stockTrends.get(stockKey) || { direction: 0, strength: 0, lastChange: 0 };
+      const trendMomentum = trend.direction * trend.strength * 0.3; // 트렌드 영향력 30%
+      
+      // 2. 기본 무작위 변동 (작고 현실적인 변동)
       const baseChangePercent = (Math.random() - 0.5) * 2 * (volatility / 100); // ±변동률%
       
-      // 2. 매수/매도량에 따른 영향 계산
-      const tradeImpact = await this.calculateTradeImpact(stock.guildId, stock.symbol);
+      // 3. 매수/매도량에 따른 영향 계산 (제한)
+      const tradeImpact = Math.max(-0.002, Math.min(0.002, await this.calculateTradeImpact(stock.guildId, stock.symbol))); // ±0.2% 제한
       
-      // 3. 뉴스 영향 계산 (향후 확장 가능)
-      const newsImpact = await this.calculateNewsImpact(stock.guildId, stock.symbol);
+      // 4. 뉴스 영향 계산 (제한)
+      const newsImpact = Math.max(-0.003, Math.min(0.003, await this.calculateNewsImpact(stock.guildId, stock.symbol))); // ±0.3% 제한
       
-      // 4. 총 변동률 계산 (기본 + 거래량 + 뉴스)
-      const totalChangePercent = baseChangePercent + tradeImpact + newsImpact;
+      // 5. 총 변동률 계산 (트렌드 + 기본 + 거래량 + 뉴스)
+      const totalChangePercent = trendMomentum + baseChangePercent + tradeImpact + newsImpact;
       
-      // 5. 안전 범위 제한 (일일 변동률의 3배 이내)
-      const maxDailyChange = volatility * 3 / 100; // 예: 1% 변동률 → ±3% 일일 최대
+      // 6. 안전 범위 제한 (매우 보수적으로)
+      const maxDailyChange = volatility / 100; // 예: 0.5% 변동률 → ±0.5% 일일 최대
       const safeChangePercent = Math.max(-maxDailyChange, Math.min(maxDailyChange, totalChangePercent));
       
-      // 6. 새 가격 계산
+      // 7. 새 가격 계산 (더 보수적인 제한)
       const targetPrice = Math.round(currentPrice * (1 + safeChangePercent));
-      const minPrice = Math.max(1000, Math.round(currentPrice * 0.95)); // 절대 최소값
-      const maxPrice = Math.round(currentPrice * 1.05); // 절대 최대값 
+      const minPrice = Math.max(Math.round(currentPrice * 0.005), Math.round(currentPrice * 0.99)); // 최소 -1%
+      const maxPrice = Math.round(currentPrice * 1.01); // 최대 +1%
       const newPrice = Math.max(minPrice, Math.min(maxPrice, targetPrice));
       
-      // 7. 거래량 계산 (변동률에 비례)
-      const baseVolume = Math.floor(Math.random() * 1000) + 100; // 100~1100주
-      const volumeMultiplier = Math.abs(safeChangePercent) * 20 + 1;
+      // 8. 트렌드 업데이트 (관성 시스템)
+      const actualChange = (newPrice - currentPrice) / currentPrice;
+      if (Math.abs(actualChange) > 0.001) { // 0.1% 이상 변동이 있을 때만
+        // 트렌드 방향 업데이트 (상승: 1, 하락: -1)
+        const newDirection = actualChange > 0 ? 1 : -1;
+        
+        // 같은 방향이면 강도 증가, 다른 방향이면 강도 감소
+        if (trend.direction === newDirection) {
+          trend.strength = Math.min(1.0, trend.strength + 0.1); // 최대 1.0
+        } else {
+          trend.strength = Math.max(0.0, trend.strength - 0.2); // 최소 0.0
+          if (trend.strength === 0) {
+            trend.direction = newDirection; // 방향 전환
+            trend.strength = 0.1;
+          }
+        }
+        
+        trend.lastChange = actualChange;
+        this.stockTrends.set(stockKey, trend);
+      }
+      
+      // 9. 거래량 계산 (변동률에 비례)
+      const baseVolume = Math.floor(Math.random() * 500) + 50; // 50~550주로 축소
+      const volumeMultiplier = Math.abs(safeChangePercent) * 10 + 1;
       const volume = Math.round(baseVolume * volumeMultiplier);
       
-      // 8. 가격이 실제로 변경된 경우만 업데이트
+      // 10. 가격이 실제로 변경된 경우만 업데이트
       if (newPrice !== currentPrice) {
         await this.storage.updateStockPrice(stock.guildId, stock.symbol, newPrice);
         await this.updateCandlestickData(stock.guildId, stock.symbol, newPrice, volume);
@@ -175,11 +204,13 @@ export class TradingEngine {
           symbol: stock.symbol,
           oldPrice: currentPrice,
           newPrice,
-          changePercent: safeChangePercent * 100,
-          volume
+          changePercent: actualChange * 100,
+          volume,
+          trend: trend.direction > 0 ? '📈' : '📉'
         });
         
-        console.log(`💹 ${stock.symbol}: ${currentPrice.toLocaleString()}원 → ${newPrice.toLocaleString()}원 (${(safeChangePercent * 100).toFixed(3)}%)`);
+        const trendEmoji = trend.direction > 0 ? '📈' : '📉';
+        console.log(`💹 ${stock.symbol}: ${currentPrice.toLocaleString()}원 → ${newPrice.toLocaleString()}원 (${(actualChange * 100).toFixed(3)}%) ${trendEmoji}`);
       }
     } catch (error) {
       console.error(`Error simulating price for ${stock.symbol}:`, error);
@@ -451,7 +482,7 @@ export class TradingEngine {
         fromUserId: userId,
         type: 'admin_freeze', // Temporary freeze for limit order
         amount: totalAmount.toString(),
-        description: `지정가 매수 주문 예약: ${symbol} ${shares}주 @ ${targetPrice}원`
+        memo: `지정가 매수 주문 예약: ${symbol} ${shares}주 @ ${targetPrice}원`
       });
 
       return limitOrder;
@@ -561,9 +592,9 @@ export class TradingEngine {
       await this.storage.addTransaction({
         guildId: order.guildId,
         fromUserId: order.userId,
-        type: `stock_${order.type}`, // stock_buy 또는 stock_sell
+        type: order.type === 'buy' ? 'stock_buy' : 'stock_sell',
         amount: totalExecutionAmount.toString(),
-        description: `지정가 ${order.type === 'buy' ? '매수' : '매도'} 체결: ${order.symbol} ${shares}주 @ ${executionPrice}원`
+        memo: `지정가 ${order.type === 'buy' ? '매수' : '매도'} 체결: ${order.symbol} ${shares}주 @ ${executionPrice}원`
       });
 
       // Update candlestick data for the execution
