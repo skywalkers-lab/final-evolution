@@ -177,8 +177,8 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
   const canTrade = () => {
     if (!selectedStockData || selectedStockData.status !== 'active') return false;
     if (tradeType === 'buy') {
-      // 지정가 매수는 예약 시에만 잔액 확인 (즉시 차감하지 않음)
-      return availableBalance >= totalRequired;
+      // Backend doesn't charge fees, so only check order amount
+      return availableBalance >= orderAmount;
     } else {
       return availableShares >= parseInt(quantity || '0');
     }
