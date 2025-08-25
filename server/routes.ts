@@ -651,10 +651,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Found ${accounts.length} accounts for guild ${guildId}:`, accounts.map(acc => ({ id: acc.id, userId: acc.userId, balance: acc.balance })));
       
       if (accounts.length > 0) {
-        // 웹 클라이언트용 - 가장 간단한 방법: 잔액이 가장 높은 계좌 사용
-        const foundAccount = accounts.reduce((prev, current) => 
-          Number(current.balance) > Number(prev.balance) ? current : prev
-        );
+        let foundAccount = null;
+        
+        if (type === 'sell') {
+          // 매도 주문의 경우: 해당 종목을 보유한 계좌를 우선 선택
+          console.log(`🔍 매도 주문 - ${symbol} 보유 계좌 탐색 중...`);
+          
+          for (const account of accounts) {
+            const holding = await storage.getHolding(guildId, account.userId, symbol);
+            if (holding && holding.shares >= shares) {
+              foundAccount = account;
+              console.log(`✅ ${symbol} ${shares}주 보유 계좌 발견:`, {
+                uniqueCode: account.uniqueCode,
+                userId: account.userId,
+                balance: account.balance,
+                holdingShares: holding.shares
+              });
+              break;
+            }
+          }
+          
+          // 보유 계좌를 찾지 못한 경우에도 기본 계좌 선택 시도
+          if (!foundAccount) {
+            console.log(`❌ ${symbol} ${shares}주 보유 계좌를 찾을 수 없음. 기본 계좌 사용 시도.`);
+          }
+        }
+        
+        // 매수 주문이거나 매도용 보유 계좌를 찾지 못한 경우: 잔액이 가장 높은 계좌 사용
+        if (!foundAccount) {
+          foundAccount = accounts.reduce((prev, current) => 
+            Number(current.balance) > Number(prev.balance) ? current : prev
+          );
+          console.log('💰 잔액 기준 계좌 선택:', {
+            type,
+            uniqueCode: foundAccount.uniqueCode,
+            balance: foundAccount.balance
+          });
+        }
         
         if (foundAccount) {
           userId = foundAccount.userId;
