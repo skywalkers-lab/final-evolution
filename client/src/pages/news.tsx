@@ -28,14 +28,14 @@ export default function NewsPage() {
 
   // Fetch news analyses
   const { data: newsAnalyses = [], refetch: refetchNews } = useQuery({
-    queryKey: ['/api/guilds', selectedGuildId, 'news'],
+    queryKey: [`/api/web-client/guilds/${selectedGuildId}/news`],
     enabled: !!selectedGuildId,
     select: (data: any) => data || [],
   });
 
   // Fetch stocks for symbol selection
   const { data: stocks = [] } = useQuery({
-    queryKey: ['/api/guilds', selectedGuildId, 'stocks'],
+    queryKey: [`/api/web-client/guilds/${selectedGuildId}/stocks`],
     enabled: !!selectedGuildId,
     select: (data: any) => data || [],
   });
@@ -73,7 +73,7 @@ export default function NewsPage() {
         symbol: selectedSymbol || undefined,
       };
 
-      await apiRequest('POST', `/api/guilds/${selectedGuildId}/news/analyze`, analysisData);
+      await apiRequest('POST', `/api/web-client/guilds/${selectedGuildId}/news/analyze`, analysisData);
 
       toast({
         title: "뉴스 분석 완료",
@@ -86,8 +86,8 @@ export default function NewsPage() {
       setSelectedSymbol('');
       
       // Refresh data
-      queryClient.invalidateQueries({ queryKey: ['/api/guilds', selectedGuildId, 'news'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/guilds', selectedGuildId, 'stocks'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/web-client/guilds/${selectedGuildId}/news`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/web-client/guilds/${selectedGuildId}/stocks`] });
     } catch (error: any) {
       toast({
         title: "뉴스 분석 실패",

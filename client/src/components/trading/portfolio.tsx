@@ -18,12 +18,12 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
   const [isTrading, setIsTrading] = useState<string | null>(null);
 
   const { data: portfolio, refetch } = useQuery({
-    queryKey: ['/api/web-client/guilds', guildId, 'portfolio'],
+    queryKey: [`/api/web-client/guilds/${guildId}/portfolio`],
     enabled: !!guildId,
   });
 
   const { data: accountData, refetch: refetchAccount } = useQuery({
-    queryKey: ['/api/web-client/guilds', guildId, 'account'],
+    queryKey: [`/api/web-client/guilds/${guildId}/account`],
     enabled: !!guildId,
   });
 

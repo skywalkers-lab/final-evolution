@@ -540,6 +540,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Web client news endpoint
+  app.get("/api/web-client/guilds/:guildId/news", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      console.log(`Web client news request for guild: ${guildId}`);
+      
+      const news = await storage.getNewsAnalysesByGuild(guildId);
+      res.json(news || []);
+    } catch (error) {
+      console.error('Web client news error:', error);
+      res.json([]);
+    }
+  });
+
+  // Web client news analyze endpoint
+  app.post("/api/web-client/guilds/:guildId/news/analyze", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const { title, content, symbol } = req.body;
+      console.log(`Web client news analyze request for guild: ${guildId}`);
+      
+      // Use storage's analyzeNews method directly
+      const analysis = await storage.analyzeNews(guildId, title, content, symbol, 'web-client');
+      
+      // Broadcast the analysis to WebSocket clients for real-time updates
+      wsManager.broadcast('news_analyzed', analysis);
+      wsManager.broadcast('stock_price_updated', { guildId });
+      
+      res.json(analysis);
+    } catch (error: any) {
+      console.error('Web client news analysis error:', error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   app.get("/api/guilds/:guildId/stocks", async (req, res) => {
     try {
       const { guildId } = req.params;
