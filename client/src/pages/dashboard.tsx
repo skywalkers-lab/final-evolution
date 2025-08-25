@@ -40,6 +40,12 @@ export default function Dashboard() {
     enabled: !!selectedGuildId,
   });
 
+  const { data: newsAnalyses = [] } = useQuery({
+    queryKey: ['/api/web-client/guilds', selectedGuildId, 'news'],
+    enabled: !!selectedGuildId,
+    select: (data: any) => data || [],
+  });
+
   // WebSocket handler for real-time updates
   useWebSocket((event: string, data: any) => {
     try {
@@ -178,6 +184,73 @@ export default function Dashboard() {
                   ) : (
                     <div className="text-center text-gray-400 py-8">
                       진행중인 경매가 없습니다
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Live News Analysis */}
+          <div className="mb-8">
+            <div className="discord-bg-darker rounded-xl border border-discord-dark">
+              <div className="p-6 border-b border-discord-dark">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-white">실시간 뉴스 분석</h3>
+                  <div className="flex items-center space-x-2">
+                    <i className="fas fa-newspaper text-blue-500"></i>
+                    <span className="text-blue-300 text-sm">AI 감정분석</span>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6">
+                <div className="space-y-4">
+                  {Array.isArray(newsAnalyses) && newsAnalyses.length > 0 ? (
+                    newsAnalyses.slice(0, 3).map((news: any) => (
+                      <div key={news.id} className="bg-discord-dark rounded-lg p-4 border border-discord-light">
+                        <div className="flex items-start justify-between mb-2">
+                          <h4 className="text-white font-medium text-sm leading-tight flex-1 pr-4">
+                            {news.title}
+                          </h4>
+                          <div className="flex items-center space-x-2 flex-shrink-0">
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              news.sentiment === 'positive' ? 'bg-green-900 text-green-300 border border-green-500' :
+                              news.sentiment === 'negative' ? 'bg-red-900 text-red-300 border border-red-500' :
+                              'bg-yellow-900 text-yellow-300 border border-yellow-500'
+                            }`}>
+                              {news.sentiment === 'positive' ? '긍정' : 
+                               news.sentiment === 'negative' ? '부정' : '중립'}
+                            </span>
+                            {news.symbol && (
+                              <span className="bg-discord-darker text-gray-300 px-2 py-1 rounded text-xs">
+                                {news.symbol}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-gray-400 text-sm line-clamp-2 mb-2">
+                          {news.content}
+                        </p>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-500">
+                            {new Date(news.createdAt).toLocaleDateString('ko-KR')} {new Date(news.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span className="text-gray-400">
+                            시장 영향: <span className={`${
+                              Math.abs(Number(news.priceImpact) * 100) >= 5 ? 'text-red-400' :
+                              Math.abs(Number(news.priceImpact) * 100) >= 2 ? 'text-yellow-400' :
+                              'text-gray-400'
+                            }`}>
+                              {Math.abs(Number(news.priceImpact) * 100) >= 5 ? '높음' :
+                               Math.abs(Number(news.priceImpact) * 100) >= 2 ? '중간' : '낮음'}
+                            </span>
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center text-gray-400 py-8">
+                      분석된 뉴스가 없습니다
                     </div>
                   )}
                 </div>

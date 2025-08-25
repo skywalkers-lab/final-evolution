@@ -792,10 +792,15 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
         const date = new Date(candle.timestamp);
         let timeLabel = '';
         
-        // 시간대별 축 레이블 형식 설정 - 실제 집계된 시간 표시
+        // 시간대별 축 레이블 형식 설정 - 한국 시간으로 정확하게 표시
+        const koreaDate = new Date(date.getTime() + (9 * 60 * 60 * 1000)); // UTC+9 (한국시간)
         switch(timeframe) {
           case 'realtime':
-            timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+            timeLabel = koreaDate.toLocaleTimeString('ko-KR', { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              timeZone: 'Asia/Seoul'
+            });
             break;
           case '1m':
           case '3m':
@@ -804,32 +809,58 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
           case '15m':
           case '30m':
             // 분 단위 집계 - 시:분 표시
-            timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+            timeLabel = koreaDate.toLocaleTimeString('ko-KR', { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              timeZone: 'Asia/Seoul'
+            });
             break;
           case '1h':
           case '2h':
           case '4h':
             // 시간 단위 집계 - 시간 표시
-            timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit' }) + ':00';
+            timeLabel = koreaDate.toLocaleTimeString('ko-KR', { 
+              hour: '2-digit',
+              timeZone: 'Asia/Seoul'
+            }) + ':00';
             break;
           case '1d':
             // 일간 집계 - 날짜 표시
-            timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+            timeLabel = koreaDate.toLocaleDateString('ko-KR', { 
+              month: 'short', 
+              day: 'numeric',
+              timeZone: 'Asia/Seoul'
+            });
             break;
           case '7d':
             // 주간 집계 - 주 시작일 표시
-            timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) + ' (주)';
+            timeLabel = koreaDate.toLocaleDateString('ko-KR', { 
+              month: 'short', 
+              day: 'numeric',
+              timeZone: 'Asia/Seoul'
+            }) + ' (주)';
             break;
           case '30d':
             // 월간 집계 - 월 표시
-            timeLabel = date.toLocaleDateString('ko-KR', { year: 'numeric', month: 'short' });
+            timeLabel = koreaDate.toLocaleDateString('ko-KR', { 
+              year: 'numeric', 
+              month: 'short',
+              timeZone: 'Asia/Seoul'
+            });
             break;
           case '365d':
             // 연간 집계 - 연도 표시
-            timeLabel = date.toLocaleDateString('ko-KR', { year: 'numeric' }) + '년';
+            timeLabel = koreaDate.toLocaleDateString('ko-KR', { 
+              year: 'numeric',
+              timeZone: 'Asia/Seoul'
+            }) + '년';
             break;
           default:
-            timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+            timeLabel = koreaDate.toLocaleTimeString('ko-KR', { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              timeZone: 'Asia/Seoul'
+            });
         }
         
         ctx.fillText(timeLabel, x, height - 25); // Leave more space for legend
