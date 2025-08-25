@@ -63,6 +63,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
+  // Session validation middleware for web client APIs  
+  const validateWebClientAuth = (req: any, res: any, next: any) => {
+    const { guildId } = req.params;
+    const session = req.session as any;
+    
+    if (!session?.authenticatedGuilds?.[guildId]) {
+      return res.status(401).json({ message: "인증이 필요합니다." });
+    }
+    
+    // Check if session is still valid (not expired)
+    const authData = session.authenticatedGuilds[guildId];
+    const authenticatedAt = new Date(authData.authenticatedAt);
+    const now = new Date();
+    const hoursDiff = (now.getTime() - authenticatedAt.getTime()) / (1000 * 60 * 60);
+    
+    // Session expires after 24 hours
+    if (hoursDiff > 24) {
+      delete session.authenticatedGuilds[guildId];
+      return res.status(401).json({ message: "세션이 만료되었습니다. 다시 로그인해주세요." });
+    }
+    
+    req.authData = authData;
+    next();
+  };
+
   // Authentication middleware
   const requireAuth = async (req: any, res: any, next: any) => {
     const authHeader = req.headers.authorization;
@@ -935,12 +960,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "비밀번호가 올바르지 않습니다." });
       }
       
-      // Store authentication in session
-      if (req.session) {
-        req.session.authenticatedGuilds = req.session.authenticatedGuilds || {};
-        req.session.authenticatedGuilds[guildId] = {
+      // Store authentication in session with password hash for validation
+      const session = req.session as any;
+      if (session) {
+        session.authenticatedGuilds = session.authenticatedGuilds || {};
+        session.authenticatedGuilds[guildId] = {
           accountId: authenticatedAccount.id,
-          authenticatedAt: new Date().toISOString()
+          authenticatedAt: new Date().toISOString(),
+          passwordHash: password // Store current password for validation
         };
       }
       
@@ -957,6 +984,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Web client auth error:', error);
       res.status(500).json({ message: "인증 중 오류가 발생했습니다." });
     }
+  });
+
+  // Add logout endpoint to clear sessions
+  app.post("/api/web-client/guilds/:guildId/logout", (req, res) => {
+    const { guildId } = req.params;
+    
+    const session = req.session as any;
+    if (session && session.authenticatedGuilds) {
+      delete session.authenticatedGuilds[guildId];
+      console.log(`🚪 User logged out from guild ${guildId}`);
+    }
+    
+    res.json({ success: true });
   });
 
   app.get("/api/web-client/guilds/:guildId/overview", async (req, res) => {

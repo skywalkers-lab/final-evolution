@@ -960,7 +960,7 @@ export class DiscordBot {
 
       await interaction.reply(`✅ 계좌 비밀번호가 성공적으로 변경되었습니다!\n계좌번호: ${account.uniqueCode}\n새 비밀번호로 대시보드에 접속하실 수 있습니다.`);
       
-      // Broadcast password change event
+      // Broadcast password change event to invalidate web sessions
       this.wsManager.broadcast('account_password_changed', {
         guildId,
         userId: user.id,

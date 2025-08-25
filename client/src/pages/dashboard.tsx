@@ -55,38 +55,55 @@ export default function Dashboard() {
       
       switch (event) {
         case 'stock_price_updated':
-      case 'trade_executed':
-      case 'auction_bid':
-      case 'auction_settled':
-      case 'account_created':
-      case 'transfer_completed':
-      case 'tax_collected':
-        refetchOverview();
-        break;
-      case 'stock_created':
-        console.log('Stock created:', data);
-        // Refetch stocks and overview to show the new stock
-        refetchOverview();
-        window.location.reload(); // Reload to update stock list
-        break;
-      case 'stock_deleted':
-        console.log('Stock deleted:', data);
-        // Refetch stocks and overview to remove the deleted stock
-        refetchOverview();
-        window.location.reload(); // Reload to update stock list
-        break;
-      case 'account_deleted':
-        console.log('Account deleted:', data);
-        // Refetch overview to update statistics
-        refetchOverview();
-        break;
-      case 'factory_reset':
-        console.log('Factory reset performed:', data);
-        // Refetch all data after factory reset
-        refetchOverview();
-        window.location.reload(); // Full reload to ensure all components refresh
-        break;
-    }
+        case 'trade_executed':
+        case 'auction_bid':
+        case 'auction_settled':
+        case 'account_created':
+        case 'transfer_completed':
+        case 'tax_collected':
+          refetchOverview();
+          break;
+        case 'stock_created':
+          console.log('Stock created:', data);
+          // Refetch stocks and overview to show the new stock
+          refetchOverview();
+          window.location.reload(); // Reload to update stock list
+          break;
+        case 'stock_deleted':
+          console.log('Stock deleted:', data);
+          // Refetch stocks and overview to remove the deleted stock
+          refetchOverview();
+          window.location.reload(); // Reload to update stock list
+          break;
+        case 'account_deleted':
+          console.log('Account deleted:', data);
+          // Refetch overview to update statistics
+          refetchOverview();
+          break;
+        case 'factory_reset':
+          console.log('Factory reset performed:', data);
+          // Refetch all data after factory reset
+          refetchOverview();
+          window.location.reload(); // Full reload to ensure all components refresh
+          break;
+        case 'account_password_changed':
+          console.log('Account password changed:', data);
+          if (data.guildId === selectedGuildId) {
+            // Password was changed for current guild - force logout and reauthentication
+            fetch(`/api/web-client/guilds/${selectedGuildId}/logout`, {
+              method: "POST",
+              credentials: "include",
+            }).then(() => {
+              // Force re-authentication by reloading page
+              window.location.reload();
+            }).catch(error => {
+              console.error('Logout error:', error);
+              // Still reload to force re-authentication
+              window.location.reload();
+            });
+          }
+          break;
+      }
     } catch (error) {
       console.error('Error handling WebSocket message in Dashboard:', error);
     }
