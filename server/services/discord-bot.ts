@@ -10,6 +10,7 @@ export class DiscordBot {
   private wsManager: WebSocketManager;
   private tradingEngine: TradingEngine;
   private botGuildIds: Set<string> = new Set();
+  private processingNews: Set<string> = new Set(); // 처리 중인 뉴스 중복 방지
 
   constructor(storage: IStorage, wsManager: WebSocketManager, tradingEngine: TradingEngine) {
     this.storage = storage;
@@ -1827,6 +1828,13 @@ export class DiscordBot {
 
     // 말머리가 붙은 제목 생성
     const titleWithCategory = `[${category}] ${title}`;
+    const newsKey = `${guildId}:${titleWithCategory}`;
+
+    // 중복 생성 방지: 처리 중인 뉴스 체크
+    if (this.processingNews.has(newsKey)) {
+      await interaction.reply('⚠️ 동일한 제목의 뉴스가 현재 처리 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
 
     // 중복 생성 방지: 동일한 제목의 뉴스가 최근 5분 내에 있는지 확인
     try {
@@ -1845,6 +1853,9 @@ export class DiscordBot {
     } catch (error) {
       console.error('뉴스 중복 확인 중 오류:', error);
     }
+
+    // 처리 중 상태로 표시
+    this.processingNews.add(newsKey);
 
     try {
       const analysis = await this.storage.analyzeNews(guildId, titleWithCategory, content, symbol, undefined);
@@ -1866,6 +1877,9 @@ export class DiscordBot {
       this.wsManager.broadcast('stock_price_updated', { guildId });
     } catch (error: any) {
       await interaction.reply(`뉴스 분석 실패: ${error.message}`);
+    } finally {
+      // 처리 완료 후 상태 제거
+      this.processingNews.delete(newsKey);
     }
   }
 
