@@ -343,9 +343,9 @@ export class DiscordBot {
                 .setMinValue(0.1)
                 .setMaxValue(10.0)
             )
-            .addAttachmentOption(option =>
+            .addStringOption(option =>
               option.setName('로고')
-                .setDescription('새로운 회사 로고 이미지')
+                .setDescription('새로운 회사 로고 이미지 URL')
                 .setRequired(false)
             )
         ),
@@ -2374,7 +2374,7 @@ export class DiscordBot {
     const symbol = interaction.options.getString('종목코드', true).toUpperCase();
     const newName = interaction.options.getString('회사명');
     const newVolatility = interaction.options.getNumber('변동률');
-    const logoAttachment = interaction.options.getAttachment('로고');
+    const logoUrl = interaction.options.getString('로고');
 
     try {
       const existingStock = await this.storage.getStockBySymbol(guildId, symbol);
@@ -2383,14 +2383,26 @@ export class DiscordBot {
         return;
       }
 
-      // 로고 업로드 처리
-      let logoUrl: string | null | undefined = undefined;
-      if (logoAttachment && logoAttachment.contentType?.startsWith('image/')) {
+      // 로고 URL 검증 및 저장
+      let validatedLogoUrl: string | null | undefined = undefined;
+      if (logoUrl && logoUrl.trim()) {
         try {
-          logoUrl = await this.uploadLogo(logoAttachment.url, guildId, symbol);
-        } catch (logoError) {
-          console.error('Logo upload failed:', logoError);
-          await interaction.reply('⚠️ 로고 업로드에 실패했습니다. 다른 정보는 업데이트됩니다.');
+          // URL 형식 검증
+          new URL(logoUrl.trim());
+          
+          // 이미지 URL인지 확인 (간단한 확장자 검사)
+          const urlPath = logoUrl.toLowerCase();
+          if (urlPath.includes('.jpg') || urlPath.includes('.jpeg') || 
+              urlPath.includes('.png') || urlPath.includes('.gif') || 
+              urlPath.includes('.webp') || urlPath.includes('.svg')) {
+            validatedLogoUrl = logoUrl.trim();
+          } else {
+            await interaction.reply('⚠️ 이미지 URL 형식이 올바르지 않습니다. (.jpg, .png, .gif, .webp, .svg 확장자를 포함해야 합니다)');
+            return;
+          }
+        } catch (urlError) {
+          await interaction.reply('⚠️ 올바른 URL 형식이 아닙니다.');
+          return;
         }
       }
 
@@ -2398,7 +2410,7 @@ export class DiscordBot {
       const updateData: any = {};
       if (newName) updateData.name = newName;
       if (newVolatility) updateData.volatility = newVolatility.toString();
-      if (logoUrl !== undefined) updateData.logoUrl = logoUrl;
+      if (validatedLogoUrl !== undefined) updateData.logoUrl = validatedLogoUrl;
 
       if (Object.keys(updateData).length === 0) {
         await interaction.reply('수정할 내용이 없습니다.');
@@ -2410,7 +2422,7 @@ export class DiscordBot {
       let reply = `✅ 주식 정보가 수정되었습니다!\n종목코드: ${symbol}`;
       if (newName) reply += `\n회사명: ${newName}`;
       if (newVolatility) reply += `\n변동률: ±${newVolatility}%`;
-      if (logoUrl) reply += '\n🖼️ 로고가 업데이트되었습니다.';
+      if (validatedLogoUrl) reply += '\n🖼️ 로고가 업데이트되었습니다.';
       
       await interaction.reply(reply);
       
