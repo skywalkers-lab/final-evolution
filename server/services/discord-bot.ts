@@ -459,6 +459,17 @@ export class DiscordBot {
         .setName('뉴스분석')
         .setDescription('뉴스를 분석하여 주가에 반영합니다 (관리자 전용)')
         .addStringOption(option =>
+          option.setName('카테고리')
+            .setDescription('뉴스 카테고리를 선택하세요')
+            .setRequired(true)
+            .addChoices(
+              { name: '[정치] 정치 뉴스', value: '정치' },
+              { name: '[사회] 사회 뉴스', value: '사회' },
+              { name: '[경제] 경제 뉴스', value: '경제' },
+              { name: '[연예] 연예 뉴스', value: '연예' }
+            )
+        )
+        .addStringOption(option =>
           option.setName('제목')
             .setDescription('뉴스 제목')
             .setRequired(true)
@@ -1724,15 +1735,19 @@ export class DiscordBot {
       return;
     }
 
+    const category = interaction.options.getString('카테고리', true);
     const title = interaction.options.getString('제목', true);
     const content = interaction.options.getString('내용', true);
     const symbol = interaction.options.getString('종목코드')?.toUpperCase() || undefined;
 
+    // 말머리가 붙은 제목 생성
+    const titleWithCategory = `[${category}] ${title}`;
+
     try {
-      const analysis = await this.storage.analyzeNews(guildId, title, content, symbol, undefined);
+      const analysis = await this.storage.analyzeNews(guildId, titleWithCategory, content, symbol, undefined);
       
       let message = `📰 **뉴스 분석 완료**\n\n`;
-      message += `제목: ${title}\n`;
+      message += `제목: ${titleWithCategory}\n`;
       message += `감정: ${analysis.sentiment}\n`;
       message += `스코어: ${Number(analysis.sentimentScore).toFixed(4)}\n`;
       
