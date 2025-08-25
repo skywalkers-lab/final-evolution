@@ -71,6 +71,7 @@ export const accounts = pgTable("accounts", {
   userId: varchar("user_id").notNull().references(() => users.id),
   uniqueCode: varchar("unique_code").notNull(),
   balance: decimal("balance", { precision: 15, scale: 2 }).default("1000000"), // Default 1M won
+  password: text("password").notNull(), // Account password for dashboard access
   frozen: boolean("frozen").default(false),
   tradingSuspended: boolean("trading_suspended").default(false),
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),

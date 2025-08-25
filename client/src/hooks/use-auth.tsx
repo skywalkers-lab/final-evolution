@@ -22,9 +22,11 @@ interface AuthContextType {
   user: User | null;
   guilds: Guild[];
   selectedGuildId: string | null;
+  accountAuthenticated: boolean;
   login: () => void;
   logout: () => void;
   selectGuild: (guildId: string) => void;
+  authenticateAccount: (password: string) => Promise<boolean>;
   isLoading: boolean;
 }
 
@@ -34,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [selectedGuildId, setSelectedGuildId] = useState<string | null>(null);
+  const [accountAuthenticated, setAccountAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [, setLocation] = useLocation();
 
@@ -106,6 +109,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const selectGuild = (guildId: string) => {
     setSelectedGuildId(guildId);
+    setAccountAuthenticated(false); // Reset account auth when switching guilds
+  };
+
+  const authenticateAccount = async (password: string): Promise<boolean> => {
+    if (!selectedGuildId) return false;
+    
+    try {
+      const response = await fetch(`/api/web-client/guilds/${selectedGuildId}/auth`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ password }),
+      });
+
+      if (response.ok) {
+        setAccountAuthenticated(true);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Account authentication error:', error);
+      return false;
+    }
   };
 
   return (
@@ -113,9 +141,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user, 
       guilds, 
       selectedGuildId, 
+      accountAuthenticated,
       login, 
       logout, 
       selectGuild, 
+      authenticateAccount,
       isLoading 
     }}>
       {children}

@@ -83,6 +83,12 @@ export class DiscordBot {
           subcommand
             .setName('계좌개설')
             .setDescription('새 계좌를 개설합니다')
+            .addStringOption(option =>
+              option.setName('비밀번호')
+                .setDescription('대시보드 접근용 계좌 비밀번호 (4자리 이상)')
+                .setRequired(true)
+                .setMinLength(4)
+            )
         )
         .addSubcommand(subcommand =>
           subcommand
@@ -716,6 +722,7 @@ export class DiscordBot {
   }
 
   private async createAccount(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
+    const password = interaction.options.getString('비밀번호', true);
     try {
       // First get or create user
       let user = await this.storage.getUserByDiscordId(userId);
@@ -746,6 +753,7 @@ export class DiscordBot {
         userId: user.id,
         uniqueCode,
         balance: "1000000", // Default 1M won
+        password,
         frozen: false
       });
 

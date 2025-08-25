@@ -719,7 +719,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             guildId,
             userId: user.id,
             uniqueCode: Math.floor(1000 + Math.random() * 9000).toString(),
-            balance: '1000000.00' // 1M won starting balance for demo
+            balance: '1000000.00', // 1M won starting balance for demo
+            password: '1234' // Default password for web-client accounts
           });
         }
         
@@ -902,6 +903,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Web client API - Guild overview
+  // Account password authentication for web dashboard
+  app.post("/api/web-client/guilds/:guildId/auth", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const { password } = req.body;
+      
+      console.log(`Web client auth request for guild: ${guildId}`);
+      
+      if (!password) {
+        return res.status(400).json({ message: "비밀번호가 필요합니다." });
+      }
+      
+      // Get all accounts for this guild
+      const accounts = await storage.getAccountsByGuild(guildId);
+      
+      if (accounts.length === 0) {
+        return res.status(404).json({ message: "이 서버에 등록된 계좌를 찾을 수 없습니다." });
+      }
+      
+      // Check if any account has matching password
+      let authenticatedAccount = null;
+      for (const account of accounts) {
+        if (account.password === password) {
+          authenticatedAccount = account;
+          break;
+        }
+      }
+      
+      if (!authenticatedAccount) {
+        return res.status(401).json({ message: "비밀번호가 올바르지 않습니다." });
+      }
+      
+      // Store authentication in session
+      if (req.session) {
+        req.session.authenticatedGuilds = req.session.authenticatedGuilds || {};
+        req.session.authenticatedGuilds[guildId] = {
+          accountId: authenticatedAccount.id,
+          authenticatedAt: new Date().toISOString()
+        };
+      }
+      
+      console.log(`✅ Account authenticated for guild ${guildId}, account: ${authenticatedAccount.uniqueCode}`);
+      
+      res.json({ 
+        success: true,
+        account: {
+          id: authenticatedAccount.id,
+          uniqueCode: authenticatedAccount.uniqueCode
+        }
+      });
+    } catch (error) {
+      console.error('Web client auth error:', error);
+      res.status(500).json({ message: "인증 중 오류가 발생했습니다." });
+    }
+  });
+
   app.get("/api/web-client/guilds/:guildId/overview", async (req, res) => {
     try {
       const { guildId } = req.params;

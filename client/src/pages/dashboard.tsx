@@ -13,12 +13,14 @@ import RecentActivity from "@/components/dashboard/recent-activity";
 import AuctionCard from "@/components/auctions/auction-card";
 import LimitOrders from "@/components/trading/limit-orders";
 import GuildSelector from "@/components/guild/guild-selector";
+import AccountPasswordPrompt from "@/components/auth/account-password-prompt";
 import ErrorBoundary from "@/components/error-boundary";
 
 export default function Dashboard() {
-  const { user, selectedGuildId, isLoading } = useAuth();
+  const { user, selectedGuildId, accountAuthenticated, isLoading } = useAuth();
   const [, setLocation] = useLocation();
   const [selectedStock, setSelectedStock] = useState<string>('');
+  const [guilds] = useState([{ id: '1284053249057620018', name: 'Demo Server' }]); // Demo guild data
 
   const { data: overview = {}, refetch: refetchOverview } = useQuery({
     queryKey: ['/api/web-client/guilds', selectedGuildId, 'overview'],
@@ -120,6 +122,20 @@ export default function Dashboard() {
   // Show guild selector if no guild is selected
   if (!selectedGuildId) {
     return <GuildSelector />;
+  }
+
+  // Show account password prompt if not authenticated
+  if (!accountAuthenticated) {
+    const selectedGuild = guilds.find(g => g.id === selectedGuildId);
+    return (
+      <AccountPasswordPrompt
+        guildName={selectedGuild?.name}
+        onAuthenticated={() => {
+          // Authentication is handled in the AuthProvider
+          console.log('Account authenticated successfully');
+        }}
+      />
+    );
   }
 
   return (
