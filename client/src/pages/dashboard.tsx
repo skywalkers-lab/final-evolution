@@ -106,9 +106,10 @@ export default function Dashboard() {
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  // Allow access without authentication for demo purposes
+  // if (!user) {
+  //   return null;
+  // }
 
   // Show guild selector if no guild is selected
   if (!selectedGuildId) {
