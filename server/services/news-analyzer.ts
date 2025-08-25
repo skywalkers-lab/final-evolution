@@ -89,10 +89,12 @@ const DAMP_KEYWORDS = [
 export class NewsAnalyzer {
   private storage: IStorage;
   private wsManager: WebSocketManager;
+  private tradingEngine?: any;
 
-  constructor(storage: IStorage, wsManager: WebSocketManager) {
+  constructor(storage: IStorage, wsManager: WebSocketManager, tradingEngine?: any) {
     this.storage = storage;
     this.wsManager = wsManager;
+    this.tradingEngine = tradingEngine;
   }
 
   async analyzeNews(guildId: string, title: string, content: string, symbol?: string, createdBy?: string) {
@@ -152,6 +154,13 @@ export class NewsAnalyzer {
             changePercent: ((newPrice - oldPrice) / oldPrice) * 100,
             reason: 'news_analysis'
           });
+
+          // 뉴스 기반 관성 설정 (3분 지속)
+          if (this.tradingEngine && Math.abs(priceImpact) > 0.005) { // 0.5% 이상 영향 시 관성 생성
+            const momentumDirection = priceImpact > 0 ? 1 : -1;
+            const momentumIntensity = Math.min(Math.abs(priceImpact) * 2, 1); // 영향력의 2배, 최대 1
+            this.tradingEngine.setNewsBasedMomentum(guildId, symbol, momentumDirection, momentumIntensity, 3);
+          }
         }
       }
     } else {
@@ -174,6 +183,13 @@ export class NewsAnalyzer {
             changePercent: ((stockNewPrice - oldPrice) / oldPrice) * 100,
             reason: 'news_analysis'
           });
+
+          // 뉴스 기반 관성 설정 (모든 주식에 적용, 3분 지속)
+          if (this.tradingEngine && Math.abs(priceImpact) > 0.005) { // 0.5% 이상 영향 시 관성 생성
+            const momentumDirection = priceImpact > 0 ? 1 : -1;
+            const momentumIntensity = Math.min(Math.abs(priceImpact) * 2, 1); // 영향력의 2배, 최대 1
+            this.tradingEngine.setNewsBasedMomentum(guildId, stock.symbol, momentumDirection, momentumIntensity, 3);
+          }
         }
       }
     }

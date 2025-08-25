@@ -43,7 +43,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const tradingEngine = new TradingEngine(storage, wsManager);
   const auctionManager = new AuctionManager(storage, wsManager);
   const taxScheduler = new TaxScheduler(storage, wsManager);
-  const newsAnalyzer = new NewsAnalyzer(storage, wsManager);
+  const newsAnalyzer = new NewsAnalyzer(storage, wsManager, tradingEngine);
 
   // Start services
   tradingEngine.start();

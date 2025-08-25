@@ -131,8 +131,18 @@ export class TradingEngine {
     }
   }
 
-  // 주식별 트렌드 기억을 위한 맵
-  private stockTrends: Map<string, { direction: number; strength: number; lastChange: number }> = new Map();
+  // 주식별 트렌드 기억을 위한 맵 (뉴스 기반 관성 포함)
+  private stockTrends: Map<string, { 
+    direction: number; 
+    strength: number; 
+    lastChange: number;
+    newsBasedMomentum?: {
+      direction: number; // 뉴스에 의한 관성 방향 (-1 ~ 1)
+      intensity: number; // 관성 강도 (0 ~ 1)
+      startTime: number; // 관성 시작 시간 (타임스탬프)
+      duration: number;  // 관성 지속 시간 (밀리초, 기본 3분)
+    }
+  }> = new Map();
 
   private async simulateStockPrice(stock: any) {
     try {
@@ -144,9 +154,37 @@ export class TradingEngine {
       const baseVolatility = isBitcoin ? 3.0 : 0.5; // BTC: 3%, 일반주식: 0.5%
       const volatility = Number(stock.volatility || baseVolatility);
       
-      // 1. 트렌드 관성 계산 (이전 방향을 기억)
+      // 1. 뉴스 기반 관성 계산 (뉴스에 의해서만 관성 생성)
       let trend = this.stockTrends.get(stockKey) || { direction: 0, strength: 0, lastChange: 0 };
-      const trendMomentum = trend.direction * trend.strength * (isBitcoin ? 0.4 : 0.3); // BTC는 트렌드가 더 강함
+      let newsMomentum = 0;
+      
+      // 뉴스 기반 관성이 있는지 확인하고 3분 제한 체크
+      if (trend.newsBasedMomentum) {
+        const now = Date.now();
+        const elapsed = now - trend.newsBasedMomentum.startTime;
+        
+        if (elapsed < trend.newsBasedMomentum.duration) {
+          // 관성이 아직 유효한 경우
+          const remainingTime = trend.newsBasedMomentum.duration - elapsed;
+          const timeDecay = remainingTime / trend.newsBasedMomentum.duration; // 시간에 따른 감소
+          
+          // 관성 방향에 요동 추가 (±30% 랜덤 변동으로 자연스러운 움직임)
+          const fluctuation = (Math.random() - 0.5) * 0.6; // -0.3 ~ +0.3
+          const momentumDirection = trend.newsBasedMomentum.direction + fluctuation;
+          
+          newsMomentum = momentumDirection * trend.newsBasedMomentum.intensity * timeDecay * (isBitcoin ? 0.8 : 0.6);
+          
+          console.log(`📈 ${stock.symbol} 뉴스 관성: ${(newsMomentum * 100).toFixed(2)}% (남은시간: ${Math.round(remainingTime / 1000)}초)`);
+        } else {
+          // 관성 시간 만료 - 제거
+          delete trend.newsBasedMomentum;
+          this.stockTrends.set(stockKey, trend);
+          console.log(`⏰ ${stock.symbol} 뉴스 관성 만료`);
+        }
+      }
+      
+      // 기존 트렌드 관성은 뉴스가 없을 때만 약하게 적용
+      const basicTrendMomentum = trend.newsBasedMomentum ? 0 : trend.direction * trend.strength * (isBitcoin ? 0.2 : 0.1);
       
       // 2. 기본 무작위 변동 - 가우시안 분포로 더 현실적으로
       const gaussian = () => {
@@ -178,8 +216,8 @@ export class TradingEngine {
         gamblingBonus = (Math.random() - 0.5) * 0.08; // ±4% 추가 변동
       }
       
-      // 6. 총 변동률 계산 (트렌드 + 기본 + 거래량 + 뉴스 + 도박성)
-      const totalChangePercent = trendMomentum + baseChangePercent + tradeImpact + newsImpact + gamblingBonus;
+      // 6. 총 변동률 계산 (뉴스관성 + 기본트렌드 + 기본변동 + 거래량 + 뉴스즉시 + 도박성)
+      const totalChangePercent = newsMomentum + basicTrendMomentum + baseChangePercent + tradeImpact + newsImpact + gamblingBonus;
       
       // 7. 안전 범위 제한 (비트코인은 더 넓은 범위)
       const maxDailyChange = isBitcoin ? volatility * 2 / 100 : volatility / 100; // BTC: 6%, 일반: 0.5%
@@ -200,9 +238,9 @@ export class TradingEngine {
         var newPrice = Math.max(currentPrice * 0.001, Math.round(currentPrice * (1 + clampedChange)));
       }
       
-      // 8. 트렌드 업데이트 (관성 시스템)
+      // 8. 트렌드 업데이트 (기본 관성 시스템 - 뉴스 관성이 없을 때만)
       const actualChange = (newPrice - currentPrice) / currentPrice;
-      if (Math.abs(actualChange) > 0.001) { // 0.1% 이상 변동이 있을 때만
+      if (Math.abs(actualChange) > 0.001 && !trend.newsBasedMomentum) { // 뉴스 관성이 없을 때만 기본 트렌드 업데이트
         // 트렌드 방향 업데이트 (상승: 1, 하락: -1)
         const newDirection = actualChange > 0 ? 1 : -1;
         
@@ -249,6 +287,23 @@ export class TradingEngine {
     } catch (error) {
       console.error(`Error simulating price for ${stock.symbol}:`, error);
     }
+  }
+
+  // 뉴스 분석에서 호출할 관성 설정 메서드
+  public setNewsBasedMomentum(guildId: string, symbol: string, direction: number, intensity: number, durationMinutes: number = 3) {
+    const stockKey = `${guildId}:${symbol}`;
+    let trend = this.stockTrends.get(stockKey) || { direction: 0, strength: 0, lastChange: 0 };
+    
+    // 뉴스 기반 관성 설정
+    trend.newsBasedMomentum = {
+      direction: Math.max(-1, Math.min(1, direction)), // -1 ~ 1 범위로 제한
+      intensity: Math.max(0, Math.min(1, intensity)),  // 0 ~ 1 범위로 제한
+      startTime: Date.now(),
+      duration: durationMinutes * 60 * 1000 // 분을 밀리초로 변환
+    };
+    
+    this.stockTrends.set(stockKey, trend);
+    console.log(`📰 ${symbol} 뉴스 관성 설정: 방향=${direction > 0 ? '상승' : '하락'}, 강도=${(intensity * 100).toFixed(1)}%, 지속=${durationMinutes}분`);
   }
 
   // 매수/매도 압력에 따른 가격 영향 계산
