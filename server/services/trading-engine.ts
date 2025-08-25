@@ -137,34 +137,54 @@ export class TradingEngine {
   private async simulateStockPrice(stock: any) {
     try {
       const currentPrice = Number(stock.price);
-      const volatility = Number(stock.volatility || 0.5); // 기본 변동률을 0.5%로 낮춤
       const stockKey = `${stock.guildId}:${stock.symbol}`;
+      
+      // 비트코인은 특별히 더 높은 변동성 적용 🎰
+      const isBitcoin = stock.symbol === 'BTC';
+      const baseVolatility = isBitcoin ? 3.0 : 0.5; // BTC: 3%, 일반주식: 0.5%
+      const volatility = Number(stock.volatility || baseVolatility);
       
       // 1. 트렌드 관성 계산 (이전 방향을 기억)
       let trend = this.stockTrends.get(stockKey) || { direction: 0, strength: 0, lastChange: 0 };
-      const trendMomentum = trend.direction * trend.strength * 0.3; // 트렌드 영향력 30%
+      const trendMomentum = trend.direction * trend.strength * (isBitcoin ? 0.4 : 0.3); // BTC는 트렌드가 더 강함
       
-      // 2. 기본 무작위 변동 (작고 현실적인 변동)
+      // 2. 기본 무작위 변동 (비트코인은 더 크게!)
       const baseChangePercent = (Math.random() - 0.5) * 2 * (volatility / 100); // ±변동률%
       
-      // 3. 매수/매도량에 따른 영향 계산 (제한)
-      const tradeImpact = Math.max(-0.002, Math.min(0.002, await this.calculateTradeImpact(stock.guildId, stock.symbol))); // ±0.2% 제한
+      // 3. 매수/매도량에 따른 영향 계산 (비트코인은 더 민감)
+      const tradeImpactLimit = isBitcoin ? 0.01 : 0.002; // BTC: ±1%, 일반: ±0.2%
+      const tradeImpact = Math.max(-tradeImpactLimit, Math.min(tradeImpactLimit, await this.calculateTradeImpact(stock.guildId, stock.symbol)));
       
-      // 4. 뉴스 영향 계산 (제한)
-      const newsImpact = Math.max(-0.003, Math.min(0.003, await this.calculateNewsImpact(stock.guildId, stock.symbol))); // ±0.3% 제한
+      // 4. 뉴스 영향 계산 (비트코인은 뉴스에 더 민감)
+      const newsImpactLimit = isBitcoin ? 0.015 : 0.003; // BTC: ±1.5%, 일반: ±0.3%
+      const newsImpact = Math.max(-newsImpactLimit, Math.min(newsImpactLimit, await this.calculateNewsImpact(stock.guildId, stock.symbol)));
       
-      // 5. 총 변동률 계산 (트렌드 + 기본 + 거래량 + 뉴스)
-      const totalChangePercent = trendMomentum + baseChangePercent + tradeImpact + newsImpact;
+      // 5. 비트코인 도박성 추가 (랜덤 급등/급락) 🎲
+      let gamblingBonus = 0;
+      if (isBitcoin && Math.random() < 0.1) { // 10% 확률로 도박성 발동
+        gamblingBonus = (Math.random() - 0.5) * 0.08; // ±4% 추가 변동
+      }
       
-      // 6. 안전 범위 제한 (매우 보수적으로)
-      const maxDailyChange = volatility / 100; // 예: 0.5% 변동률 → ±0.5% 일일 최대
+      // 6. 총 변동률 계산 (트렌드 + 기본 + 거래량 + 뉴스 + 도박성)
+      const totalChangePercent = trendMomentum + baseChangePercent + tradeImpact + newsImpact + gamblingBonus;
+      
+      // 7. 안전 범위 제한 (비트코인은 더 넓은 범위)
+      const maxDailyChange = isBitcoin ? volatility * 2 / 100 : volatility / 100; // BTC: 6%, 일반: 0.5%
       const safeChangePercent = Math.max(-maxDailyChange, Math.min(maxDailyChange, totalChangePercent));
       
-      // 7. 새 가격 계산 (더 보수적인 제한)
+      // 8. 새 가격 계산 (비트코인은 더 큰 변동 허용)
       const targetPrice = Math.round(currentPrice * (1 + safeChangePercent));
-      const minPrice = Math.max(Math.round(currentPrice * 0.005), Math.round(currentPrice * 0.99)); // 최소 -1%
-      const maxPrice = Math.round(currentPrice * 1.01); // 최대 +1%
-      const newPrice = Math.max(minPrice, Math.min(maxPrice, targetPrice));
+      if (isBitcoin) {
+        // 비트코인: ±5% 까지 허용
+        const minPrice = Math.max(Math.round(currentPrice * 0.01), Math.round(currentPrice * 0.95));
+        const maxPrice = Math.round(currentPrice * 1.05);
+        var newPrice = Math.max(minPrice, Math.min(maxPrice, targetPrice));
+      } else {
+        // 일반 주식: ±1% 까지만
+        const minPrice = Math.max(Math.round(currentPrice * 0.005), Math.round(currentPrice * 0.99));
+        const maxPrice = Math.round(currentPrice * 1.01);
+        var newPrice = Math.max(minPrice, Math.min(maxPrice, targetPrice));
+      }
       
       // 8. 트렌드 업데이트 (관성 시스템)
       const actualChange = (newPrice - currentPrice) / currentPrice;
