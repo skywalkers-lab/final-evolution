@@ -26,7 +26,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
   const [zoomLevel, setZoomLevel] = useState(1); // 1 = 기본, 2 = 2배 확대, 0.5 = 2배 축소
 
   const { data: candlestickData = [] } = useQuery({
-    queryKey: ['/api/web-client/guilds', guildId, 'stocks', symbol, 'candlestick', timeframe],
+    queryKey: [`/api/web-client/guilds/${guildId}/stocks/${symbol}/candlestick/${timeframe}`],
     enabled: !!symbol && !!guildId,
     select: (data: any[]) => data || [],
   });
@@ -49,7 +49,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
         // 실시간 모드에서만 즉시 업데이트
         if (isRealTimeMode) {
           queryClient.invalidateQueries({ 
-            queryKey: ['/api/web-client/guilds', guildId, 'stocks', symbol, 'candlestick', timeframe] 
+            queryKey: [`/api/web-client/guilds/${guildId}/stocks/${symbol}/candlestick/${timeframe}`] 
           });
         }
         
