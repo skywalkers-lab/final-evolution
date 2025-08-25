@@ -37,9 +37,9 @@
   --sidebar-accent-foreground: hsl(203.8863, 88.2845%, 53.1373%);
   --sidebar-border: hsl(205.0000, 25.0000%, 90.5882%);
   --sidebar-ring: hsl(202.8169, 89.1213%, 53.1373%);
-  --font-sans: 'Noto Sans KR', Inter, system-ui, sans-serif;
-  --font-serif: Georgia, serif;
-  --font-mono: Menlo, monospace;
+  --font-sans: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', Inter, system-ui, sans-serif;
+  --font-serif: 'Noto Serif KR', Georgia, serif;
+  --font-mono: 'D2Coding', 'Nanum Gothic Coding', Menlo, monospace;
   --radius: 1.3rem;
 
   /* Discord theme colors */
@@ -86,9 +86,9 @@
   --sidebar-accent-foreground: hsl(235, 85.6%, 64.7%);
   --sidebar-border: hsl(220, 6.5%, 18.0%);
   --sidebar-ring: hsl(235, 85.6%, 64.7%);
-  --font-sans: 'Noto Sans KR', Inter, system-ui, sans-serif;
-  --font-serif: Georgia, serif;
-  --font-mono: Menlo, monospace;
+  --font-sans: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', Inter, system-ui, sans-serif;
+  --font-serif: 'Noto Serif KR', Georgia, serif;
+  --font-mono: 'D2Coding', 'Nanum Gothic Coding', Menlo, monospace;
   --radius: 1.3rem;
 }
 
@@ -101,6 +101,11 @@
     @apply font-sans antialiased;
     background: var(--discord-darkest);
     color: hsl(200, 6.6667%, 91.1765%);
+    font-feature-settings: 'kern' 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    line-height: 1.6;
   }
 
   html {
