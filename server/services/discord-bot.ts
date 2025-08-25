@@ -1760,6 +1760,24 @@ export class DiscordBot {
     // 말머리가 붙은 제목 생성
     const titleWithCategory = `[${category}] ${title}`;
 
+    // 중복 생성 방지: 동일한 제목의 뉴스가 최근 5분 내에 있는지 확인
+    try {
+      const existingNews = await this.storage.getNewsAnalysesByGuild(guildId);
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      
+      const duplicateNews = existingNews.find((news: any) => 
+        news.title === titleWithCategory && 
+        new Date(news.createdAt) > fiveMinutesAgo
+      );
+      
+      if (duplicateNews) {
+        await interaction.reply('⚠️ 동일한 제목의 뉴스가 최근 5분 내에 이미 분석되었습니다.');
+        return;
+      }
+    } catch (error) {
+      console.error('뉴스 중복 확인 중 오류:', error);
+    }
+
     try {
       const analysis = await this.storage.analyzeNews(guildId, titleWithCategory, content, symbol, undefined);
       

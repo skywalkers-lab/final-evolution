@@ -15,13 +15,16 @@ export default function LimitOrders({ guildId }: LimitOrdersProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['/api/web-client/guilds', guildId, 'limit-orders', filter],
     queryFn: async () => {
       const response = await apiRequest('GET', `/api/web-client/guilds/${guildId}/limit-orders?status=${filter === 'all' ? '' : filter}`);
+      console.log('지정가 주문 데이터:', response);
       return Array.isArray(response) ? response : [];
     },
     enabled: !!guildId,
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
   
   const limitOrders = Array.isArray(data) ? data : [];
@@ -106,9 +109,16 @@ export default function LimitOrders({ guildId }: LimitOrdersProps) {
       <div className="p-6">
         {isLoading ? (
           <div className="text-center text-gray-400 py-8">로딩 중...</div>
+        ) : error ? (
+          <div className="text-center text-red-400 py-8">
+            데이터를 불러오는 중 오류가 발생했습니다: {(error as any)?.message || '알 수 없는 오류'}
+          </div>
         ) : limitOrders.length === 0 ? (
           <div className="text-center text-gray-400 py-8">
             {filter === 'pending' ? '대기중인 지정가 주문이 없습니다' : '주문 내역이 없습니다'}
+            <div className="text-xs text-gray-500 mt-2">
+              Discord에서 `/주식 지정가매수` 또는 `/주식 지정가매도` 명령어로 주문을 생성하세요
+            </div>
           </div>
         ) : (
           <div className="space-y-4">

@@ -206,13 +206,13 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
             <table className="w-full">
               <thead>
                 <tr className="text-left text-sm text-gray-400">
-                  <th className="pb-3">종목명</th>
-                  <th className="pb-3">보유량</th>
-                  <th className="pb-3">평균단가</th>
-                  <th className="pb-3">현재가</th>
-                  <th className="pb-3">평가액</th>
-                  <th className="pb-3">손익률</th>
-                  <th className="pb-3">액션</th>
+                  <th className="pb-3 font-medium">종목명</th>
+                  <th className="pb-3 text-right font-medium">보유량</th>
+                  <th className="pb-3 text-right font-medium">평균단가</th>
+                  <th className="pb-3 text-right font-medium">현재가</th>
+                  <th className="pb-3 text-right font-medium">평가액</th>
+                  <th className="pb-3 text-center font-medium">손익률</th>
+                  <th className="pb-3 text-center font-medium">액션</th>
                 </tr>
               </thead>
               <tbody className="text-sm">
@@ -255,23 +255,23 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
                           </div>
                         </div>
                       </td>
-                      <td className="py-4 text-white" data-testid={`text-holding-shares-${index}`}>
+                      <td className="py-4 text-white text-right font-mono" data-testid={`text-holding-shares-${index}`}>
                         {holding.shares.toLocaleString()}주
                       </td>
-                      <td className="py-4 text-green-400 font-semibold" data-testid={`text-holding-avg-price-${index}`}>
+                      <td className="py-4 text-green-400 font-semibold text-right font-mono" data-testid={`text-holding-avg-price-${index}`}>
                         ₩{Number(holding.avgPrice).toLocaleString()}
                       </td>
-                      <td className="py-4 text-white" data-testid={`text-holding-current-price-${index}`}>
+                      <td className="py-4 text-white text-right font-mono" data-testid={`text-holding-current-price-${index}`}>
                         ₩{Number(holding.currentPrice).toLocaleString()}
                       </td>
-                      <td className="py-4 text-white font-medium" data-testid={`text-holding-market-value-${index}`}>
+                      <td className="py-4 text-white font-medium text-right font-mono" data-testid={`text-holding-market-value-${index}`}>
                         ₩{currentValue.toLocaleString()}
                       </td>
-                      <td className="py-4" data-testid={`text-holding-profit-loss-${index}`}>
+                      <td className="py-4 text-center" data-testid={`text-holding-profit-loss-${index}`}>
                         {formatProfitLoss(profitAmount, profitPercent)}
                       </td>
                       <td className="py-4">
-                        <div className="flex space-x-1">
+                        <div className="flex space-x-1 justify-center">
                           <Button 
                             size="sm"
                             className="bg-discord-blue hover:bg-blue-600 text-white px-3 py-1 text-xs disabled:opacity-50"

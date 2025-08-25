@@ -9,7 +9,7 @@ import OverviewCards from "@/components/dashboard/overview-cards";
 import StockChart from "@/components/trading/stock-chart";
 import TradingPanel from "@/components/trading/trading-panel";
 import Portfolio from "@/components/trading/portfolio";
-import RecentActivity from "@/components/dashboard/recent-activity";
+import LatestNews from "@/components/dashboard/latest-news";
 import AuctionCard from "@/components/auctions/auction-card";
 import LimitOrders from "@/components/trading/limit-orders";
 import GuildSelector from "@/components/guild/guild-selector";
@@ -290,7 +290,7 @@ export default function Dashboard() {
             
             <div>
               <ErrorBoundary>
-                <RecentActivity guildId={selectedGuildId || ''} />
+                <LatestNews guildId={selectedGuildId || ''} />
               </ErrorBoundary>
             </div>
           </div>
