@@ -774,7 +774,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      const limitOrder = await tradingEngine.createLimitOrder(guildId, user.id, symbol, type, shares, Number(targetPrice), expiresAt);
+      const limitOrder = await tradingEngine.createLimitOrder(guildId, user.id, symbol, type, shares, Number(targetPrice), expiresAt ? new Date(expiresAt) : undefined);
       res.json(limitOrder);
     } catch (error: any) {
       console.error('Web client limit order error:', error);
