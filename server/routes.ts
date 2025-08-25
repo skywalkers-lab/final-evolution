@@ -651,28 +651,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Found ${accounts.length} accounts for guild ${guildId}:`, accounts.map(acc => ({ id: acc.id, userId: acc.userId, balance: acc.balance })));
       
       if (accounts.length > 0) {
-        // Find account with sufficient balance for buy orders, or any account for sell orders
-        let foundAccount = null;
-        
-        if (type === 'buy') {
-          // For buy orders, find account with sufficient balance
-          const requiredAmount = shares * Number(price);
-          foundAccount = accounts.find(acc => Number(acc.balance) >= requiredAmount + 1);
-          
-          // If no account has sufficient balance, use the account with highest balance
-          if (!foundAccount) {
-            foundAccount = accounts.reduce((prev, current) => 
-              Number(current.balance) > Number(prev.balance) ? current : prev
-            );
-          }
-        } else {
-          // For sell orders, prefer account with specific user ID first, then fallback to first account
-          foundAccount = accounts.find(acc => acc.userId === 'ad895e98-3deb-4220-a8d4-fbdcebfccd3a') || accounts[0];
-        }
+        // 웹 클라이언트용 - 가장 간단한 방법: 잔액이 가장 높은 계좌 사용
+        const foundAccount = accounts.reduce((prev, current) => 
+          Number(current.balance) > Number(prev.balance) ? current : prev
+        );
         
         if (foundAccount) {
           userId = foundAccount.userId;
-          console.log('Selected account:', { id: foundAccount.id, userId: foundAccount.userId, balance: foundAccount.balance });
+          console.log('🎯 Web client selected account:', { 
+            uniqueCode: foundAccount.uniqueCode, 
+            userId: foundAccount.userId, 
+            balance: foundAccount.balance 
+          });
         }
       }
       
