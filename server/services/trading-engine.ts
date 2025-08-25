@@ -183,24 +183,33 @@ export class TradingEngine {
         }
       }
       
-      // 기존 트렌드 관성은 뉴스가 없을 때만 약하게 적용
-      const basicTrendMomentum = trend.newsBasedMomentum ? 0 : trend.direction * trend.strength * (isBitcoin ? 0.2 : 0.1);
+      // 기존 트렌드 관성은 뉴스가 없을 때만 매우 약하게 적용 (균형을 위해 대폭 축소)
+      const basicTrendMomentum = trend.newsBasedMomentum ? 0 : trend.direction * trend.strength * (isBitcoin ? 0.05 : 0.02);
       
-      // 2. 기본 무작위 변동 - 가우시안 분포로 더 현실적으로
+      // 2. 기본 무작위 변동 - 더 강한 랜덤성으로 트렌드 억제
       const gaussian = () => {
         // Box-Muller 변환으로 정규분포 생성
         let u = 0, v = 0;
         while(u === 0) u = Math.random(); // 0 방지
         while(v === 0) v = Math.random();
         const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-        return z * 0.3; // 표준편차 조정 (더 작은 변동이 자주, 큰 변동은 드물게)
+        return z * (isBitcoin ? 0.8 : 0.3); // 비트코인은 더 큰 랜덤성
       };
       
       const marketHour = new Date().getHours();
       const isMarketOpen = marketHour >= 9 && marketHour <= 15; // 9시-15시 활발
       const marketMultiplier = isMarketOpen ? 1.2 : 0.6; // 시장 시간에 따른 변동성 조절
       
-      const baseChangePercent = gaussian() * (volatility / 100) * marketMultiplier;
+      // 비트코인에 강제 랜덤성 추가로 트렌드 억제
+      let baseChangePercent = gaussian() * (volatility / 100) * marketMultiplier;
+      if (isBitcoin) {
+        // 50% 확률로 방향 강제 변경 (트렌드 억제)
+        if (Math.random() < 0.5) {
+          baseChangePercent *= -1;
+        }
+        // 추가 랜덤 요소 (±1%)
+        baseChangePercent += (Math.random() - 0.5) * 0.02;
+      }
       
       // 3. 매수/매도량에 따른 영향 계산 (비트코인은 더 민감)
       const tradeImpactLimit = isBitcoin ? 0.01 : 0.002; // BTC: ±1%, 일반: ±0.2%
@@ -210,14 +219,26 @@ export class TradingEngine {
       const newsImpactLimit = isBitcoin ? 0.015 : 0.003; // BTC: ±1.5%, 일반: ±0.3%
       const newsImpact = Math.max(-newsImpactLimit, Math.min(newsImpactLimit, await this.calculateNewsImpact(stock.guildId, stock.symbol)));
       
-      // 5. 비트코인 도박성 추가 (랜덤 급등/급락) 🎲
+      // 5. 비트코인 도박성 추가 (랜덤 급등/급락) 🎲 - 더 균형적으로 조정
       let gamblingBonus = 0;
-      if (isBitcoin && Math.random() < 0.1) { // 10% 확률로 도박성 발동
-        gamblingBonus = (Math.random() - 0.5) * 0.08; // ±4% 추가 변동
+      if (isBitcoin && Math.random() < 0.15) { // 15% 확률로 도박성 발동
+        gamblingBonus = (Math.random() - 0.5) * 0.06; // ±3% 추가 변동으로 축소
       }
       
       // 6. 총 변동률 계산 (뉴스관성 + 기본트렌드 + 기본변동 + 거래량 + 뉴스즉시 + 도박성)
       const totalChangePercent = newsMomentum + basicTrendMomentum + baseChangePercent + tradeImpact + newsImpact + gamblingBonus;
+      
+      // 비트코인 디버깅 정보 추가
+      if (isBitcoin) {
+        console.log(`🔍 BTC 계산 디버깅:
+          뉴스관성: ${(newsMomentum * 100).toFixed(3)}%
+          기본트렌드: ${(basicTrendMomentum * 100).toFixed(3)}%
+          기본변동: ${(baseChangePercent * 100).toFixed(3)}%
+          거래영향: ${(tradeImpact * 100).toFixed(3)}%
+          뉴스즉시: ${(newsImpact * 100).toFixed(3)}%
+          도박보너스: ${(gamblingBonus * 100).toFixed(3)}%
+          총변동률: ${(totalChangePercent * 100).toFixed(3)}%`);
+      }
       
       // 7. 안전 범위 제한 (비트코인은 더 넓은 범위)
       const maxDailyChange = isBitcoin ? volatility * 2 / 100 : volatility / 100; // BTC: 6%, 일반: 0.5%
@@ -227,10 +248,9 @@ export class TradingEngine {
       const targetPrice = currentPrice * (1 + safeChangePercent);
       
       if (isBitcoin) {
-        // 비트코인: 더 큰 변동성, 더 정밀한 가격
-        const dailyLimit = Math.abs(safeChangePercent) > 0.08 ? 0.08 : Math.abs(safeChangePercent); // 일일 최대 8%
-        const actualChange = safeChangePercent > 0 ? dailyLimit : -dailyLimit;
-        var newPrice = Math.max(1, Math.round(currentPrice * (1 + actualChange) * 100) / 100); // 소수점 2자리
+        // 비트코인: 더 큰 변동성, 더 정밀한 가격 (상승/하락 균형 맞춤)
+        const clampedChange = Math.max(-0.08, Math.min(0.08, safeChangePercent)); // ±8% 제한
+        var newPrice = Math.max(1, Math.round(currentPrice * (1 + clampedChange) * 100) / 100); // 소수점 2자리
       } else {
         // 일반 주식: 더 세밀한 변동, 0.01%~3% 범위
         const maxChange = Math.min(0.03, volatility / 100); // 최대 3% 또는 설정된 변동성
@@ -244,14 +264,20 @@ export class TradingEngine {
         // 트렌드 방향 업데이트 (상승: 1, 하락: -1)
         const newDirection = actualChange > 0 ? 1 : -1;
         
-        // 같은 방향이면 강도 증가, 다른 방향이면 강도 감소
-        if (trend.direction === newDirection) {
-          trend.strength = Math.min(1.0, trend.strength + 0.1); // 최대 1.0
+        // 비트코인은 트렌드 형성을 더 어렵게 (억제)
+        if (isBitcoin && Math.random() < 0.7) {
+          // 70% 확률로 트렌드 강도를 감소시켜 관성 억제
+          trend.strength = Math.max(0.0, trend.strength - 0.1);
         } else {
-          trend.strength = Math.max(0.0, trend.strength - 0.2); // 최소 0.0
-          if (trend.strength === 0) {
-            trend.direction = newDirection; // 방향 전환
-            trend.strength = 0.1;
+          // 같은 방향이면 강도 증가, 다른 방향이면 강도 감소 (더 약하게 조정)
+          if (trend.direction === newDirection) {
+            trend.strength = Math.min(0.3, trend.strength + 0.03); // 비트코인은 최대 0.3
+          } else {
+            trend.strength = Math.max(0.0, trend.strength - 0.4); // 더 빠르게 감소
+            if (trend.strength === 0) {
+              trend.direction = newDirection; // 방향 전환
+              trend.strength = 0.03; // 시작 강도도 축소
+            }
           }
         }
         
