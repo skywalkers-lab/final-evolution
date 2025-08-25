@@ -88,9 +88,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Discord OAuth routes
   app.get("/auth/discord", (req, res) => {
     const clientId = process.env.DISCORD_CLIENT_ID;
-    // Use proper domain for Replit environment
-    const domain = process.env.REPLIT_DOMAINS || `${process.env.REPL_SLUG}.${process.env.REPL_OWNER || 'dev'}.replit.app`;
-    const redirectUri = `https://${domain}/auth/discord/callback`;
+    // Use the actual host from the request to ensure correct redirect URI
+    const host = req.get('host');
+    const redirectUri = `https://${host}/auth/discord/callback`;
     const scopes = "identify guilds";
     
     console.log('Discord OAuth redirect URI:', redirectUri);
@@ -110,9 +110,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const clientId = process.env.DISCORD_CLIENT_ID;
       const clientSecret = process.env.DISCORD_CLIENT_SECRET;
-      // Use REPLIT_DOMAINS environment variable for correct redirect URI
-      const domain = process.env.REPLIT_DOMAINS || req.get('host');
-      const redirectUri = `https://${domain}/auth/discord/callback`;
+      // Use the actual host from the request to ensure correct redirect URI
+      const host = req.get('host');
+      const redirectUri = `https://${host}/auth/discord/callback`;
 
       // Exchange code for token
       const tokenResponse = await axios.post('https://discord.com/api/oauth2/token', {
