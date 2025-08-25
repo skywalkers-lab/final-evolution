@@ -119,6 +119,23 @@ export class DiscordBot {
                 .setDescription('송금 메모')
                 .setRequired(false)
             )
+        )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('비밀번호수정')
+            .setDescription('계좌 비밀번호를 변경합니다')
+            .addStringOption(option =>
+              option.setName('기존비밀번호')
+                .setDescription('현재 계좌 비밀번호')
+                .setRequired(true)
+                .setMinLength(4)
+            )
+            .addStringOption(option =>
+              option.setName('새비밀번호')
+                .setDescription('새로운 계좌 비밀번호 (4자리 이상)')
+                .setRequired(true)
+                .setMinLength(4)
+            )
         ),
 
       // Stock commands
@@ -718,6 +735,9 @@ export class DiscordBot {
       case '이체':
         await this.transferMoney(interaction, guildId, userId);
         break;
+      case '비밀번호수정':
+        await this.changeAccountPassword(interaction, guildId, userId);
+        break;
     }
   }
 
@@ -902,6 +922,54 @@ export class DiscordBot {
       });
     } catch (error: any) {
       await interaction.reply(`송금 실패: ${error.message}`);
+    }
+  }
+
+  private async changeAccountPassword(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
+    const currentPassword = interaction.options.getString('기존비밀번호', true);
+    const newPassword = interaction.options.getString('새비밀번호', true);
+
+    if (currentPassword === newPassword) {
+      await interaction.reply('새 비밀번호는 기존 비밀번호와 달라야 합니다.');
+      return;
+    }
+
+    try {
+      // Get user by Discord ID
+      const user = await this.storage.getUserByDiscordId(userId);
+      if (!user) {
+        await interaction.reply('계좌를 찾을 수 없습니다. /은행 계좌개설 명령으로 계좌를 먼저 개설해주세요.');
+        return;
+      }
+
+      // Get account using database user ID
+      const account = await this.storage.getAccountByUser(guildId, user.id);
+      if (!account) {
+        await interaction.reply('계좌를 찾을 수 없습니다. /은행 계좌개설 명령으로 계좌를 먼저 개설해주세요.');
+        return;
+      }
+
+      // Verify current password
+      if (account.password !== currentPassword) {
+        await interaction.reply('❌ 기존 비밀번호가 일치하지 않습니다.');
+        return;
+      }
+
+      // Update password
+      await this.storage.updateAccountPassword(guildId, user.id, newPassword);
+
+      await interaction.reply(`✅ 계좌 비밀번호가 성공적으로 변경되었습니다!\n계좌번호: ${account.uniqueCode}\n새 비밀번호로 대시보드에 접속하실 수 있습니다.`);
+      
+      // Broadcast password change event
+      this.wsManager.broadcast('account_password_changed', {
+        guildId,
+        userId: user.id,
+        accountCode: account.uniqueCode,
+        username: user.username,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      await interaction.reply(`비밀번호 변경 실패: ${error.message}`);
     }
   }
 

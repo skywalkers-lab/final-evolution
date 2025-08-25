@@ -203,6 +203,12 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(accounts.guildId, guildId), eq(accounts.userId, userId)));
   }
 
+  async updateAccountPassword(guildId: string, userId: string, newPassword: string): Promise<void> {
+    await db.update(accounts)
+      .set({ password: newPassword })
+      .where(and(eq(accounts.guildId, guildId), eq(accounts.userId, userId)));
+  }
+
   async resetAllAccounts(guildId: string): Promise<void> {
     await db.transaction(async (tx) => {
       // Delete all related data first (due to foreign keys)
