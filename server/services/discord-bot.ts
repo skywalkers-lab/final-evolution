@@ -1730,7 +1730,9 @@ export class DiscordBot {
 
   private async handleNewsAnalysisCommand(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
     const isAdmin = await this.isAdmin(guildId, userId);
-    if (!isAdmin) {
+    const isSpecialNewsUser = userId === '1207119635124592650'; // 뉴스분석 전용 권한
+    
+    if (!isAdmin && !isSpecialNewsUser) {
       await interaction.reply('이 명령은 관리자만 사용할 수 있습니다.');
       return;
     }
