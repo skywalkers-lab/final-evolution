@@ -203,15 +203,21 @@ export class TradingEngine {
       // 모든 주식에 강한 랜덤성 적용 (실제 주식처럼)
       let baseChangePercent = gaussian() * (volatility / 100) * marketMultiplier;
       
-      // 모든 주식에 추가 랜덤 요소와 방향 변경 확률 적용
-      if (Math.random() < 0.4) {
-        // 40% 확률로 방향 강제 변경 (트렌드 억제)
-        baseChangePercent *= -1;
+      // 완전히 무작위적인 방향 결정 (50% 상승, 50% 하락)
+      if (Math.random() < 0.5) {
+        // 50% 확률로 방향 강제 변경 (완전한 균형)
+        baseChangePercent = Math.abs(baseChangePercent) * -1; // 하락으로 변경
+      } else {
+        baseChangePercent = Math.abs(baseChangePercent); // 상승으로 변경
       }
       
-      // 추가 랜덤 노이즈 (주식별로 다르게)
-      const randomNoise = (Math.random() - 0.5) * (isBitcoin ? 0.015 : 0.008); // BTC: ±1.5%, 일반: ±0.8%
-      baseChangePercent += randomNoise;
+      // 추가 강한 랜덤 노이즈 (더 극적인 변동)
+      const strongNoise = (Math.random() - 0.5) * (isBitcoin ? 0.025 : 0.015); // BTC: ±2.5%, 일반: ±1.5%
+      baseChangePercent += strongNoise;
+      
+      // 완전히 무작위적인 추가 변동 요소
+      const pureRandomChange = (Math.random() - 0.5) * (isBitcoin ? 0.02 : 0.01); // BTC: ±2%, 일반: ±1%
+      baseChangePercent += pureRandomChange;
       
       // 3. 매수/매도량에 따른 영향 계산 (더 강한 영향력으로 조정)
       const tradeImpactLimit = isBitcoin ? 0.02 : 0.008; // BTC: ±2%, 일반: ±0.8%로 증가
