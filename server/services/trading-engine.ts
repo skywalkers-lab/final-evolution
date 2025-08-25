@@ -219,6 +219,27 @@ export class TradingEngine {
       const pureRandomChange = (Math.random() - 0.5) * (isBitcoin ? 0.02 : 0.01); // BTC: ±2%, 일반: ±1%
       baseChangePercent += pureRandomChange;
       
+      // 💡 비트코인 가격 안정성 보장: 극단적 변동 방지
+      if (isBitcoin) {
+        const currentPrice = Number(stock.price);
+        const targetPrice = 2000000; // 200만원 기준
+        
+        // 현재 가격이 500만원 이상이면 강제로 200만원으로 리셋
+        if (currentPrice >= 5000000) {
+          console.log(`🚨 비트코인 가격 강제 리셋: ${currentPrice.toLocaleString()}원 → 2,000,000원`);
+          // 직접 가격을 200만원으로 설정하고 변동 없음으로 처리
+          baseChangePercent = (targetPrice - currentPrice) / currentPrice; // 즉시 200만원으로
+        }
+        // 300만원 이상이면 강제 하락
+        else if (currentPrice > 3000000) {
+          baseChangePercent = -Math.abs(baseChangePercent) * 5; // 더 강력한 하락
+        }
+        // 100만원 이하면 강제 상승  
+        else if (currentPrice < 1000000) {
+          baseChangePercent = Math.abs(baseChangePercent) * 3; // 강력한 상승
+        }
+      }
+      
       // 3. 매수/매도량에 따른 영향 계산 (더 강한 영향력으로 조정)
       const tradeImpactLimit = isBitcoin ? 0.02 : 0.008; // BTC: ±2%, 일반: ±0.8%로 증가
       const tradeImpact = Math.max(-tradeImpactLimit, Math.min(tradeImpactLimit, await this.calculateTradeImpact(stock.guildId, stock.symbol)));
