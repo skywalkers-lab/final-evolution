@@ -708,6 +708,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "사용자 계정을 찾을 수 없습니다" });
       }
       
+      console.log('About to execute trade with:', { guildId, userId, symbol, type, shares, price });
+      
+      // Double-check account exists before trading
+      const verifyAccount = await storage.getAccountByUser(guildId, userId);
+      console.log('Account verification:', verifyAccount ? { id: verifyAccount.id, balance: verifyAccount.balance } : 'null');
+      
+      if (!verifyAccount) {
+        console.error('Account verification failed - account not found for userId:', userId);
+        return res.status(400).json({ message: "선택된 계좌를 찾을 수 없습니다. 계좌를 다시 확인해주세요." });
+      }
+      
       const result = await tradingEngine.executeTrade(guildId, userId, symbol, type, shares, Number(price));
       console.log('Trade executed successfully:', result);
       res.json(result);
