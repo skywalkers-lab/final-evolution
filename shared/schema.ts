@@ -75,7 +75,10 @@ export const accounts = pgTable("accounts", {
   frozen: boolean("frozen").default(false),
   tradingSuspended: boolean("trading_suspended").default(false),
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
-});
+}, (table) => ({
+  // 길드별 사용자당 계좌 하나만 허용 (중복 계좌 방지)
+  uniqueGuildUser: unique('unique_guild_user_account').on(table.guildId, table.userId)
+}));
 
 // Transactions
 export const transactions = pgTable("transactions", {

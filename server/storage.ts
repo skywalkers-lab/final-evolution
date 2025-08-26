@@ -21,6 +21,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByDiscordId(discordId: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(userId: string, updateData: Partial<InsertUser>): Promise<void>;
   getUsersByGuild(guildId: string): Promise<User[]>;
 
   // Account management
@@ -160,6 +161,12 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async updateUser(userId: string, updateData: Partial<InsertUser>): Promise<void> {
+    await db.update(users)
+      .set(updateData)
+      .where(eq(users.id, userId));
+  }
+
   // Account methods
   async getAccount(id: string): Promise<Account | undefined> {
     const [account] = await db.select().from(accounts).where(eq(accounts.id, id));
@@ -167,9 +174,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAccountByUser(guildId: string, userId: string): Promise<Account | undefined> {
-    const [account] = await db.select().from(accounts)
+    const accountsForUser = await db.select().from(accounts)
       .where(and(eq(accounts.guildId, guildId), eq(accounts.userId, userId)));
-    return account || undefined;
+    
+    // 중복 계좌 감지 및 경고
+    if (accountsForUser.length > 1) {
+      console.warn(`⚠️ 중복 계좌 감지: 사용자 ${userId}가 길드 ${guildId}에서 ${accountsForUser.length}개의 계좌를 가지고 있습니다.`);
+      console.warn('계좌 목록:', accountsForUser.map(acc => ({ id: acc.id, uniqueCode: acc.uniqueCode, balance: acc.balance })));
+      
+      // 잔액이 가장 높은 계좌를 반환 (또는 생성 시간이 가장 늦은 계좌)
+      const primaryAccount = accountsForUser.reduce((prev, current) => {
+        const prevBalance = Number(prev.balance);
+        const currentBalance = Number(current.balance);
+        
+        if (prevBalance === currentBalance) {
+          // 잔액이 같으면 최근에 생성된 계좌 선택
+          return new Date(prev.createdAt) > new Date(current.createdAt) ? prev : current;
+        }
+        
+        return prevBalance > currentBalance ? prev : current;
+      });
+      
+      console.warn(`📌 주 계좌로 선택됨: ${primaryAccount.uniqueCode} (잔액: ${primaryAccount.balance})`);
+      return primaryAccount;
+    }
+    
+    return accountsForUser[0] || undefined;
   }
 
   async getAccountByUniqueCode(guildId: string, uniqueCode: string): Promise<Account | undefined> {

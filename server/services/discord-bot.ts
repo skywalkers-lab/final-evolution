@@ -755,12 +755,28 @@ export class DiscordBot {
           discriminator: discordUser.discriminator || '0000',
           avatar: discordUser.avatar
         });
+      } else {
+        // 기존 사용자 정보 업데이트 (닉네임 변경 등 반영)
+        try {
+          const discordUser = await interaction.client.users.fetch(userId);
+          if (user.username !== discordUser.username) {
+            console.log(`🔄 사용자 정보 업데이트: ${user.username} → ${discordUser.username}`);
+            await this.storage.updateUser(user.id, {
+              username: discordUser.username,
+              discriminator: discordUser.discriminator || '0000',
+              avatar: discordUser.avatar
+            });
+            user.username = discordUser.username;
+          }
+        } catch (updateError) {
+          console.warn('사용자 정보 업데이트 실패:', updateError);
+        }
       }
 
       // Check if account already exists using database user ID
       const existingAccount = await this.storage.getAccountByUser(guildId, user.id);
       if (existingAccount) {
-        await interaction.reply(`🚫 이미 계좌가 개설되어 있습니다.\n계좌번호: ${existingAccount.uniqueCode}\n현재 잔액: ₩${Number(existingAccount.balance).toLocaleString()}`);
+        await interaction.reply(`🚫 이미 계좌가 개설되어 있습니다.\n계좌번호: ${existingAccount.uniqueCode}\n현재 잔액: ₩${Number(existingAccount.balance).toLocaleString()}\n\n💡 계좌 정보가 업데이트되었습니다.`);
         return;
       }
 
