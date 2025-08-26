@@ -67,17 +67,18 @@ export default function Sidebar() {
       {/* Bank of Korea Header */}
       <div className="p-6 border-b border-discord-dark">
         <div className="flex items-center space-x-3 mb-4">
-          <div className="w-12 h-12 rounded-full flex items-center justify-center border-2 border-yellow-400 overflow-hidden bg-white">
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-full">
-              <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center">
-                <div className="w-5 h-5 bg-red-600 rounded-full border border-blue-600" style={{
-                  background: 'radial-gradient(circle, #e53e3e 50%, #3182ce 50%)'
-                }}></div>
-              </div>
-            </div>
+          <div className="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden">
+            <img 
+              src="https://i.imgur.com/3ZYO13u.png" 
+              alt="한국은행 로고" 
+              className="w-full h-full object-contain"
+            />
           </div>
           <div className="flex-1">
-            <h2 className="font-bold text-white text-lg leading-tight">한국은행 종합서비스센터</h2>
+            <h2 className="font-bold text-white text-lg leading-tight">
+              한국은행<br />
+              종합서비스 센터
+            </h2>
             <p className="text-xs text-yellow-300 font-medium">Bank of Korea Service Center</p>
           </div>
         </div>
