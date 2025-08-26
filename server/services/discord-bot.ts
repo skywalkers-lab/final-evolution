@@ -1436,6 +1436,33 @@ export class DiscordBot {
     }
   }
 
+  private async hasBroadcasterRole(guildId: string, userId: string): Promise<boolean> {
+    console.log(`[BROADCASTER CHECK] Checking broadcaster role for user ID: ${userId}`);
+    
+    try {
+      const guild = await this.client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId);
+      
+      // 방송국 역할을 찾아서 확인
+      const broadcasterRole = guild.roles.cache.find(role => 
+        role.name === '방송국' || 
+        role.name.toLowerCase() === 'broadcaster' ||
+        role.name.toLowerCase() === '방송국'
+      );
+      
+      if (broadcasterRole && member.roles.cache.has(broadcasterRole.id)) {
+        console.log('[BROADCASTER CHECK] ✅ User has broadcaster role');
+        return true;
+      }
+      
+      console.log('[BROADCASTER CHECK] ❌ User does not have broadcaster role');
+      return false;
+    } catch (error) {
+      console.log('[BROADCASTER CHECK] ❌ Error checking broadcaster role:', error);
+      return false;
+    }
+  }
+
   private async isAdmin(guildId: string, userId: string): Promise<boolean> {
     console.log(`[ADMIN CHECK] Checking admin for user ID: ${userId}`);
     
@@ -1829,11 +1856,10 @@ export class DiscordBot {
   }
 
   private async handleNewsAnalysisCommand(interaction: ChatInputCommandInteraction, guildId: string, userId: string) {
-    const isAdmin = await this.isAdmin(guildId, userId);
-    const isSpecialNewsUser = userId === '1207119635124592650'; // 뉴스분석 전용 권한
+    const hasBroadcasterRole = await this.hasBroadcasterRole(guildId, userId);
     
-    if (!isAdmin && !isSpecialNewsUser) {
-      await interaction.reply('이 명령은 관리자만 사용할 수 있습니다.');
+    if (!hasBroadcasterRole) {
+      await interaction.reply('이 명령은 방송국 역할을 가진 사용자만 사용할 수 있습니다.');
       return;
     }
 
