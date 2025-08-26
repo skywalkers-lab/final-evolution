@@ -480,14 +480,8 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       const price = adjustedMaxPrice - (adjustedPriceRange * i / 8);
       const y = padding + (chartHeight * i / 8) + 4;
       
-      let priceText;
-      if (price >= 10000) {
-        priceText = `₩${Math.round(price).toLocaleString()}`;
-      } else if (price >= 1000) {
-        priceText = `₩${price.toFixed(0)}`;
-      } else {
-        priceText = `₩${price.toFixed(1)}`;
-      }
+      // 한국식 통화 표시 사용
+      const priceText = formatKoreanCurrency(price);
       
       ctx.fillText(priceText, padding - 5, y);
     }
@@ -513,7 +507,11 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
         
         switch(timeframe) {
           case 'realtime':
-            timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+            timeLabel = date.toLocaleTimeString('ko-KR', { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              timeZone: 'Asia/Seoul'
+            });
             break;
           case '1m':
           case '3m':
@@ -521,18 +519,48 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
           case '10m':
           case '15m':
           case '30m':
-            timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+            timeLabel = date.toLocaleTimeString('ko-KR', { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              timeZone: 'Asia/Seoul'
+            });
             break;
           case '1h':
           case '2h':
           case '4h':
-            timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit' }) + ':00';
+            timeLabel = date.toLocaleTimeString('ko-KR', { 
+              hour: '2-digit',
+              timeZone: 'Asia/Seoul' 
+            }) + ':00';
             break;
           case '1d':
-            timeLabel = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+            timeLabel = date.toLocaleDateString('ko-KR', { 
+              month: 'short', 
+              day: 'numeric',
+              timeZone: 'Asia/Seoul'
+            });
+            break;
+          case '7d':
+            timeLabel = date.toLocaleDateString('ko-KR', { 
+              month: 'numeric', 
+              day: 'numeric',
+              timeZone: 'Asia/Seoul'
+            }) + '일';
+            break;
+          case '30d':
+          case '365d':
+            timeLabel = date.toLocaleDateString('ko-KR', { 
+              year: '2-digit',
+              month: 'numeric',
+              timeZone: 'Asia/Seoul'
+            }) + '월';
             break;
           default:
-            timeLabel = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+            timeLabel = date.toLocaleTimeString('ko-KR', { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              timeZone: 'Asia/Seoul'
+            });
         }
         
         ctx.fillText(timeLabel, x, height - 25);

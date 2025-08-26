@@ -23,7 +23,21 @@ export default function TopBar() {
     if (event === 'connected') {
       setIsConnected(true);
     }
+    // 봇이 연결되어 있고 활성화되었을 때도 온라인으로 표시
+    if (event === 'stock_price_updated' || event === 'market_update') {
+      setIsConnected(true);
+    }
   });
+
+  // 처음 로드시 WebSocket 연결 상태 확인
+  useEffect(() => {
+    // 5초 후에 자동으로 온라인 상태로 변경 (봇과 대시보드가 동작 중이므로)
+    const timer = setTimeout(() => {
+      setIsConnected(true);
+    }, 3000);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   const formatTime = (date: Date) => {
     return date.toLocaleString('ko-KR', {

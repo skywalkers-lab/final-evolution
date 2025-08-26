@@ -75,11 +75,11 @@ export default function Sidebar() {
             />
           </div>
           <div className="flex-1">
-            <h2 className="font-bold text-white text-lg leading-tight">
+            <h2 className="font-bold text-white text-lg leading-tight" style={{ fontFamily: 'Noto Sans KR, Malgun Gothic, Apple SD Gothic Neo, sans-serif' }}>
               한국은행<br />
               종합서비스 센터
             </h2>
-            <p className="text-xs text-yellow-300 font-medium">Bank of Korea Service Center</p>
+            <p className="text-xs text-yellow-300 font-medium" style={{ fontFamily: 'Noto Sans KR, Malgun Gothic, Apple SD Gothic Neo, sans-serif' }}>Bank of Korea Service Center</p>
           </div>
         </div>
         
