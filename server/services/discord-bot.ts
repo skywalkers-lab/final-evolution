@@ -504,6 +504,16 @@ export class DiscordBot {
             .setRequired(true)
         )
         .addStringOption(option =>
+          option.setName('방송사')
+            .setDescription('방송사 이름 (예: KBS, MBC, SBS)')
+            .setRequired(true)
+        )
+        .addStringOption(option =>
+          option.setName('기자')
+            .setDescription('기자 이름')
+            .setRequired(true)
+        )
+        .addStringOption(option =>
           option.setName('종목코드')
             .setDescription('영향받을 종목코드 (선택)')
             .setRequired(false)
@@ -1867,6 +1877,8 @@ export class DiscordBot {
     const category = interaction.options.getString('카테고리', true);
     const title = interaction.options.getString('제목', true);
     const content = interaction.options.getString('내용', true);
+    const broadcaster = interaction.options.getString('방송사', true);
+    const reporter = interaction.options.getString('기자', true);
     const symbol = interaction.options.getString('종목코드')?.toUpperCase() || undefined;
 
     // 말머리가 붙은 제목 생성
@@ -1901,10 +1913,12 @@ export class DiscordBot {
     this.processingNews.add(newsKey);
 
     try {
-      const analysis = await this.storage.analyzeNews(guildId, titleWithCategory, content, symbol, undefined);
+      const analysis = await this.storage.analyzeNews(guildId, titleWithCategory, content, symbol, undefined, broadcaster, reporter);
       
       let message = `📰 **뉴스 분석 완료**\n\n`;
       message += `제목: ${titleWithCategory}\n`;
+      message += `방송사: ${broadcaster}\n`;
+      message += `기자: ${reporter}\n`;
       message += `감정: ${analysis.sentiment}\n`;
       message += `스코어: ${Number(analysis.sentimentScore).toFixed(4)}\n`;
       

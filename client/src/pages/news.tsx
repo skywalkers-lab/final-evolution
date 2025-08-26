@@ -318,6 +318,22 @@ export default function NewsPage() {
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <CardTitle className="text-white text-lg mb-2">{news.title}</CardTitle>
+                          {(news.broadcaster || news.reporter) && (
+                            <div className="flex items-center space-x-3 mb-2 text-sm text-gray-400">
+                              {news.broadcaster && (
+                                <div className="flex items-center space-x-1">
+                                  <i className="fas fa-broadcast-tower text-xs"></i>
+                                  <span>{news.broadcaster}</span>
+                                </div>
+                              )}
+                              {news.reporter && (
+                                <div className="flex items-center space-x-1">
+                                  <i className="fas fa-user-tie text-xs"></i>
+                                  <span>{news.reporter}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <CardDescription className="text-gray-300 line-clamp-3">
                             {news.content}
                           </CardDescription>

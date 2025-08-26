@@ -153,6 +153,8 @@ export const newsAnalyses = pgTable("news_analyses", {
   symbol: varchar("symbol"),
   title: text("title").notNull(),
   content: text("content").notNull(),
+  broadcaster: text("broadcaster"), // 방송사 이름
+  reporter: text("reporter"), // 기자 이름
   sentiment: text("sentiment"), // 'positive', 'negative', 'neutral'
   sentimentScore: decimal("sentiment_score", { precision: 5, scale: 4 }),
   priceImpact: decimal("price_impact", { precision: 5, scale: 4 }),

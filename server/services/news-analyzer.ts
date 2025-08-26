@@ -118,7 +118,7 @@ export class NewsAnalyzer {
     this.tradingEngine = tradingEngine;
   }
 
-  async analyzeNews(guildId: string, title: string, content: string, symbol?: string, createdBy?: string) {
+  async analyzeNews(guildId: string, title: string, content: string, symbol?: string, createdBy?: string, broadcaster?: string, reporter?: string) {
     // Normalize text
     const normalizedText = this.normalizeText(`${title} ${content}`);
     
@@ -230,6 +230,8 @@ export class NewsAnalyzer {
       symbol,
       title,
       content,
+      broadcaster,
+      reporter,
       sentiment,
       sentimentScore: sentimentScore.toString(),
       priceImpact: priceImpact.toString(),
