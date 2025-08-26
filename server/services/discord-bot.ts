@@ -1585,12 +1585,13 @@ export class DiscordBot {
       // 로고 URL 처리
       let finalLogoUrl: string | null = null;
       if (logoUrl) {
-        // URL 유효성 검사 (기본적인 URL 형식 체크)
+        // URL 유효성 검사 및 간단한 로고 URL 저장 (Object Storage 우회)
         try {
           const url = new URL(logoUrl);
           if (url.protocol === 'http:' || url.protocol === 'https:') {
-            // 이미지 URL을 Object Storage에 업로드
-            finalLogoUrl = await this.uploadLogo(logoUrl, guildId, symbol);
+            // 간단히 URL을 그대로 사용 (Object Storage 업로드 대신)
+            finalLogoUrl = logoUrl;
+            console.log(`✅ 로고 URL 설정: ${finalLogoUrl}`);
           } else {
             console.warn('Invalid protocol for logo URL:', logoUrl);
           }

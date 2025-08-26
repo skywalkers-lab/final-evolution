@@ -219,7 +219,7 @@ export class TradingEngine {
       const pureRandomChange = (Math.random() - 0.5) * (isBitcoin ? 0.02 : 0.01); // BTC: ±2%, 일반: ±1%
       baseChangePercent += pureRandomChange;
       
-      // 💡 비트코인 가격 조절: 1000만원 이상에서 하락 유도
+      // 💡 비트코인 전용 가격 조절: 1000만원 이상에서 하락 유도
       if (isBitcoin) {
         const currentPrice = Number(stock.price);
         
