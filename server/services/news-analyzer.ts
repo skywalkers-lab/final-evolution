@@ -6,6 +6,7 @@ const POSITIVE_KEYWORDS = [
   // 경제/금융
   '상승', '증가', '성장', '호조', '개선', '확대', '긍정', '상향', '돌파',
   '신기록', '최고', '수익', '이익', '혁신', '발전', '성공', '승인', '계약',
+  '호황', '면제', '관세면제', '관세 면제', '세금면제', '세금 면제', '혜택', '특혜', '지원',
   // 가상화폐/비트코인 호재 (대폭 확장)
   '규제완화', '규제 완화', '완화', '허용', '합법화', '승인', '도입', '채택', '수용',
   '호재', '긍정적', '낙관적', '기대감', '전망밝음', '밝은전망', '투자증가', '자금유입',
@@ -135,10 +136,10 @@ export class NewsAnalyzer {
     // Apply tanh normalization - 훨씬 민감하게 반응하도록 변경
     const sentimentScore = this.tanh(rawScore / 2); // 6에서 2로 감소해서 더 민감하게
     
-    // Determine sentiment
+    // Determine sentiment - 더 민감하게 조정
     let sentiment = 'neutral';
-    if (sentimentScore > 0.12) sentiment = 'positive';
-    else if (sentimentScore < -0.12) sentiment = 'negative';
+    if (sentimentScore > 0.05) sentiment = 'positive';  // 0.12에서 0.05로 낮춤
+    else if (sentimentScore < -0.05) sentiment = 'negative';  // -0.12에서 -0.05로 낮춤
     
     // Get guild settings for max impact
     const settings = await this.storage.getGuildSettings(guildId);
