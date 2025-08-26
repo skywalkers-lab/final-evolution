@@ -13,11 +13,10 @@ import LatestNews from "@/components/dashboard/latest-news";
 import AuctionCard from "@/components/auctions/auction-card";
 import LimitOrders from "@/components/trading/limit-orders";
 import GuildSelector from "@/components/guild/guild-selector";
-import AccountPasswordPrompt from "@/components/auth/account-password-prompt";
 import ErrorBoundary from "@/components/error-boundary";
 
 export default function Dashboard() {
-  const { user, selectedGuildId, accountAuthenticated, isLoading } = useAuth();
+  const { user, selectedGuildId, isLoading } = useAuth();
   const [, setLocation] = useLocation();
   const [selectedStock, setSelectedStock] = useState<string>('');
   const [guilds] = useState([{ id: '1284053249057620018', name: 'Demo Server' }]); // Demo guild data
@@ -141,19 +140,7 @@ export default function Dashboard() {
     return <GuildSelector />;
   }
 
-  // Show account password prompt if not authenticated
-  if (!accountAuthenticated) {
-    const selectedGuild = guilds.find(g => g.id === selectedGuildId);
-    return (
-      <AccountPasswordPrompt
-        guildName={selectedGuild?.name}
-        onAuthenticated={() => {
-          // Authentication is handled in the AuthProvider
-          console.log('Account authenticated successfully');
-        }}
-      />
-    );
-  }
+  // 계좌 비밀번호 인증 시스템 제거됨 - 직접 대시보드 접근 허용
 
   return (
     <div className="flex h-screen overflow-hidden discord-bg-darkest text-gray-100 font-inter">

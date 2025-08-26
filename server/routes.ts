@@ -65,26 +65,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Session validation middleware for web client APIs  
   const validateWebClientAuth = (req: any, res: any, next: any) => {
-    const { guildId } = req.params;
-    const session = req.session as any;
-    
-    if (!session?.authenticatedGuilds?.[guildId]) {
-      return res.status(401).json({ message: "인증이 필요합니다." });
-    }
-    
-    // Check if session is still valid (not expired)
-    const authData = session.authenticatedGuilds[guildId];
-    const authenticatedAt = new Date(authData.authenticatedAt);
-    const now = new Date();
-    const hoursDiff = (now.getTime() - authenticatedAt.getTime()) / (1000 * 60 * 60);
-    
-    // Session expires after 24 hours
-    if (hoursDiff > 24) {
-      delete session.authenticatedGuilds[guildId];
-      return res.status(401).json({ message: "세션이 만료되었습니다. 다시 로그인해주세요." });
-    }
-    
-    req.authData = authData;
+    // 비밀번호 인증 시스템 제거됨 - 모든 요청 허용
     next();
   };
 
