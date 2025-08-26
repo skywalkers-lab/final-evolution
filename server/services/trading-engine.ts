@@ -219,20 +219,15 @@ export class TradingEngine {
       const pureRandomChange = (Math.random() - 0.5) * (isBitcoin ? 0.02 : 0.01); // BTC: ±2%, 일반: ±1%
       baseChangePercent += pureRandomChange;
       
-      // 💡 비트코인 가격 안정성 보장: 극단적 변동 방지
+      // 💡 비트코인 가격 조절: 1000만원 이상에서 하락 유도
       if (isBitcoin) {
         const currentPrice = Number(stock.price);
-        const targetPrice = 2000000; // 200만원 기준
         
-        // 현재 가격이 300만원 이상이면 강제로 200만원으로 리셋 (임계값 대폭 낮춤)
-        if (currentPrice >= 3000000) {
-          console.log(`🚨 비트코인 가격 강제 리셋: ${currentPrice.toLocaleString()}원 → 2,000,000원`);
-          // 직접 가격을 200만원으로 설정하고 변동 없음으로 처리
-          baseChangePercent = (targetPrice - currentPrice) / currentPrice; // 즉시 200만원으로
-        }
-        // 250만원 이상이면 강제 하락
-        else if (currentPrice > 2500000) {
-          baseChangePercent = -Math.abs(baseChangePercent) * 8; // 매우 강력한 하락
+        // 1000만원 이상이면 강제 하락 (점진적으로 증가하는 하락압력)
+        if (currentPrice >= 10000000) {
+          const excessFactor = (currentPrice - 10000000) / 1000000; // 1000만원 초과 정도
+          baseChangePercent = -Math.abs(baseChangePercent) * (3 + excessFactor); // 점진적 하락 증가
+          console.log(`📉 BTC 가격 조절: ${currentPrice.toLocaleString()}원 → 하락압력 적용 (${(baseChangePercent * 100).toFixed(2)}%)`);
         }
         // 150만원 이하면 강제 상승  
         else if (currentPrice < 1500000) {
