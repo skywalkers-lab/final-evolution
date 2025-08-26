@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useWebSocket } from "@/hooks/use-websocket";
+import { formatKoreanCurrency } from "@/utils/formatCurrency";
 
 interface MarketOverviewProps {
   stocks: any[];
@@ -108,27 +109,25 @@ export default function MarketOverview({ stocks }: MarketOverviewProps) {
                   data-testid={`stock-item-${index}`}
                 >
                   <div className="flex items-center space-x-3">
-                    {stock.logoUrl ? (
-                      <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-700 flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-full overflow-hidden bg-discord-blue border border-discord-light flex items-center justify-center">
+                      {stock.logoUrl ? (
                         <img 
                           src={stock.logoUrl} 
                           alt={`${stock.symbol} logo`}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            // Fallback to colored icon if image fails to load
+                            // 로고 로드 실패 시 fallback
                             const target = e.target as HTMLImageElement;
-                            const parent = target.parentElement;
-                            if (parent) {
-                              parent.innerHTML = `<div class="${getStockIcon(stock.symbol)} w-full h-full rounded-full flex items-center justify-center text-sm font-bold text-white">${stock.symbol.substring(0, 2)}</div>`;
-                            }
+                            target.style.display = 'none';
+                            const nextElement = target.nextElementSibling as HTMLElement;
+                            if (nextElement) nextElement.style.display = 'flex';
                           }}
                         />
-                      </div>
-                    ) : (
-                      <div className={`w-8 h-8 ${getStockIcon(stock.symbol)} rounded-full flex items-center justify-center text-sm font-bold text-white`}>
+                      ) : null}
+                      <div className={`w-full h-full ${getStockIcon(stock.symbol, stock.logoUrl)} rounded-full flex items-center justify-center text-xs font-bold text-white ${stock.logoUrl ? 'hidden' : ''}`}>
                         {stock.symbol.substring(0, 2)}
                       </div>
-                    )}
+                    </div>
                     <div>
                       <p className="font-medium text-white" data-testid={`text-stock-symbol-${index}`}>
                         {stock.symbol}
@@ -140,7 +139,7 @@ export default function MarketOverview({ stocks }: MarketOverviewProps) {
                   </div>
                   <div className="text-right">
                     <p className="font-medium text-white" data-testid={`text-stock-price-${index}`}>
-                      ₩{price.toLocaleString()}
+                      {formatKoreanCurrency(price)}
                     </p>
                     <div className="flex items-center space-x-1">
                       <span className={`text-sm ${getChangeColor(change)}`} data-testid={`text-stock-change-${index}`}>

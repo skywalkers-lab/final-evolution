@@ -101,6 +101,7 @@
     @apply font-sans antialiased;
     background: var(--discord-darkest);
     color: hsl(200, 6.6667%, 91.1765%);
+    font-family: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', Inter, system-ui, sans-serif;
     font-feature-settings: 'kern' 1;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
