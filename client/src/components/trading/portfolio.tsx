@@ -4,6 +4,7 @@ import { useWebSocket } from "@/hooks/use-websocket";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { apiRequest } from "@/lib/queryClient";
+import { formatKoreanCurrency } from "@/utils/formatCurrency";
 
 interface PortfolioProps {
   guildId: string;
@@ -105,7 +106,7 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
           {isPositive ? '+' : ''}{percentage.toFixed(1)}%
         </span>
         <span className={`text-xs ${isPositive ? 'text-red-500' : 'text-blue-500'}`}>
-          ({isPositive ? '+' : ''}₩{Math.abs(amount).toLocaleString()})
+          ({isPositive ? '+' : ''}{formatKoreanCurrency(Math.abs(amount))})
         </span>
       </div>
     );
@@ -131,7 +132,7 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
       // 성공 토스트
       toast({
         title: type === 'buy' ? "매수 완료" : "매도 완료",
-        description: `${symbol} 1주를 ₩${currentPrice.toLocaleString()}에 ${type === 'buy' ? '매수' : '매도'}했습니다.`,
+        description: `${symbol} 1주를 ${formatKoreanCurrency(currentPrice)}에 ${type === 'buy' ? '매수' : '매도'}했습니다.`,
         variant: "default",
       });
 
@@ -184,7 +185,7 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
                 <div className="text-sm text-gray-400">
                   <span>총 평가액: </span>
                   <span className="text-white font-medium" data-testid="text-portfolio-value">
-                    ₩{totalValue.toLocaleString()}
+                    {formatKoreanCurrency(totalValue)}
                   </span>
                 </div>
                 <div className="text-sm" data-testid="text-portfolio-change">
@@ -259,13 +260,13 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
                         {holding.shares.toLocaleString()}주
                       </td>
                       <td className="py-4 text-green-400 font-semibold text-right font-mono" data-testid={`text-holding-avg-price-${index}`}>
-                        ₩{Number(holding.avgPrice).toLocaleString()}
+                        {formatKoreanCurrency(Number(holding.avgPrice))}
                       </td>
                       <td className="py-4 text-white text-right font-mono" data-testid={`text-holding-current-price-${index}`}>
-                        ₩{Number(holding.currentPrice).toLocaleString()}
+                        {formatKoreanCurrency(Number(holding.currentPrice))}
                       </td>
                       <td className="py-4 text-white font-medium text-right font-mono" data-testid={`text-holding-market-value-${index}`}>
-                        ₩{currentValue.toLocaleString()}
+                        {formatKoreanCurrency(currentValue)}
                       </td>
                       <td className="py-4 text-center" data-testid={`text-holding-profit-loss-${index}`}>
                         {formatProfitLoss(profitAmount, profitPercent)}

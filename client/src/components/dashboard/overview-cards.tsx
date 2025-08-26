@@ -1,5 +1,6 @@
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useState, useEffect } from "react";
+import { formatKoreanCurrency } from "@/utils/formatCurrency";
 
 interface OverviewCardsProps {
   data?: any;
@@ -53,7 +54,7 @@ export default function OverviewCards({ data, portfolio }: OverviewCardsProps) {
   const cards = [
     {
       title: "총 자산",
-      value: `₩${stats.totalAssets.toLocaleString()}`,
+      value: formatKoreanCurrency(stats.totalAssets),
       change: "+5.2%",
       changeText: "지난 24시간",
       icon: "fas fa-wallet",
@@ -80,7 +81,7 @@ export default function OverviewCards({ data, portfolio }: OverviewCardsProps) {
     },
     {
       title: "세금 징수액",
-      value: `₩${stats.taxCollected.toLocaleString()}`,
+      value: formatKoreanCurrency(stats.taxCollected),
       change: "다음 징수: 15일",
       changeText: "월간",
       icon: "fas fa-coins",

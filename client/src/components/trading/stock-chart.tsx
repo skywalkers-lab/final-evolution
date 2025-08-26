@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Bar, BarChart, ReferenceLine, ComposedChart, Tooltip } from "recharts";
+import { formatKoreanCurrency } from "@/utils/formatCurrency";
 
 interface StockChartProps {
   symbol: string;
@@ -1033,7 +1034,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
               <div className="bg-discord-dark rounded-lg p-4">
                 <h4 className="text-sm text-gray-400 mb-2">현재가</h4>
                 <p className="text-2xl font-bold text-white mb-2" data-testid="text-current-price">
-                  ₩{currentPrice.toLocaleString()}
+                  {formatKoreanCurrency(currentPrice)}
                 </p>
                 <div className="flex items-center space-x-2">
                   <span className={`text-sm font-semibold ${priceChange >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
@@ -1048,12 +1049,12 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
               <div className="bg-discord-dark rounded-lg p-4">
                 <h4 className="text-sm text-gray-400 mb-2">가격 범위</h4>
                 <div className="space-y-1">
-                  <p className="text-sm">고가: <span className="text-white font-semibold">₩{candlestickData.length > 0 
-                    ? Math.max(...candlestickData.map(d => Number(d.high))).toLocaleString() 
-                    : currentPrice.toLocaleString()}</span></p>
-                  <p className="text-sm">저가: <span className="text-white font-semibold">₩{candlestickData.length > 0 
-                    ? Math.min(...candlestickData.map(d => Number(d.low))).toLocaleString() 
-                    : currentPrice.toLocaleString()}</span></p>
+                  <p className="text-sm">고가: <span className="text-white font-semibold">{candlestickData.length > 0 
+                    ? formatKoreanCurrency(Math.max(...candlestickData.map(d => Number(d.high)))) 
+                    : formatKoreanCurrency(currentPrice)}</span></p>
+                  <p className="text-sm">저가: <span className="text-white font-semibold">{candlestickData.length > 0 
+                    ? formatKoreanCurrency(Math.min(...candlestickData.map(d => Number(d.low)))) 
+                    : formatKoreanCurrency(currentPrice)}</span></p>
                 </div>
               </div>
               

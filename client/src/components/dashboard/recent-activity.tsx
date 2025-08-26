@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useState } from "react";
+import { formatKoreanCurrency } from "@/utils/formatCurrency";
 
 interface RecentActivityProps {
   guildId: string;
@@ -91,10 +92,10 @@ export default function RecentActivity({ guildId }: RecentActivityProps) {
     const isIncoming = ['transfer_in', 'payroll_in', 'stock_sell'].includes(transaction.type);
     
     if (transaction.type === 'stock_buy' || transaction.type === 'stock_sell') {
-      return transaction.memo || `₩${amount.toLocaleString()}`;
+      return transaction.memo || formatKoreanCurrency(amount);
     }
     
-    return `${isIncoming ? '+' : '-'}₩${amount.toLocaleString()}`;
+    return `${isIncoming ? '+' : ''}${formatKoreanCurrency(amount)}`;
   };
 
   const displayTransactions = Array.isArray(transactions) ? transactions.slice(0, 5) : [];

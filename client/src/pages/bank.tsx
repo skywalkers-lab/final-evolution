@@ -12,6 +12,7 @@ import { useLocation } from "wouter";
 import Sidebar from "@/components/layout/sidebar";
 import TopBar from "@/components/layout/top-bar";
 import GuildSelector from "@/components/guild/guild-selector";
+import { formatKoreanCurrency } from "@/utils/formatCurrency";
 
 export default function BankPage() {
   const { user, selectedGuildId, isLoading } = useAuth();
@@ -158,7 +159,7 @@ export default function BankPage() {
               <div className="flex justify-between items-center mt-2">
                 <span className="text-gray-400">현재 잔액</span>
                 <span className="text-2xl font-bold text-green-400" data-testid="text-balance">
-                  {(accountData as any)?.account ? `₩${Number((accountData as any).account.balance).toLocaleString()}` : '계좌 없음'}
+                  {(accountData as any)?.account ? formatKoreanCurrency(Number((accountData as any).account.balance)) : '계좌 없음'}
                 </span>
               </div>
               <div className="flex justify-between items-center mt-2">
@@ -308,7 +309,7 @@ export default function BankPage() {
                       <span className={`font-bold ${
                         isReceive ? 'text-green-400' : 'text-red-400'
                       }`}>
-                        {isReceive ? '+' : '-'}₩{amount.toLocaleString()}
+                        {isReceive ? '+' : ''}{formatKoreanCurrency(amount)}
                       </span>
                     </div>
                   );

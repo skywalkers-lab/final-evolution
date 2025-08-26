@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { formatKoreanCurrency } from "@/utils/formatCurrency";
 import { useAuth } from "@/hooks/use-auth";
 import { useWebSocket } from "@/hooks/use-websocket";
 
@@ -251,7 +252,7 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-white font-medium">₩{Number(selectedStockData.price).toLocaleString()}</p>
+                  <p className="text-white font-medium">{formatKoreanCurrency(Number(selectedStockData.price))}</p>
                   <p className="text-xs text-gray-400">현재가</p>
                 </div>
               </div>
@@ -290,9 +291,9 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
               </div>
               <p className="text-xs text-gray-400 mt-1">
                 {realtimePrice ? (
-                  <span className="text-orange-400">실시간: ₩{realtimePrice.toLocaleString()}</span>
+                  <span className="text-orange-400">실시간: {formatKoreanCurrency(realtimePrice)}</span>
                 ) : (
-                  `현재가: ₩${Number(selectedStockData.price).toLocaleString()}`
+                  `현재가: ${formatKoreanCurrency(Number(selectedStockData.price))}`
                 )}
               </p>
             </div>
@@ -314,15 +315,15 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
             <div className="bg-discord-dark rounded-lg p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">주문 금액:</span>
-                <span className="text-white" data-testid="text-order-amount">₩{orderAmount.toLocaleString()}</span>
+                <span className="text-white" data-testid="text-order-amount">{formatKoreanCurrency(orderAmount)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">수수료:</span>
-                <span className="text-white" data-testid="text-order-fee">₩{fee.toLocaleString()}</span>
+                <span className="text-white" data-testid="text-order-fee">{formatKoreanCurrency(fee)}</span>
               </div>
               <div className="flex justify-between text-sm font-medium border-t border-discord-dark pt-2">
                 <span className="text-gray-300">총 {tradeType === 'buy' ? '필요' : '수령'} 금액:</span>
-                <span className="text-white" data-testid="text-total-amount">₩{totalRequired.toLocaleString()}</span>
+                <span className="text-white" data-testid="text-total-amount">{formatKoreanCurrency(totalRequired)}</span>
               </div>
             </div>
 
@@ -334,7 +335,7 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
                 </span>
                 <span className="text-white font-medium" data-testid="text-available-balance">
                   {tradeType === 'buy' 
-                    ? `₩${availableBalance.toLocaleString()}`
+                    ? formatKoreanCurrency(availableBalance)
                     : `${availableShares.toLocaleString()}주`
                   }
                 </span>
