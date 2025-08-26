@@ -132,8 +132,8 @@ export class NewsAnalyzer {
     const contextModifier = Math.min(Math.max(boostFactor * dampFactor, 0.4), 1.6);
     const rawScore = (positiveScore - negativeScore) * contextModifier;
     
-    // Apply tanh normalization
-    const sentimentScore = this.tanh(rawScore / 6);
+    // Apply tanh normalization - 훨씬 민감하게 반응하도록 변경
+    const sentimentScore = this.tanh(rawScore / 2); // 6에서 2로 감소해서 더 민감하게
     
     // Determine sentiment
     let sentiment = 'neutral';
@@ -142,7 +142,7 @@ export class NewsAnalyzer {
     
     // Get guild settings for max impact
     const settings = await this.storage.getGuildSettings(guildId);
-    const maxImpactPct = Number(settings?.newsMaxImpactPct || 50) / 100; // 기본값을 50%로 대폭 증가
+    const maxImpactPct = Number(settings?.newsMaxImpactPct || 150) / 100; // 기본값을 150%로 극대화
     
     // Calculate price impact with EXTREME sensitivity for dramatic movements
     let priceImpact = 0;
@@ -150,7 +150,7 @@ export class NewsAnalyzer {
       // 키워드별 가중치 적용 + 카테고리별 강화
       const enhancedScore = this.enhanceScoreBasedOnKeywords(normalizedText, sentimentScore);
       const categoryMultiplier = this.getCategoryMultiplier(title); // 말머리별 배율
-      const finalScore = enhancedScore * categoryMultiplier;
+      const finalScore = enhancedScore * categoryMultiplier * 3.0; // 전체적으로 3배 증폭
       priceImpact = Math.min(Math.max(finalScore * maxImpactPct, -maxImpactPct), maxImpactPct);
     }
     
@@ -176,11 +176,11 @@ export class NewsAnalyzer {
             reason: 'news_analysis'
           });
 
-          // 뉴스 기반 관성 설정 (3분 지속)
-          if (this.tradingEngine && Math.abs(priceImpact) > 0.005) { // 0.5% 이상 영향 시 관성 생성
+          // 뉴스 기반 관성 설정 (5분 지속으로 연장)
+          if (this.tradingEngine && Math.abs(priceImpact) > 0.001) { // 0.1% 이상 영향 시 관성 생성 (더 낮은 임계값)
             const momentumDirection = priceImpact > 0 ? 1 : -1;
-            const momentumIntensity = Math.min(Math.abs(priceImpact) * 2, 1); // 영향력의 2배, 최대 1
-            this.tradingEngine.setNewsBasedMomentum(guildId, symbol, momentumDirection, momentumIntensity, 3);
+            const momentumIntensity = Math.min(Math.abs(priceImpact) * 5, 2); // 영향력의 5배, 최대 2로 증폭
+            this.tradingEngine.setNewsBasedMomentum(guildId, symbol, momentumDirection, momentumIntensity, 5);
           }
         }
       }
@@ -205,11 +205,11 @@ export class NewsAnalyzer {
             reason: 'news_analysis'
           });
 
-          // 뉴스 기반 관성 설정 (모든 주식에 적용, 3분 지속)
-          if (this.tradingEngine && Math.abs(priceImpact) > 0.005) { // 0.5% 이상 영향 시 관성 생성
+          // 뉴스 기반 관성 설정 (모든 주식에 적용, 5분 지속으로 연장)
+          if (this.tradingEngine && Math.abs(priceImpact) > 0.001) { // 0.1% 이상 영향 시 관성 생성 (더 낮은 임계값)
             const momentumDirection = priceImpact > 0 ? 1 : -1;
-            const momentumIntensity = Math.min(Math.abs(priceImpact) * 2, 1); // 영향력의 2배, 최대 1
-            this.tradingEngine.setNewsBasedMomentum(guildId, stock.symbol, momentumDirection, momentumIntensity, 3);
+            const momentumIntensity = Math.min(Math.abs(priceImpact) * 5, 2); // 영향력의 5배, 최대 2로 증폭
+            this.tradingEngine.setNewsBasedMomentum(guildId, stock.symbol, momentumDirection, momentumIntensity, 5);
           }
         }
       }
@@ -343,13 +343,13 @@ export class NewsAnalyzer {
           // 가상화폐 호재 키워드는 초강력한 가중치
           if (keyword.includes('가상화폐') || keyword.includes('비트코인') || keyword.includes('암호화폐') || 
               keyword.includes('디지털자산') || keyword.includes('블록체인') || keyword.includes('규제완화')) {
-            multiplier *= 5.0; // 가상화폐 호재는 초강력한 영향 (500%)
+            multiplier *= 10.0; // 가상화폐 호재는 극초강력한 영향 (1000%)
           }
           // 법정/사법 긍정 키워드는 더 강력한 가중치
           else if (keyword.includes('무현의') || keyword.includes('불기소') || keyword.includes('석방') || keyword.includes('수사종결')) {
-            multiplier *= 3.5; // 법정 긍정은 더 강력한 영향
+            multiplier *= 7.0; // 법정 긍정은 더 강력한 영향
           } else {
-            multiplier *= 2.5; // 150% 대폭 증폭으로 변경
+            multiplier *= 5.0; // 500% 대폭 증폭으로 변경
           }
         }
       }
@@ -375,24 +375,24 @@ export class NewsAnalyzer {
       }
     }
 
-    // 최대 15배까지 증폭 가능 - 뉴스 임팩트 극대화
-    return baseScore * Math.min(multiplier, 15.0);
+    // 최대 50배까지 증폭 가능 - 뉴스 임팩트 극극대화
+    return baseScore * Math.min(multiplier, 50.0);
   }
 
   // 뉴스 카테고리별 강도 배율 계산 (말머리 기반)
   private getCategoryMultiplier(title: string): number {
-    // 말머리에 따른 임팩트 강도
+    // 말머리에 따른 임팩트 강도 - 대폭 증가
     if (title.includes('[경제]') || title.includes('[Economy]')) {
-      return 3.0; // 경제 뉴스는 3배 강력한 영향
+      return 8.0; // 경제 뉴스는 8배 강력한 영향
     } else if (title.includes('[정치]') || title.includes('[Politics]')) {
-      return 2.5; // 정치 뉴스는 2.5배 영향
+      return 6.0; // 정치 뉴스는 6배 영향
     } else if (title.includes('[사회]') || title.includes('[Society]')) {
-      return 2.0; // 사회 뉴스는 2배 영향
+      return 4.0; // 사회 뉴스는 4배 영향
     } else if (title.includes('[연예]') || title.includes('[Entertainment]')) {
-      return 1.5; // 연예 뉴스는 1.5배 영향
+      return 3.0; // 연예 뉴스는 3배 영향
     }
     
     // 말머리가 없는 일반 뉴스도 기본 배율 적용
-    return 2.0;
+    return 5.0; // 일반 뉴스도 5배로 증가
   }
 }
