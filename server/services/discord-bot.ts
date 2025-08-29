@@ -800,7 +800,6 @@ export class DiscordBot {
         userId: user.id,
         uniqueCode,
         balance: "1000000", // Default 1M won
-        password,
         frozen: false
       });
 
@@ -867,7 +866,10 @@ export class DiscordBot {
       
       await interaction.reply(`💰 ${displayName}의 잔액: ₩${balance}`);
     } catch (error) {
-      await interaction.reply('잔액 조회 중 오류가 발생했습니다.');
+      console.error('Balance check error:', error);
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply('잔액 조회 중 오류가 발생했습니다.');
+      }
     }
   }
 
@@ -976,25 +978,9 @@ export class DiscordBot {
         return;
       }
 
-      // Verify current password
-      if (account.password !== currentPassword) {
-        await interaction.reply('❌ 기존 비밀번호가 일치하지 않습니다.');
-        return;
-      }
-
-      // Update password
-      await this.storage.updateAccountPassword(guildId, user.id, newPassword);
-
-      await interaction.reply(`✅ 계좌 비밀번호가 성공적으로 변경되었습니다!\n계좌번호: ${account.uniqueCode}\n새 비밀번호로 대시보드에 접속하실 수 있습니다.`);
-      
-      // Broadcast password change event to invalidate web sessions
-      this.wsManager.broadcast('account_password_changed', {
-        guildId,
-        userId: user.id,
-        accountCode: account.uniqueCode,
-        username: user.username,
-        timestamp: new Date().toISOString()
-      });
+      // Note: Password functionality has been removed from accounts table
+      await interaction.reply('❌ 비밀번호 변경 기능은 현재 사용할 수 없습니다.');
+      return;
     } catch (error: any) {
       await interaction.reply(`비밀번호 변경 실패: ${error.message}`);
     }
@@ -1893,7 +1879,7 @@ export class DiscordBot {
 
     // 중복 생성 방지: 동일한 제목의 뉴스가 최근 5분 내에 있는지 확인
     try {
-      const existingNews = await this.storage.getNewsAnalysesByGuild(guildId);
+      const existingNews = await this.storage.getNewsAnalyses(guildId);
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
       
       const duplicateNews = existingNews.find((news: any) => 
@@ -1913,7 +1899,7 @@ export class DiscordBot {
     this.processingNews.add(newsKey);
 
     try {
-      const analysis = await this.storage.analyzeNews(guildId, titleWithCategory, content, symbol, undefined, broadcaster, reporter);
+      const analysis = await this.storage.analyzeNews(guildId, titleWithCategory, content, symbol, broadcaster);
       
       let message = `📰 **뉴스 분석 완료**\n\n`;
       message += `제목: ${titleWithCategory}\n`;
