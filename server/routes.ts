@@ -547,7 +547,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Circuit breaker status
+  // Circuit breaker status (all)
   app.get("/api/web-client/guilds/:guildId/circuit-breakers", async (req, res) => {
     try {
       const { guildId } = req.params;
@@ -556,6 +556,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Circuit breakers error:', error);
       res.json([]);
+    }
+  });
+
+  // Circuit breaker status (specific stock)
+  app.get("/api/web-client/guilds/:guildId/stocks/:symbol/circuit-breaker", async (req, res) => {
+    try {
+      const { guildId, symbol } = req.params;
+      const breaker = tradingEngine.getCircuitBreaker(guildId, symbol);
+      
+      if (breaker) {
+        const now = Date.now();
+        const remainingMs = breaker.resumeAt - now;
+        const remainingMinutes = Math.ceil(remainingMs / 60000);
+        
+        res.json({
+          active: true,
+          triggeredAt: new Date(breaker.triggeredAt).toISOString(),
+          resumesAt: new Date(breaker.resumeAt).toISOString(),
+          remainingMinutes: remainingMinutes > 0 ? remainingMinutes : 0,
+        });
+      } else {
+        res.json({
+          active: false,
+        });
+      }
+    } catch (error) {
+      console.error('Circuit breaker status error:', error);
+      res.json({ active: false });
     }
   });
 

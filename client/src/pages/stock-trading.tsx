@@ -69,8 +69,8 @@ export default function StockTrading() {
             {selectedStock ? (
               <>
                 {/* 상단 종목 정보 */}
-                <div className="flex gap-1 mb-1 h-20 flex-shrink-0">
-                  <div className="flex-1 bg-slate-800 border border-slate-600 rounded p-2">
+                <div className="flex gap-1 mb-1 h-16 flex-shrink-0">
+                  <div className="flex-1 bg-slate-800 border border-slate-600 rounded p-1.5">
                     <ErrorBoundary>
                       <RealTimeQuote 
                         guildId={selectedGuildId || ''} 
@@ -84,9 +84,9 @@ export default function StockTrading() {
                 <div className="flex-1 overflow-hidden">
                   <PanelGroup direction="horizontal" className="h-full gap-1">
                     {/* 좌측: 호가창 */}
-                    <Panel defaultSize={25} minSize={20} maxSize={40}>
-                      <div className="h-full bg-slate-800 border border-slate-600 rounded p-2 flex flex-col min-h-0 pr-0.5">
-                        <div className="text-xs font-bold text-slate-300 mb-2 border-b border-slate-600 pb-1 flex-shrink-0">
+                    <Panel defaultSize={22} minSize={18} maxSize={35}>
+                      <div className="h-full bg-slate-800 border border-slate-600 rounded p-1.5 flex flex-col min-h-0">
+                        <div className="text-[11px] font-bold text-slate-300 mb-1 border-b border-slate-600 pb-0.5 flex-shrink-0">
                           📊 실시간 호가
                         </div>
                         <div className="flex-1 overflow-y-auto overflow-x-hidden">
@@ -104,12 +104,12 @@ export default function StockTrading() {
                       </div>
                     </Panel>
 
-                    <PanelResizeHandle className="w-1 bg-slate-700 hover:bg-blue-500 transition-colors cursor-col-resize" />
+                    <PanelResizeHandle className="w-0.5 bg-slate-700 hover:bg-blue-500 transition-colors cursor-col-resize" />
 
                     {/* 중앙: 상세 차트 영역 */}
-                    <Panel defaultSize={50} minSize={40} maxSize={70}>
-                      <div className="h-full bg-slate-800 border border-slate-600 rounded p-2 flex flex-col min-h-0 mx-0.5">
-                        <div className="text-xs font-bold text-slate-300 mb-2 border-b border-slate-600 pb-1 flex-shrink-0">
+                    <Panel defaultSize={56} minSize={40} maxSize={70}>
+                      <div className="h-full bg-slate-800 border border-slate-600 rounded p-1.5 flex flex-col min-h-0">
+                        <div className="text-[11px] font-bold text-slate-300 mb-1 border-b border-slate-600 pb-0.5 flex-shrink-0">
                           📈 상세 차트 분석
                         </div>
                         <div className="flex-1 min-h-0 overflow-hidden">
@@ -125,12 +125,12 @@ export default function StockTrading() {
                       </div>
                     </Panel>
 
-                    <PanelResizeHandle className="w-1 bg-slate-700 hover:bg-blue-500 transition-colors cursor-col-resize" />
+                    <PanelResizeHandle className="w-0.5 bg-slate-700 hover:bg-blue-500 transition-colors cursor-col-resize" />
 
                     {/* 우측: 주문창 */}
-                    <Panel defaultSize={25} minSize={20} maxSize={40}>
-                      <div className="h-full bg-slate-800 border border-slate-600 rounded p-2 flex flex-col min-h-0 pl-0.5">
-                        <div className="text-xs font-bold text-slate-300 mb-2 border-b border-slate-600 pb-1 flex-shrink-0">
+                    <Panel defaultSize={22} minSize={18} maxSize={35}>
+                      <div className="h-full bg-slate-800 border border-slate-600 rounded p-1.5 flex flex-col min-h-0">
+                        <div className="text-[11px] font-bold text-slate-300 mb-1 border-b border-slate-600 pb-0.5 flex-shrink-0">
                           🎯 주문하기
                         </div>
                         <div className="flex-1 overflow-y-auto overflow-x-hidden">
@@ -148,11 +148,11 @@ export default function StockTrading() {
                 </div>
 
                 {/* 하단: 체결내역 + 미체결주문 */}
-                <div className="h-48 flex-shrink-0 mt-1">
+                <div className="h-56 flex-shrink-0 mt-1">
                   <PanelGroup direction="horizontal" className="h-full gap-1">
                     <Panel defaultSize={50} minSize={30} maxSize={70}>
-                      <div className="h-full bg-slate-800 border border-slate-600 rounded p-2 flex flex-col overflow-hidden pr-0.5">
-                        <div className="text-xs font-bold text-slate-300 mb-2 border-b border-slate-600 pb-1 flex-shrink-0">
+                      <div className="h-full bg-slate-800 border border-slate-600 rounded p-1.5 flex flex-col overflow-hidden">
+                        <div className="text-[11px] font-bold text-slate-300 mb-1 border-b border-slate-600 pb-0.5 flex-shrink-0">
                           ✅ 체결내역
                         </div>
                         <div className="flex-1 overflow-auto">
@@ -166,11 +166,11 @@ export default function StockTrading() {
                       </div>
                     </Panel>
 
-                    <PanelResizeHandle className="w-1 bg-slate-700 hover:bg-blue-500 transition-colors cursor-col-resize" />
+                    <PanelResizeHandle className="w-0.5 bg-slate-700 hover:bg-blue-500 transition-colors cursor-col-resize" />
 
                     <Panel defaultSize={50} minSize={30} maxSize={70}>
-                      <div className="h-full bg-slate-800 border border-slate-600 rounded p-2 flex flex-col min-h-0 pl-0.5">
-                        <div className="text-xs font-bold text-slate-300 mb-2 border-b border-slate-600 pb-1 flex-shrink-0">
+                      <div className="h-full bg-slate-800 border border-slate-600 rounded p-1.5 flex flex-col min-h-0">
+                        <div className="text-[11px] font-bold text-slate-300 mb-1 border-b border-slate-600 pb-0.5 flex-shrink-0">
                           ⏳ 미체결주문
                         </div>
                         <div className="flex-1 overflow-y-auto overflow-x-hidden">

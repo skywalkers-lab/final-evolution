@@ -31,13 +31,28 @@ interface StockQuote {
   updatedAt: string;
 }
 
+interface CircuitBreakerStatus {
+  active: boolean;
+  triggeredAt?: string;
+  resumesAt?: string;
+  remainingMinutes?: number;
+}
+
 export function RealTimeQuote({ guildId, symbol }: RealTimeQuoteProps) {
   const [quote, setQuote] = useState<StockQuote | null>(null);
   const [flashClass, setFlashClass] = useState('');
+  const [circuitBreaker, setCircuitBreaker] = useState<CircuitBreakerStatus | null>(null);
 
   const { data: stockData, refetch } = useQuery({
     queryKey: [`/api/web-client/guilds/${guildId}/stocks/${symbol}/quote`],
     enabled: !!symbol && !!guildId,
+  });
+
+  // 서킷브레이커 상태 조회
+  const { data: cbData } = useQuery({
+    queryKey: [`/api/web-client/guilds/${guildId}/stocks/${symbol}/circuit-breaker`],
+    enabled: !!symbol && !!guildId,
+    refetchInterval: 5000, // 5초마다 업데이트
   });
 
   useEffect(() => {
@@ -54,6 +69,12 @@ export function RealTimeQuote({ guildId, symbol }: RealTimeQuoteProps) {
     }
   }, [stockData, quote]);
 
+  useEffect(() => {
+    if (cbData) {
+      setCircuitBreaker(cbData as CircuitBreakerStatus);
+    }
+  }, [cbData]);
+
   // WebSocket으로 실시간 업데이트
   useWebSocket((event: string, data: any) => {
     if (event === 'stock_price_updated' && data.symbol === symbol) {
@@ -68,6 +89,22 @@ export function RealTimeQuote({ guildId, symbol }: RealTimeQuoteProps) {
       
       setTimeout(() => setFlashClass(''), 500);
       refetch();
+    }
+    
+    // 서킷브레이커 이벤트 처리
+    if (event === 'circuit_breaker_triggered' && data.symbol === symbol) {
+      setCircuitBreaker({
+        active: true,
+        triggeredAt: data.triggeredAt,
+        resumesAt: data.resumesAt,
+        remainingMinutes: data.remainingMinutes,
+      });
+    }
+    
+    if (event === 'circuit_breaker_released' && data.symbol === symbol) {
+      setCircuitBreaker({
+        active: false,
+      });
     }
   });
 
@@ -107,12 +144,16 @@ export function RealTimeQuote({ guildId, symbol }: RealTimeQuoteProps) {
         </div>
         <div className="flex items-center space-x-1">
           <div className={`text-xs px-1 py-0.5 rounded ${
+            circuitBreaker?.active ? 'bg-orange-600 text-white animate-pulse' :
             quote.currentPrice >= quote.highLimit ? 'bg-red-600 text-white' : 
             quote.currentPrice <= quote.lowLimit ? 'bg-blue-600 text-white' : 
             'bg-green-600 text-white'
           }`}>
-            {quote.currentPrice >= quote.highLimit ? '상한가' : 
-             quote.currentPrice <= quote.lowLimit ? '하한가' : '거래중'}
+            {circuitBreaker?.active 
+              ? `서킷브레이커(${circuitBreaker.remainingMinutes || 0}분)` 
+              : quote.currentPrice >= quote.highLimit ? '상한가' 
+              : quote.currentPrice <= quote.lowLimit ? '하한가' 
+              : '정상거래'}
           </div>
         </div>
       </div>

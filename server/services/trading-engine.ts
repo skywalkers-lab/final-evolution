@@ -300,6 +300,12 @@ export class TradingEngine {
     return breakers;
   }
 
+  // 특정 종목의 서킷브레이커 조회
+  public getCircuitBreaker(guildId: string, symbol: string): CircuitBreaker | undefined {
+    const key = `${guildId}:${symbol}`;
+    return this.circuitBreakers.get(key);
+  }
+
   // 관리자가 서킷브레이커를 수동으로 해제
   public async releaseCircuitBreaker(guildId: string, symbol: string): Promise<boolean> {
     const key = `${guildId}:${symbol}`;
