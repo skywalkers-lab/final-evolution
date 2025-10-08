@@ -4,3 +4,48 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+server/.env
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Database
+*.db
+*.sqlite
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+
+# Testing
+coverage
+
+# Build
+build
+.cache
+# Replit agent files
+.local/
+.config/
+
+# ZIP files
+*.zip
+
+# Environment files
+.env
+server/.env

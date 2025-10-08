@@ -1,14 +1,40 @@
-import { IStorage } from '../storage';
+  import { IStorage } from '../storage';
 import { WebSocketManager } from './websocket-manager';
+
+interface CircuitBreaker {
+  guildId: string;
+  symbol: string;
+  triggeredAt: number; // timestamp
+  resumeAt: number; // timestamp
+  reason: string;
+  priceChange: number;
+  level: 1 | 2 | 3; // 1: 8%, 2: 15%, 3: 20%
+}
+
+// DiscordBot 타입 정의 (순환 참조 방지)
+interface IDiscordBot {
+  sendCircuitBreakerAlert(data: any): Promise<void>;
+  sendCircuitBreakerResumeAlert(data: any): Promise<void>;
+}
 
 export class TradingEngine {
   private storage: IStorage;
   private wsManager: WebSocketManager;
+  private discordBot: IDiscordBot | null = null;
   private priceSimulationInterval: NodeJS.Timeout | null = null;
+  private circuitBreakers: Map<string, CircuitBreaker> = new Map(); // key: `${guildId}:${symbol}`
+  private baselinePrices: Map<string, number> = new Map(); // 기준가 저장 (장 시작 가격)
 
   constructor(storage: IStorage, wsManager: WebSocketManager) {
     this.storage = storage;
     this.wsManager = wsManager;
+  }
+
+  /**
+   * Discord Bot 인스턴스 설정 (서킷브레이커 알림용)
+   */
+  setDiscordBot(discordBot: IDiscordBot) {
+    this.discordBot = discordBot;
   }
 
   start() {
@@ -17,7 +43,47 @@ export class TradingEngine {
       this.simulatePriceMovements();
     }, 2000); // 2초마다 업데이트 (실시간 경험)
 
+    // 매일 자정에 기준가 초기화 (한국 증시 기준)
+    this.scheduleBaselinePriceReset();
+
     console.log('Trading engine started');
+  }
+
+  private scheduleBaselinePriceReset() {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    
+    const timeUntilMidnight = tomorrow.getTime() - now.getTime();
+    
+    setTimeout(() => {
+      this.resetBaselinePrices();
+      // 다음날도 스케줄링
+      setInterval(() => {
+        this.resetBaselinePrices();
+      }, 24 * 60 * 60 * 1000); // 24시간마다
+    }, timeUntilMidnight);
+  }
+
+  private async resetBaselinePrices() {
+    console.log('🔄 Resetting baseline prices for new trading day');
+    this.baselinePrices.clear();
+    this.circuitBreakers.clear();
+    
+    // WebSocket으로 알림
+    for (const guildId of await this.getAllGuildIds()) {
+      this.wsManager.broadcast('trading_day_start', {
+        timestamp: Date.now(),
+        message: '새로운 거래일이 시작되었습니다. 기준가가 초기화되었습니다.'
+      }, guildId);
+    }
+  }
+
+  private async getAllGuildIds(): Promise<string[]> {
+    const stocks = await this.storage.getAllActiveStocks();
+    const guildIds = new Set(stocks.map(s => s.guildId));
+    return Array.from(guildIds);
   }
 
   stop() {
@@ -59,19 +125,22 @@ export class TradingEngine {
         throw new Error('잔액이 부족합니다 (거래 후 최소 1원이 남아있어야 합니다)');
       }
 
-      // Execute buy order
-      const result = await this.storage.executeTrade(guildId, userId, symbol, type, shares, price);
+      // Execute buy order with order matching
+      const result = await this.executeOrderWithMatching(guildId, userId, symbol, type, shares, price);
       
-      // Update candlestick data
-      await this.updateCandlestickData(guildId, symbol, price, shares);
+      // Update candlestick data with average execution price
+      await this.updateCandlestickData(guildId, symbol, result.averagePrice, shares);
       
-      // Apply minimal market impact only for large trades
-      if (shares > 1000) { // Only for trades over 1000 shares
-        await this.applyMarketImpact(guildId, symbol, type, shares, price);
-      }
+      // Update order book and market depth
+      await this.storage.updateMarketDepth(guildId, symbol);
       
       // Broadcast to websocket clients
       this.wsManager.broadcast('trade_executed', result);
+      this.wsManager.broadcast('order_book_updated', {
+        guildId,
+        symbol,
+        orderBook: await this.storage.getOrderBook(guildId, symbol)
+      });
       
       return result;
     } else {
@@ -81,22 +150,127 @@ export class TradingEngine {
         throw new Error('보유 수량이 부족합니다');
       }
 
-      // Execute sell order
-      const result = await this.storage.executeTrade(guildId, userId, symbol, type, shares, price);
+      // Execute sell order with order matching
+      const result = await this.executeOrderWithMatching(guildId, userId, symbol, type, shares, price);
       
-      // Update candlestick data
-      await this.updateCandlestickData(guildId, symbol, price, shares);
+      // Update candlestick data with average execution price
+      await this.updateCandlestickData(guildId, symbol, result.averagePrice, shares);
       
-      // Apply minimal market impact only for large trades
-      if (shares > 1000) { // Only for trades over 1000 shares
-        await this.applyMarketImpact(guildId, symbol, type, shares, price);
-      }
+      // Update order book and market depth
+      await this.storage.updateMarketDepth(guildId, symbol);
       
       // Broadcast to websocket clients
       this.wsManager.broadcast('trade_executed', result);
+      this.wsManager.broadcast('order_book_updated', {
+        guildId,
+        symbol,
+        orderBook: await this.storage.getOrderBook(guildId, symbol)
+      });
       
       return result;
     }
+  }
+
+  /**
+   * Order matching engine - 호가창 기반 주문 체결
+   * Market orders are matched against the best available prices in the order book
+   */
+  private async executeOrderWithMatching(
+    guildId: string, 
+    userId: string, 
+    symbol: string, 
+    side: 'buy' | 'sell', 
+    quantity: number, 
+    limitPrice: number
+  ): Promise<{ 
+    averagePrice: number, 
+    totalQuantity: number, 
+    fills: Array<{price: number, quantity: number}>,
+    slippage: number 
+  }> {
+    const orderBook = await this.storage.getOrderBook(guildId, symbol, 50);
+    const fills: Array<{price: number, quantity: number}> = [];
+    
+    let remainingQuantity = quantity;
+    let totalCost = 0;
+
+    if (side === 'buy') {
+      // Match against sell orders (asks)
+      const asks = orderBook.asks.sort((a, b) => a.price - b.price); // Lowest price first
+      
+      for (const ask of asks) {
+        if (remainingQuantity <= 0) break;
+        if (ask.price > limitPrice) break; // Can't buy above limit price
+        
+        const matchQuantity = Math.min(remainingQuantity, ask.quantity);
+        totalCost += ask.price * matchQuantity;
+        fills.push({ price: ask.price, quantity: matchQuantity });
+        
+        // Execute the matched trade
+        await this.storage.executeTrade(guildId, userId, symbol, side, matchQuantity, ask.price);
+        
+        // Update order book
+        const newQuantity = ask.quantity - matchQuantity;
+        if (newQuantity > 0) {
+          await this.storage.updateOrderBook(guildId, symbol, 'sell', ask.price, newQuantity);
+        } else {
+          await this.storage.clearOrderBookLevel(guildId, symbol, 'sell', ask.price);
+        }
+        
+        remainingQuantity -= matchQuantity;
+      }
+      
+      // If there's remaining quantity, add to order book as buy order
+      if (remainingQuantity > 0) {
+        await this.storage.updateOrderBook(guildId, symbol, 'buy', limitPrice, remainingQuantity);
+        console.log(`📋 Added ${remainingQuantity} shares to order book at ${limitPrice}`);
+      }
+      
+    } else {
+      // Match against buy orders (bids)
+      const bids = orderBook.bids.sort((a, b) => b.price - a.price); // Highest price first
+      
+      for (const bid of bids) {
+        if (remainingQuantity <= 0) break;
+        if (bid.price < limitPrice) break; // Can't sell below limit price
+        
+        const matchQuantity = Math.min(remainingQuantity, bid.quantity);
+        totalCost += bid.price * matchQuantity;
+        fills.push({ price: bid.price, quantity: matchQuantity });
+        
+        // Execute the matched trade
+        await this.storage.executeTrade(guildId, userId, symbol, side, matchQuantity, bid.price);
+        
+        // Update order book
+        const newQuantity = bid.quantity - matchQuantity;
+        if (newQuantity > 0) {
+          await this.storage.updateOrderBook(guildId, symbol, 'buy', bid.price, newQuantity);
+        } else {
+          await this.storage.clearOrderBookLevel(guildId, symbol, 'buy', bid.price);
+        }
+        
+        remainingQuantity -= matchQuantity;
+      }
+      
+      // If there's remaining quantity, add to order book as sell order
+      if (remainingQuantity > 0) {
+        await this.storage.updateOrderBook(guildId, symbol, 'sell', limitPrice, remainingQuantity);
+        console.log(`📋 Added ${remainingQuantity} shares to order book at ${limitPrice}`);
+      }
+    }
+    
+    const executedQuantity = quantity - remainingQuantity;
+    const averagePrice = executedQuantity > 0 ? totalCost / executedQuantity : limitPrice;
+    const slippage = Math.abs((averagePrice - limitPrice) / limitPrice) * 100;
+    
+    console.log(`✅ Order ${side}: ${executedQuantity}/${quantity} shares filled at avg ${averagePrice.toFixed(2)} (slippage: ${slippage.toFixed(2)}%)`);
+    
+    return {
+      averagePrice,
+      totalQuantity: executedQuantity,
+      fills,
+      slippage
+    };
   }
 
   async calculatePortfolioValue(guildId: string, userId: string): Promise<number> {
@@ -113,6 +287,49 @@ export class TradingEngine {
     }
     
     return totalValue;
+  }
+
+  // 길드별 서킷브레이커 목록 조회
+  public getCircuitBreakers(guildId: string): CircuitBreaker[] {
+    const breakers: CircuitBreaker[] = [];
+    this.circuitBreakers.forEach((breaker, key) => {
+      if (breaker.guildId === guildId) {
+        breakers.push(breaker);
+      }
+    });
+    return breakers;
+  }
+
+  // 관리자가 서킷브레이커를 수동으로 해제
+  public async releaseCircuitBreaker(guildId: string, symbol: string): Promise<boolean> {
+    const key = `${guildId}:${symbol}`;
+    const breaker = this.circuitBreakers.get(key);
+    
+    if (!breaker) {
+      return false; // 서킷브레이커가 없음
+    }
+    
+    // 서킷브레이커 해제
+    this.circuitBreakers.delete(key);
+    
+    // WebSocket으로 해제 알림
+    this.wsManager.broadcast('circuit_breaker_resumed', {
+      symbol,
+      level: breaker.level,
+      manualRelease: true
+    }, guildId);
+    
+    // Discord 채널에도 해제 알림
+    if (this.discordBot) {
+      await this.discordBot.sendCircuitBreakerResumeAlert({ 
+        guildId, 
+        symbol, 
+        level: breaker.level 
+      });
+    }
+    
+    console.log(`🔓 관리자에 의해 ${symbol} 서킷브레이커 수동 해제됨 (Level ${breaker.level})`);
+    return true;
   }
 
   private async simulatePriceMovements() {
@@ -144,10 +361,124 @@ export class TradingEngine {
     }
   }> = new Map();
 
+  // 서킷브레이커 체크
+  private isCircuitBreakerActive(guildId: string, symbol: string): boolean {
+    const key = `${guildId}:${symbol}`;
+    const breaker = this.circuitBreakers.get(key);
+    
+    if (!breaker) return false;
+    
+    const now = Date.now();
+    if (now >= breaker.resumeAt) {
+      // 서킷브레이커 해제
+      this.circuitBreakers.delete(key);
+      this.wsManager.broadcast('circuit_breaker_resumed', {
+        symbol,
+        resumedAt: now
+      }, guildId);
+      console.log(`🟢 Circuit breaker resumed for ${symbol} in guild ${guildId}`);
+      return false;
+    }
+    
+    return true;
+  }
+
+  // 서킷브레이커 트리거
+  private async triggerCircuitBreaker(
+    guildId: string,
+    symbol: string,
+    baselinePrice: number,
+    currentPrice: number
+  ) {
+    const key = `${guildId}:${symbol}`;
+    const priceChange = ((currentPrice - baselinePrice) / baselinePrice) * 100;
+    
+    // 하락폭에 따른 레벨 결정 (한국 증시 기준)
+    let level: 1 | 2 | 3 | null = null;
+    let reason = '';
+    
+    if (priceChange <= -20) {
+      level = 3;
+      reason = '20% 이상 급락';
+    } else if (priceChange <= -15) {
+      level = 2;
+      reason = '15% 이상 급락';
+    } else if (priceChange <= -8) {
+      level = 1;
+      reason = '8% 이상 급락';
+    }
+    
+    if (!level) return;
+    
+    const now = Date.now();
+    const haltDuration = 20 * 60 * 1000; // 20분
+    
+    const breaker: CircuitBreaker = {
+      guildId,
+      symbol,
+      triggeredAt: now,
+      resumeAt: now + haltDuration,
+      reason,
+      priceChange,
+      level
+    };
+    
+    this.circuitBreakers.set(key, breaker);
+    
+    const alertData = {
+      guildId,
+      symbol,
+      level,
+      reason,
+      priceChange: priceChange.toFixed(2),
+      triggeredAt: now,
+      resumeAt: now + haltDuration,
+      haltMinutes: 20
+    };
+    
+    // WebSocket으로 알림
+    this.wsManager.broadcast('circuit_breaker_triggered', alertData, guildId);
+    
+    // Discord 채널에도 알림 전송
+    if (this.discordBot) {
+      await this.discordBot.sendCircuitBreakerAlert(alertData);
+    }
+    
+    console.log(`🔴 Circuit breaker triggered for ${symbol} (Level ${level}): ${priceChange.toFixed(2)}% drop`);
+    
+    // 자동 해제 타이머 설정
+    setTimeout(async () => {
+      this.circuitBreakers.delete(key);
+      
+      // WebSocket으로 해제 알림
+      this.wsManager.broadcast('circuit_breaker_resumed', { symbol, level }, guildId);
+      
+      // Discord 채널에도 해제 알림
+      if (this.discordBot) {
+        await this.discordBot.sendCircuitBreakerResumeAlert({ guildId, symbol, level });
+      }
+      
+      console.log(`✅ Circuit breaker resumed for ${symbol} (Level ${level})`);
+    }, haltDuration);
+  }
+
   private async simulateStockPrice(stock: any) {
     try {
       const currentPrice = Number(stock.price);
       const stockKey = `${stock.guildId}:${stock.symbol}`;
+      
+      // 서킷브레이커 체크 - 활성화되어 있으면 가격 변동 중단
+      if (this.isCircuitBreakerActive(stock.guildId, stock.symbol)) {
+        console.log(`⏸️ Circuit breaker active for ${stock.symbol}, skipping price update`);
+        return;
+      }
+      
+      // 기준 가격 초기화 (당일 시작가 기준)
+      if (!this.baselinePrices.has(stockKey)) {
+        this.baselinePrices.set(stockKey, currentPrice);
+      }
+      
+      const baselinePrice = this.baselinePrices.get(stockKey)!;
       
       // 모든 주식에 적절한 변동성 적용 (더 현실적으로)
       const isBitcoin = stock.symbol === 'BTC';
@@ -279,6 +610,16 @@ export class TradingEngine {
         const maxChange = Math.min(0.03, volatility / 100); // 최대 3% 또는 설정된 변동성
         const clampedChange = Math.max(-maxChange, Math.min(maxChange, safeChangePercent));
         var newPrice = Math.max(currentPrice * 0.001, Math.round(currentPrice * (1 + clampedChange)));
+        
+        // 저가 주식 (5만원 이하)의 경우 최소 변동폭 보장
+        if (currentPrice < 50000 && newPrice === currentPrice) {
+          // 80% 확률로 ±1~3원 변동 보장 (더 활발한 거래를 위해)
+          if (Math.random() < 0.8) {
+            const minChange = Math.ceil(Math.random() * 3); // 1~3원
+            newPrice = currentPrice + (Math.random() < 0.5 ? minChange : -minChange);
+            newPrice = Math.max(1, newPrice); // 가격이 0 이하로 떨어지지 않도록
+          }
+        }
       }
       
       // 8. 트렌드 업데이트 (기본 관성 시스템 - 뉴스 관성이 없을 때만)
@@ -316,6 +657,15 @@ export class TradingEngine {
       // 10. 가격이 실제로 변경된 경우만 업데이트
       if (newPrice !== currentPrice) {
         await this.storage.updateStockPrice(stock.guildId, stock.symbol, newPrice);
+        
+        // 서킷브레이커 체크 (기준가 대비 하락폭)
+        const priceChangePercent = ((newPrice - baselinePrice) / baselinePrice) * 100;
+        if (priceChangePercent <= -8) {
+          await this.triggerCircuitBreaker(stock.guildId, stock.symbol, baselinePrice, newPrice);
+          // 서킷브레이커 발동 시 추가 업데이트 중단
+          return;
+        }
+        
         await this.updateCandlestickData(stock.guildId, stock.symbol, newPrice, volume);
         await this.checkAndExecuteLimitOrders(stock.guildId, stock.symbol, newPrice);
         
@@ -659,12 +1009,12 @@ export class TradingEngine {
         const targetPrice = Number(order.targetPrice);
         let shouldExecute = false;
 
-        // ±500원 범위 내에서 체결 허용
-        const priceRange = 500;
-        
-        if (order.type === 'buy' && currentPrice <= (targetPrice + priceRange)) {
+        // 실제 주식처럼 정확한 가격 조건 체크
+        // 매수: 현재가가 지정가 이하일 때 체결
+        // 매도: 현재가가 지정가 이상일 때 체결
+        if (order.type === 'buy' && currentPrice <= targetPrice) {
           shouldExecute = true;
-        } else if (order.type === 'sell' && currentPrice >= (targetPrice - priceRange)) {
+        } else if (order.type === 'sell' && currentPrice >= targetPrice) {
           shouldExecute = true;
         }
 
@@ -679,8 +1029,16 @@ export class TradingEngine {
             continue;
           }
           
-          // Execute the limit order at target price (not market price for safety)
-          await this.executeLimitOrderAtMarketPrice(order, targetPrice);
+          // 실제 주식처럼 지정가 또는 더 유리한 가격에 체결
+          // 매수는 지정가 이하의 가격으로, 매도는 지정가 이상의 가격으로 체결
+          const executionPrice = order.type === 'buy' ? 
+            Math.min(currentPrice, targetPrice) : // 매수: 지정가보다 낮으면 낮은 가격에 체결
+            Math.max(currentPrice, targetPrice);  // 매도: 지정가보다 높으면 높은 가격에 체결
+          
+          console.log(`✅ 지정가 주문 체결: ${symbol} ${order.type === 'buy' ? '매수' : '매도'} ${order.shares}주 @ ₩${executionPrice.toLocaleString()} (지정가: ₩${targetPrice.toLocaleString()}, 현재가: ₩${currentPrice.toLocaleString()})`);
+          
+          // Execute the limit order at the favorable price
+          await this.executeLimitOrderAtMarketPrice(order, executionPrice);
         }
       }
     } catch (error) {
@@ -690,29 +1048,39 @@ export class TradingEngine {
 
   private async executeLimitOrderAtMarketPrice(order: any, executionPrice: number): Promise<void> {
     try {
-      const shares = order.shares;
-      const totalExecutionAmount = executionPrice * shares;
+      // 실제 주식처럼 부분 체결 가능
+      const remainingShares = order.shares - (order.executedShares || 0);
+      
+      // 시장 유동성에 따라 체결 가능 수량 결정 (50~100% 랜덤)
+      const liquidityFactor = 0.5 + Math.random() * 0.5; // 50~100%
+      const sharesToExecute = Math.max(1, Math.floor(remainingShares * liquidityFactor));
+      
+      const totalExecutionAmount = executionPrice * sharesToExecute;
+      const isPartialFill = sharesToExecute < remainingShares;
+      const previousExecutedShares = order.executedShares || 0;
+      const newExecutedShares = previousExecutedShares + sharesToExecute;
 
       if (order.type === 'buy') {
         // For buy orders: user already had money reserved, now execute the trade
         const holding = await this.storage.getHolding(order.guildId, order.userId, order.symbol);
         
         if (holding) {
-          const totalShares = holding.shares + shares;
+          const totalShares = holding.shares + sharesToExecute;
           const totalValue = (holding.shares * Number(holding.avgPrice)) + totalExecutionAmount;
           const newAvgPrice = totalValue / totalShares;
           
           await this.storage.updateHolding(order.guildId, order.userId, order.symbol, totalShares, newAvgPrice);
         } else {
-          await this.storage.updateHolding(order.guildId, order.userId, order.symbol, shares, executionPrice);
+          await this.storage.updateHolding(order.guildId, order.userId, order.symbol, sharesToExecute, executionPrice);
         }
 
-        // If execution price was lower than target price, refund the difference
-        const targetAmount = Number(order.totalAmount);
-        if (totalExecutionAmount < targetAmount) {
+        // If execution price was lower than target price, refund the difference for executed shares
+        const targetPricePerShare = Number(order.targetPrice);
+        if (executionPrice < targetPricePerShare) {
+          const refundAmount = (targetPricePerShare - executionPrice) * sharesToExecute;
           const account = await this.storage.getAccountByUser(order.guildId, order.userId);
           if (account) {
-            await this.storage.updateBalance(account.id, targetAmount - totalExecutionAmount);
+            await this.storage.updateBalance(account.id, refundAmount);
           }
         }
       } else {
@@ -723,8 +1091,16 @@ export class TradingEngine {
         }
       }
 
-      // Mark order as executed
-      await this.storage.executeLimitOrder(order.id, executionPrice, shares);
+      // Mark order as executed (partially or fully)
+      if (isPartialFill) {
+        // 부분 체결: 체결된 수량만 업데이트하고 주문은 계속 유지
+        await this.storage.partialExecuteLimitOrder(order.id, executionPrice, newExecutedShares);
+        console.log(`📊 부분 체결: ${order.symbol} ${sharesToExecute}/${order.shares}주 (${((newExecutedShares / order.shares) * 100).toFixed(1)}%)`);
+      } else {
+        // 전체 체결: 주문 완료
+        await this.storage.executeLimitOrder(order.id, executionPrice, newExecutedShares);
+        console.log(`✅ 전체 체결 완료: ${order.symbol} ${newExecutedShares}/${order.shares}주`);
+      }
 
       // Log the stock transaction
       await this.storage.addTransaction({
@@ -732,11 +1108,11 @@ export class TradingEngine {
         fromUserId: order.userId,
         type: order.type === 'buy' ? 'stock_buy' : 'stock_sell',
         amount: totalExecutionAmount.toString(),
-        memo: `지정가 ${order.type === 'buy' ? '매수' : '매도'} 체결: ${order.symbol} ${shares}주 @ ${executionPrice}원`
+        memo: `지정가 ${order.type === 'buy' ? '매수' : '매도'} ${isPartialFill ? '부분 ' : ''}체결: ${order.symbol} ${sharesToExecute}주 @ ${executionPrice}원 (${newExecutedShares}/${order.shares})`
       });
 
       // Update candlestick data for the execution
-      await this.updateCandlestickData(order.guildId, order.symbol, executionPrice, shares);
+      await this.updateCandlestickData(order.guildId, order.symbol, executionPrice, sharesToExecute);
 
       // Broadcast limit order execution
       this.wsManager.broadcast('limit_order_executed', {
@@ -744,13 +1120,16 @@ export class TradingEngine {
         orderId: order.id,
         symbol: order.symbol,
         type: order.type,
-        shares,
+        shares: sharesToExecute,
+        totalShares: order.shares,
+        executedShares: newExecutedShares,
         targetPrice: Number(order.targetPrice),
         executionPrice,
-        userId: order.userId
+        userId: order.userId,
+        isPartialFill
       });
 
-      console.log(`Limit order executed: ${order.type} ${shares} shares of ${order.symbol} at ${executionPrice} (target: ${order.targetPrice})`);
+      console.log(`Limit order executed: ${order.type} ${sharesToExecute} shares of ${order.symbol} at ${executionPrice} (target: ${order.targetPrice})`);
     } catch (error) {
       console.error('Error executing limit order:', error);
     }

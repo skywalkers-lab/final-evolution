@@ -13,6 +13,8 @@ import Sidebar from "@/components/layout/sidebar";
 import TopBar from "@/components/layout/top-bar";
 import GuildSelector from "@/components/guild/guild-selector";
 import { formatKoreanCurrency } from "@/utils/formatCurrency";
+import { format } from "date-fns";
+import { ko } from "date-fns/locale";
 
 export default function BankPage() {
   const { user, selectedGuildId, isLoading } = useAuth();
@@ -20,6 +22,8 @@ export default function BankPage() {
   const [amount, setAmount] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [memo, setMemo] = useState('');
+  const [transactionTypeFilter, setTransactionTypeFilter] = useState<string>('all');
+  const [dateRangeFilter, setDateRangeFilter] = useState<string>('30d');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -36,6 +40,17 @@ export default function BankPage() {
   const { data: transactionHistory } = useQuery({
     queryKey: ['/api/web-client/guilds', selectedGuildId, 'transactions'],
     enabled: !!selectedGuildId,
+  });
+
+  // 지정가 주문 조회
+  const { data: limitOrders } = useQuery({
+    queryKey: [`/api/web-client/guilds/${selectedGuildId}/limit-orders`, 'pending'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', `/api/web-client/guilds/${selectedGuildId}/limit-orders?status=pending`);
+      return Array.isArray(response) ? response : [];
+    },
+    enabled: !!selectedGuildId,
+    refetchInterval: 5000, // 5초마다 자동 갱신
   });
 
   const transferMutation = useMutation({
@@ -273,6 +288,85 @@ export default function BankPage() {
           </CardContent>
         </Card>
 
+        {/* 지정가 주문 */}
+        {limitOrders && limitOrders.length > 0 && (
+          <Card className="discord-bg-darker border-discord-dark lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <i className="fas fa-clock text-yellow-500"></i>
+                  <span>대기중인 지정가 주문</span>
+                </div>
+                <Badge variant="outline" className="bg-yellow-500/10 text-yellow-400 border-yellow-500/30">
+                  {limitOrders.length}건
+                </Badge>
+              </CardTitle>
+              <CardDescription>예약된 매수/매도 주문</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {limitOrders.map((order: any, index: number) => {
+                  const executedShares = order.executedShares || 0;
+                  const remainingShares = order.shares - executedShares;
+                  const fillPercentage = executedShares > 0 ? (executedShares / order.shares) * 100 : 0;
+                  const isPartiallyFilled = executedShares > 0 && executedShares < order.shares;
+                  
+                  return (
+                    <div key={order.id} className="flex items-center justify-between p-4 bg-discord-dark rounded-lg border border-discord-light">
+                      <div className="flex items-center space-x-4 flex-1">
+                        <div className={`w-2 h-2 rounded-full ${order.type === 'buy' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-white font-medium">{order.symbol}</span>
+                            <Badge variant="outline" className={order.type === 'buy' ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30'}>
+                              {order.type === 'buy' ? '매수' : '매도'}
+                            </Badge>
+                            {isPartiallyFilled && (
+                              <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
+                                부분체결 {fillPercentage.toFixed(0)}%
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-400 mt-1">
+                            {isPartiallyFilled ? (
+                              <>
+                                <span className="text-blue-400">{executedShares.toLocaleString()}주 체결</span>
+                                <span className="mx-2">•</span>
+                                <span className="text-yellow-400">{remainingShares.toLocaleString()}주 대기</span>
+                                <span className="mx-2">@</span>
+                                {formatKoreanCurrency(Number(order.targetPrice))}
+                              </>
+                            ) : (
+                              <>
+                                {order.shares.toLocaleString()}주 @ {formatKoreanCurrency(Number(order.targetPrice))}
+                                <span className="mx-2">•</span>
+                                <span className="text-yellow-400">예약금: {formatKoreanCurrency(Number(order.reservedAmount))}</span>
+                              </>
+                            )}
+                          </div>
+                          {isPartiallyFilled && order.executedPrice && (
+                            <div className="text-xs text-blue-400 mt-1">
+                              평균 체결가: {formatKoreanCurrency(Number(order.executedPrice))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-white font-medium">
+                          {formatKoreanCurrency(Number(order.totalAmount))}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          {order.expiresAt ? `만료: ${format(new Date(order.expiresAt), 'MM/dd HH:mm', { locale: ko })}` : '무기한'}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* 거래 내역 */}
         <Card className="discord-bg-darker border-discord-dark lg:col-span-2">
           <CardHeader>
@@ -281,11 +375,78 @@ export default function BankPage() {
               <span>최근 거래 내역</span>
             </CardTitle>
             <CardDescription>지난 30일간의 입출금 내역</CardDescription>
+            
+            {/* Filters */}
+            <div className="flex flex-wrap gap-3 mt-4">
+              <div className="flex-1 min-w-[150px]">
+                <Label className="text-gray-300 text-sm mb-1 block">거래 유형</Label>
+                <select
+                  value={transactionTypeFilter}
+                  onChange={(e) => setTransactionTypeFilter(e.target.value)}
+                  className="w-full bg-discord-dark border border-discord-border rounded-md px-3 py-2 text-white text-sm"
+                >
+                  <option value="all">전체</option>
+                  <option value="deposit">입금</option>
+                  <option value="withdraw">출금</option>
+                  <option value="transfer">송금</option>
+                  <option value="stock">주식</option>
+                  <option value="tax">세금</option>
+                </select>
+              </div>
+              
+              <div className="flex-1 min-w-[150px]">
+                <Label className="text-gray-300 text-sm mb-1 block">기간</Label>
+                <select
+                  value={dateRangeFilter}
+                  onChange={(e) => setDateRangeFilter(e.target.value)}
+                  className="w-full bg-discord-dark border border-discord-border rounded-md px-3 py-2 text-white text-sm"
+                >
+                  <option value="7d">최근 7일</option>
+                  <option value="30d">최근 30일</option>
+                  <option value="90d">최근 90일</option>
+                  <option value="all">전체</option>
+                </select>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               {(transactionHistory as any)?.length > 0 ? (
-                (transactionHistory as any[]).map((transaction: any, index: number) => {
+                (transactionHistory as any[])
+                  .filter((transaction: any) => {
+                    // Type filter
+                    if (transactionTypeFilter === 'all') return true;
+                    
+                    const txType = transaction.type;
+                    if (transactionTypeFilter === 'deposit') {
+                      return txType === 'transfer_in' || txType === 'initial_deposit' || txType === 'admin_deposit';
+                    }
+                    if (transactionTypeFilter === 'withdraw') {
+                      return txType === 'transfer_out' || txType === 'admin_withdraw';
+                    }
+                    if (transactionTypeFilter === 'transfer') {
+                      return txType === 'transfer_in' || txType === 'transfer_out';
+                    }
+                    if (transactionTypeFilter === 'stock') {
+                      return txType === 'stock_buy' || txType === 'stock_sell';
+                    }
+                    if (transactionTypeFilter === 'tax') {
+                      return txType === 'tax';
+                    }
+                    return false;
+                  })
+                  .filter((transaction: any) => {
+                    // Date range filter
+                    if (dateRangeFilter === 'all') return true;
+                    
+                    const txDate = new Date(transaction.createdAt);
+                    const now = new Date();
+                    const daysAgo = parseInt(dateRangeFilter.replace('d', ''));
+                    const cutoffDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+                    
+                    return txDate >= cutoffDate;
+                  })
+                  .map((transaction: any, index: number) => {
                   const isReceive = transaction.type === 'transfer_in' || transaction.type === 'initial_deposit' || transaction.type === 'admin_deposit' || transaction.type === 'stock_sell';
                   const amount = Number(transaction.amount);
                   

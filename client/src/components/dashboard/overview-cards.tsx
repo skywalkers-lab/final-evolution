@@ -91,32 +91,28 @@ export default function OverviewCards({ data, portfolio }: OverviewCardsProps) {
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <div className="grid grid-cols-4 gap-1 h-full">
       {cards.map((card, index) => (
         <div 
           key={card.title}
-          className="discord-bg-darker rounded-xl border border-discord-dark p-6 flex flex-col justify-between"
+          className="discord-bg-darker rounded border border-discord-dark p-1 flex items-center justify-between"
           data-testid={card.testId}
         >
-          <div className="flex items-center justify-between mb-4">
-            <div className={`p-3 bg-${card.color} bg-opacity-20 rounded-lg`}>
-              <i className={`${card.icon} text-${card.color} text-lg`}></i>
+          <div className="flex items-center gap-1 min-w-0 flex-1">
+            <div className={`p-0.5 bg-${card.color} bg-opacity-20 rounded flex-shrink-0`}>
+              <i className={`${card.icon} text-${card.color} text-[9px]`}></i>
             </div>
-            <span className="text-xs text-gray-500">실시간</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[8px] text-gray-400 leading-tight truncate">{card.title}</p>
+              <p className="text-[11px] font-bold text-white leading-tight truncate" data-testid={`text-${card.testId}-value`}>
+                {card.value}
+              </p>
+            </div>
           </div>
-          <div className="flex-1">
-            <p className="text-sm text-gray-400 mb-2">{card.title}</p>
-            <p className="text-2xl font-bold text-white mb-3" data-testid={`text-${card.testId}-value`}>
-              {card.value}
-            </p>
-            <div className="flex items-center">
-              <span className={`text-sm ${card.change.startsWith('+') ? 'text-discord-green' : 'text-gray-400'}`}>
-                {card.change}
-              </span>
-              {card.changeText && (
-                <span className="text-gray-400 text-sm ml-2">{card.changeText}</span>
-              )}
-            </div>
+          <div className="text-right flex-shrink-0 ml-1">
+            <span className={`text-[8px] font-medium ${card.change.startsWith('+') ? 'text-discord-green' : 'text-gray-400'}`}>
+              {card.change}
+            </span>
           </div>
         </div>
       ))}

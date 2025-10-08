@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Bar, BarChart, ReferenceLine, ComposedChart, Tooltip } from "recharts";
 import { formatKoreanCurrency } from "@/utils/formatCurrency";
+import { convertToDirectImageUrl, handleImageError } from "@/utils/imageUrl";
 
 interface StockChartProps {
   symbol: string;
@@ -25,11 +26,29 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
   const [hoveredCandle, setHoveredCandle] = useState<{candle: any, x: number, y: number} | null>(null);
   const [isRealTimeMode, setIsRealTimeMode] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1); // 1 = 기본, 2 = 2배 확대, 0.5 = 2배 축소
+  const [showIndicators, setShowIndicators] = useState({
+    sma5: true,
+    sma20: true,
+    sma60: false,
+    sma120: false,
+    ema12: false,
+    ema26: false,
+    rsi: false,
+    macd: false,
+    bollingerBands: false,
+  });
 
   const { data: candlestickData = [] } = useQuery({
     queryKey: [`/api/web-client/guilds/${guildId}/stocks/${symbol}/candlestick/${timeframe}`],
     enabled: !!symbol && !!guildId,
     select: (data: any[]) => data || [],
+  });
+
+  const { data: indicators } = useQuery<any>({
+    queryKey: [`/api/web-client/guilds/${guildId}/stocks/${symbol}/indicators`, timeframe],
+    enabled: !!symbol && !!guildId,
+    refetchInterval: 10000, // 10초마다 갱신
+    select: (data: any) => data || {},
   });
 
   const selectedStock = stocks && Array.isArray(stocks) ? stocks.find(s => s?.symbol === symbol) : null;
@@ -91,7 +110,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     }, 10); // 10ms 딜레이로 여러 상태 변경을 배치 처리
     
     return () => clearTimeout(timer);
-  }, [candlestickData, symbol, zoomLevel, chartType, currentPrice]);
+  }, [candlestickData, symbol, zoomLevel, chartType, currentPrice, showIndicators, indicators]);
 
   // 실시간 애니메이션 효과를 위한 requestAnimationFrame
   useEffect(() => {
@@ -151,7 +170,6 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
   const handleZoomIn = () => {
     setZoomLevel(prev => {
       const newZoom = Math.min(5, prev + 0.2);
-      console.log(`[DEBUG] Zoom In: ${prev} → ${newZoom}`);
       // 상태 업데이트 후 즉시 차트 다시 그리기
       setTimeout(() => drawChart(), 0);
       return newZoom;
@@ -161,7 +179,6 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
   const handleZoomOut = () => {
     setZoomLevel(prev => {
       const newZoom = Math.max(0.1, prev - 0.2);
-      console.log(`[DEBUG] Zoom Out: ${prev} → ${newZoom}`);
       // 상태 업데이트 후 즉시 차트 다시 그리기
       setTimeout(() => drawChart(), 0);
       return newZoom;
@@ -170,7 +187,6 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
 
   const handleZoomReset = () => {
     setZoomLevel(prev => {
-      console.log(`[DEBUG] Zoom Reset: ${prev} → 1.0`);
       // 상태 업데이트 후 즉시 차트 다시 그리기
       setTimeout(() => drawChart(), 0);
       return 1;
@@ -625,7 +641,6 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
     }
     
     const displayData = sortedData.slice(-itemsToShow); // 최신 데이터가 오른쪽에 표시
-    console.log(`[DEBUG] Candlestick Chart - Zoom: ${zoomLevel}x, Base: ${baseItemCount}, Show: ${itemsToShow}, Display: ${displayData.length}`);
     
     const dataToUse = displayData;
 
@@ -917,6 +932,98 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
       const changeText = `${priceChange > 0 ? '+' : ''}${priceChange.toFixed(2)}%`;
       ctx.fillText(changeText, width - padding, height - 10);
     }
+
+    // Draw technical indicators overlay
+    if (indicators && candlestickData.length > 0) {
+      drawTechnicalIndicators(ctx, dataToUse, adjustedMaxPrice, adjustedMinPrice, adjustedPriceRange, padding, chartWidth, chartHeight);
+    }
+  };
+
+  // 기술적 지표 그리기 함수
+  const drawTechnicalIndicators = (
+    ctx: CanvasRenderingContext2D,
+    displayData: any[],
+    maxPrice: number,
+    minPrice: number,
+    priceRange: number,
+    padding: number,
+    chartWidth: number,
+    chartHeight: number
+  ) => {
+    if (!indicators) return;
+
+    const candleWidth = chartWidth / displayData.length;
+
+    // SMA 그리기
+    const drawSMA = (smaData: number[], color: string, label: string) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      
+      let started = false;
+      displayData.forEach((candle, index) => {
+        const smaValue = smaData[candlestickData.length - displayData.length + index];
+        if (isNaN(smaValue) || smaValue === undefined) return;
+        
+        const x = padding + (index * candleWidth) + candleWidth / 2;
+        const y = padding + ((maxPrice - smaValue) / priceRange) * chartHeight;
+        
+        if (!started) {
+          ctx.moveTo(x, y);
+          started = true;
+        } else {
+          ctx.lineTo(x, y);
+        }
+      });
+      
+      ctx.stroke();
+    };
+
+    if (showIndicators.sma5 && indicators?.sma5) {
+      drawSMA(indicators.sma5, '#FFD700', 'MA5');
+    }
+    if (showIndicators.sma20 && indicators?.sma20) {
+      drawSMA(indicators.sma20, '#FF69B4', 'MA20');
+    }
+    if (showIndicators.sma60 && indicators?.sma60) {
+      drawSMA(indicators.sma60, '#00CED1', 'MA60');
+    }
+    if (showIndicators.sma120 && indicators?.sma120) {
+      drawSMA(indicators.sma120, '#9370DB', 'MA120');
+    }
+
+    // Bollinger Bands 그리기
+    if (showIndicators.bollingerBands && indicators?.bollingerBands) {
+      const { upper, middle, lower } = indicators.bollingerBands;
+      
+      // Upper band
+      ctx.strokeStyle = 'rgba(147, 112, 219, 0.6)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 3]);
+      ctx.beginPath();
+      displayData.forEach((candle, index) => {
+        const upperValue = upper[candlestickData.length - displayData.length + index];
+        if (isNaN(upperValue)) return;
+        const x = padding + (index * candleWidth) + candleWidth / 2;
+        const y = padding + ((maxPrice - upperValue) / priceRange) * chartHeight;
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      // Lower band
+      ctx.beginPath();
+      displayData.forEach((candle, index) => {
+        const lowerValue = lower[candlestickData.length - displayData.length + index];
+        if (isNaN(lowerValue)) return;
+        const x = padding + (index * candleWidth) + candleWidth / 2;
+        const y = padding + ((maxPrice - lowerValue) / priceRange) * chartHeight;
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
   };
 
   const formatTimeRemaining = () => {
@@ -970,15 +1077,10 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                       <div className="w-6 h-6 rounded-full overflow-hidden bg-discord-darker border border-discord-light flex items-center justify-center">
                         {selectedStock.logoUrl ? (
                           <img 
-                            src={selectedStock.logoUrl} 
+                            src={convertToDirectImageUrl(selectedStock.logoUrl) || selectedStock.logoUrl} 
                             alt={`${selectedStock.symbol} 로고`}
                             className="w-full h-full object-cover"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = 'none';
-                              const nextElement = target.nextElementSibling as HTMLElement;
-                              if (nextElement) nextElement.style.display = 'flex';
-                            }}
+                            onError={handleImageError}
                           />
                         ) : null}
                         <div className={`w-full h-full bg-discord-blue rounded-full flex items-center justify-center text-xs font-bold text-white ${selectedStock.logoUrl ? 'hidden' : ''}`}>
@@ -997,15 +1099,10 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                       <div className="w-6 h-6 rounded-full overflow-hidden bg-discord-darker border border-discord-light flex items-center justify-center">
                         {stock.logoUrl ? (
                           <img 
-                            src={stock.logoUrl} 
+                            src={convertToDirectImageUrl(stock.logoUrl) || stock.logoUrl} 
                             alt={`${stock.symbol} 로고`}
                             className="w-full h-full object-cover"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = 'none';
-                              const nextElement = target.nextElementSibling as HTMLElement;
-                              if (nextElement) nextElement.style.display = 'flex';
-                            }}
+                            onError={handleImageError}
                           />
                         ) : null}
                         <div className={`w-full h-full bg-discord-blue rounded-full flex items-center justify-center text-xs font-bold text-white ${stock.logoUrl ? 'hidden' : ''}`}>
@@ -1062,7 +1159,7 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
               <div className="bg-discord-dark rounded-lg p-4">
                 <h4 className="text-sm text-gray-400 mb-2">현재가</h4>
                 <p className="text-2xl font-bold text-white mb-2" data-testid="text-current-price">
-                  {formatKoreanCurrency(currentPrice)}
+                  ₩{currentPrice.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
                 <div className="flex items-center space-x-2">
                   <span className={`text-sm font-semibold ${priceChange >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
@@ -1099,8 +1196,8 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
               </div>
             </div>
             
-            {/* Chart Type Selection and Zoom Controls */}
-            <div className="flex justify-between items-center mb-4">
+            {/* Chart Type Selection, Indicators and Zoom Controls */}
+            <div className="flex justify-between items-center mb-4 gap-4">
               <div className="flex bg-discord-dark rounded-lg p-1 gap-1">
                 <Button
                   variant={chartType === 'candlestick' ? 'default' : 'ghost'}
@@ -1121,6 +1218,8 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                   📈 꺾은선
                 </Button>
               </div>
+              
+
               
               {/* Zoom Controls */}
               <div className="flex items-center space-x-2 bg-discord-dark rounded-lg p-1">
@@ -1179,13 +1278,13 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
               </div>
             </div>
 
-            <div className="h-96 bg-discord-dark rounded-lg">
+            <div className="h-[500px] bg-discord-dark rounded-lg">
               {chartType === 'candlestick' ? (
                 <div className="w-full h-full flex items-center justify-center relative">
                   <canvas 
                     ref={canvasRef} 
-                    width={1200} 
-                    height={600} 
+                    width={1400} 
+                    height={700} 
                     className="max-w-full max-h-full cursor-crosshair border-2 border-discord-light/20 rounded"
                     data-testid="canvas-stock-chart"
                     onMouseMove={handleMouseMove}
@@ -1285,7 +1384,6 @@ export default function StockChart({ symbol, guildId, stocks, onSymbolChange }: 
                             }
                             
                             const displayData = sortedData.slice(-itemsToShow);
-                            console.log(`[DEBUG] Line Chart - Zoom: ${zoomLevel}x, Base: ${baseItemCount}, Show: ${itemsToShow}, Display: ${displayData.length}`);
                             return displayData.map((item: any, index: number, arr: any[]) => {
                             const date = new Date(item.timestamp);
                             let timeLabel = '';

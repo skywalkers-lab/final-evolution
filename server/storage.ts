@@ -1,7 +1,8 @@
 import { 
   users, accounts, transactions, stocks, holdings, stockTransactions, 
   candlestickData, newsAnalyses, auctions, auctionBids, escrows, 
-  auditLogs, guildSettings, guildAdmins, auctionPasswords, limitOrders,
+  auditLogs, guildSettings, guildAdmins, auctionPasswords, limitOrders, robloxLinks,
+  orderBook, marketDepth, publicAccounts, robloxMapApis,
   type User, type InsertUser, type Account, type InsertAccount,
   type Transaction, type InsertTransaction, type Stock, type InsertStock,
   type Holding, type InsertHolding, type StockTransaction, type InsertStockTransaction,
@@ -9,7 +10,10 @@ import {
   type Auction, type InsertAuction, type AuctionBid, type InsertAuctionBid,
   type Escrow, type InsertEscrow, type AuditLog, type InsertAuditLog,
   type GuildSettings, type InsertGuildSettings, type GuildAdmin, type InsertGuildAdmin,
-  type AuctionPassword, type InsertAuctionPassword, type LimitOrder, type InsertLimitOrder
+  type AuctionPassword, type InsertAuctionPassword, type LimitOrder, type InsertLimitOrder,
+  type RobloxLink, type InsertRobloxLink, type OrderBook, type InsertOrderBook,
+  type MarketDepth, type InsertMarketDepth, type PublicAccount, type InsertPublicAccount,
+  type RobloxMapApi, type InsertRobloxMapApi
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql, gt, lt, asc, gte, lte } from "drizzle-orm";
@@ -64,6 +68,7 @@ export interface IStorage {
   updateHolding(guildId: string, userId: string, symbol: string, shares: number, avgPrice: number): Promise<void>;
   getStockTransactionsByUser(guildId: string, userId: string): Promise<StockTransaction[]>;
   getRecentTradesBySymbol(guildId: string, symbol: string, minutes: number): Promise<StockTransaction[]>;
+  getAllTrades(guildId: string): Promise<StockTransaction[]>;
   executeTrade(guildId: string, userId: string, symbol: string, type: 'buy' | 'sell', shares: number, price: number): Promise<StockTransaction>;
   transferStock(guildId: string, fromUserId: string, toUserId: string, symbol: string, shares: number): Promise<void>;
 
@@ -96,6 +101,14 @@ export interface IStorage {
   // Additional admin methods needed by Discord bot
   isAdmin(guildId: string, discordUserId: string): Promise<boolean>;
   grantAdminPermission(guildId: string, targetDiscordId: string, grantedBy: string): Promise<void>;
+  
+  // Account management methods
+  updateAccount(accountId: string, updates: Partial<Account>): Promise<Account>;
+  getUserById(userId: string): Promise<User | undefined>;
+  
+  // Transaction methods
+  createTransaction(transaction: InsertTransaction): Promise<Transaction>;
+  getTransactionsByUser(guildId: string, userId: string, limit?: number): Promise<Transaction[]>;
   removeAdminPermission(guildId: string, targetDiscordId: string): Promise<void>;
   setTaxRate(guildId: string, rate: number): Promise<void>;
   hasActiveAccount(guildId: string, discordUserId: string): Promise<boolean>;
@@ -135,8 +148,46 @@ export interface IStorage {
   getLimitOrdersByGuild(guildId: string, status?: string): Promise<LimitOrder[]>;
   cancelLimitOrder(id: string): Promise<void>;
   executeLimitOrder(id: string, executedPrice: number, executedShares: number): Promise<LimitOrder>;
+  partialExecuteLimitOrder(id: string, executedPrice: number, executedShares: number): Promise<LimitOrder>;
   checkPendingOrdersForSymbol(guildId: string, symbol: string, currentPrice: number): Promise<LimitOrder[]>;
   expireLimitOrders(): Promise<void>;
+
+  // Roblox account linking
+  createRobloxLinkRequest(discordUserId: string, verificationCode: string): Promise<RobloxLink>;
+  getRobloxLinkByDiscordId(discordUserId: string): Promise<RobloxLink | undefined>;
+  getRobloxLinkByRobloxId(robloxUserId: string): Promise<RobloxLink | undefined>;
+  getRobloxLinkByVerificationCode(code: string): Promise<RobloxLink | undefined>;
+  verifyRobloxLink(discordUserId: string, robloxUserId: string, robloxUsername: string): Promise<RobloxLink>;
+  deleteRobloxLink(discordUserId: string): Promise<void>;
+  expireRobloxLinks(): Promise<void>;
+
+  // Order Book (호가창)
+  updateOrderBook(guildId: string, symbol: string, side: 'buy' | 'sell', price: number, quantity: number): Promise<void>;
+  getOrderBook(guildId: string, symbol: string, depth?: number): Promise<{ bids: Array<{price: number, quantity: number}>, asks: Array<{price: number, quantity: number}> }>;
+  clearOrderBookLevel(guildId: string, symbol: string, side: 'buy' | 'sell', price: number): Promise<void>;
+  
+  // Market Depth
+  updateMarketDepth(guildId: string, symbol: string): Promise<void>;
+  getMarketDepth(guildId: string, symbol: string): Promise<MarketDepth | undefined>;
+  getBestBidAsk(guildId: string, symbol: string): Promise<{ bestBid: number | null, bestAsk: number | null, spread: number | null }>;
+
+  // Public Accounts
+  createPublicAccount(account: InsertPublicAccount): Promise<PublicAccount>;
+  getPublicAccountByNumber(guildId: string, accountNumber: string): Promise<PublicAccount | undefined>;
+  getPublicAccountByName(guildId: string, accountName: string): Promise<PublicAccount | undefined>;
+  getPublicAccountsByGuild(guildId: string): Promise<PublicAccount[]>;
+  updatePublicAccountBalance(id: string, balance: number): Promise<void>;
+  setTreasuryAccount(guildId: string, accountNumber: string): Promise<void>;
+  getTreasuryAccount(guildId: string): Promise<PublicAccount | undefined>;
+
+  // Roblox Map APIs
+  createMapApi(api: InsertRobloxMapApi): Promise<RobloxMapApi>;
+  getMapApiByName(guildId: string, mapName: string): Promise<RobloxMapApi | undefined>;
+  getMapApisByGuild(guildId: string): Promise<RobloxMapApi[]>;
+  updateMapApiToken(id: string, token: string): Promise<void>;
+  updateMapApiEnabled(id: string, enabled: boolean): Promise<void>;
+  deleteMapApi(id: string): Promise<void>;
+  getMapApiByToken(token: string): Promise<RobloxMapApi | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -269,15 +320,7 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async getTransactionsByUser(guildId: string, userId: string, limit = 50): Promise<Transaction[]> {
-    return await db.select().from(transactions)
-      .where(and(
-        eq(transactions.guildId, guildId),
-        or(eq(transactions.fromUserId, userId), eq(transactions.toUserId, userId))
-      ))
-      .orderBy(desc(transactions.createdAt))
-      .limit(limit);
-  }
+
 
   async getTransactionHistory(guildId: string, options: { userId?: string; type?: string; limit?: number }): Promise<Transaction[]> {
     const conditions = [eq(transactions.guildId, guildId)];
@@ -600,6 +643,12 @@ export class DatabaseStorage implements IStorage {
         eq(stockTransactions.symbol, symbol),
         gte(stockTransactions.createdAt, cutoffTime)
       ))
+      .orderBy(desc(stockTransactions.createdAt));
+  }
+
+  async getAllTrades(guildId: string): Promise<StockTransaction[]> {
+    return await db.select().from(stockTransactions)
+      .where(eq(stockTransactions.guildId, guildId))
       .orderBy(desc(stockTransactions.createdAt));
   }
 
@@ -1590,6 +1639,19 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  async partialExecuteLimitOrder(id: string, executedPrice: number, executedShares: number): Promise<LimitOrder> {
+    const [result] = await db.update(limitOrders)
+      .set({ 
+        status: 'pending', // 부분 체결이므로 계속 pending 상태 유지
+        executedPrice: executedPrice.toString(),
+        executedShares // 누적 체결 수량 업데이트
+      })
+      .where(eq(limitOrders.id, id))
+      .returning();
+    
+    return result;
+  }
+
   async checkPendingOrdersForSymbol(guildId: string, symbol: string, currentPrice: number): Promise<LimitOrder[]> {
     return await db.select().from(limitOrders)
       .where(and(
@@ -1713,6 +1775,388 @@ export class DatabaseStorage implements IStorage {
     );
     
     return usersResult;
+  }
+
+  // 추가된 메서드들
+  async updateAccount(accountId: string, updates: Partial<Account>): Promise<Account> {
+    const [updated] = await db.update(accounts)
+      .set(updates)
+      .where(eq(accounts.id, accountId))
+      .returning();
+    return updated;
+  }
+
+  async getUserById(userId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    return user || undefined;
+  }
+
+  async createTransaction(transaction: InsertTransaction): Promise<Transaction> {
+    const [created] = await db.insert(transactions).values(transaction).returning();
+    return created;
+  }
+
+  async getTransactionsByUser(guildId: string, userId: string, limit: number = 50): Promise<Transaction[]> {
+    return await db.select().from(transactions)
+      .where(
+        and(
+          eq(transactions.guildId, guildId),
+          or(
+            eq(transactions.fromUserId, userId),
+            eq(transactions.toUserId, userId)
+          )
+        )
+      )
+      .orderBy(desc(transactions.createdAt))
+      .limit(limit);
+  }
+
+  // Roblox account linking methods
+  async createRobloxLinkRequest(discordUserId: string, verificationCode: string): Promise<RobloxLink> {
+    // Delete any existing pending/expired links for this Discord user
+    await db.delete(robloxLinks).where(eq(robloxLinks.discordUserId, discordUserId));
+
+    // Create new link request (expires in 10 minutes)
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const [link] = await db.insert(robloxLinks).values({
+      discordUserId,
+      verificationCode,
+      status: 'pending',
+      expiresAt,
+    }).returning();
+    
+    return link;
+  }
+
+  async getRobloxLinkByDiscordId(discordUserId: string): Promise<RobloxLink | undefined> {
+    const [link] = await db.select().from(robloxLinks)
+      .where(eq(robloxLinks.discordUserId, discordUserId));
+    return link || undefined;
+  }
+
+  async getRobloxLinkByRobloxId(robloxUserId: string): Promise<RobloxLink | undefined> {
+    const [link] = await db.select().from(robloxLinks)
+      .where(eq(robloxLinks.robloxUserId, robloxUserId));
+    return link || undefined;
+  }
+
+  async getRobloxLinkByVerificationCode(code: string): Promise<RobloxLink | undefined> {
+    const [link] = await db.select().from(robloxLinks)
+      .where(
+        and(
+          eq(robloxLinks.verificationCode, code),
+          eq(robloxLinks.status, 'pending')
+        )
+      );
+    return link || undefined;
+  }
+
+  async verifyRobloxLink(discordUserId: string, robloxUserId: string, robloxUsername: string): Promise<RobloxLink> {
+    const [updated] = await db.update(robloxLinks)
+      .set({
+        robloxUserId,
+        robloxUsername,
+        status: 'verified',
+        verifiedAt: new Date(),
+      })
+      .where(eq(robloxLinks.discordUserId, discordUserId))
+      .returning();
+    
+    return updated;
+  }
+
+  async deleteRobloxLink(discordUserId: string): Promise<void> {
+    await db.delete(robloxLinks).where(eq(robloxLinks.discordUserId, discordUserId));
+  }
+
+  async expireRobloxLinks(): Promise<void> {
+    // Expire all pending links that have passed their expiration time
+    await db.update(robloxLinks)
+      .set({ status: 'expired' })
+      .where(
+        and(
+          eq(robloxLinks.status, 'pending'),
+          lt(robloxLinks.expiresAt, new Date())
+        )
+      );
+  }
+
+  // Order Book (호가창) methods
+  async updateOrderBook(guildId: string, symbol: string, side: 'buy' | 'sell', price: number, quantity: number): Promise<void> {
+    if (quantity <= 0) {
+      // Remove order book entry if quantity is 0 or less
+      await this.clearOrderBookLevel(guildId, symbol, side, price);
+      return;
+    }
+
+    // Use ON CONFLICT to update quantity if entry exists, otherwise insert
+    await db.insert(orderBook)
+      .values({
+        guildId,
+        symbol,
+        side,
+        price: price.toFixed(2),
+        quantity,
+      })
+      .onConflictDoUpdate({
+        target: [orderBook.guildId, orderBook.symbol, orderBook.side, orderBook.price],
+        set: {
+          quantity,
+          updatedAt: new Date(),
+        }
+      });
+  }
+
+  async getOrderBook(guildId: string, symbol: string, depth: number = 10): Promise<{ 
+    bids: Array<{price: number, quantity: number}>, 
+    asks: Array<{price: number, quantity: number}> 
+  }> {
+    // Get buy orders (bids) - highest prices first
+    const bidsRaw = await db.select({
+      price: orderBook.price,
+      quantity: orderBook.quantity,
+    })
+      .from(orderBook)
+      .where(
+        and(
+          eq(orderBook.guildId, guildId),
+          eq(orderBook.symbol, symbol),
+          eq(orderBook.side, 'buy')
+        )
+      )
+      .orderBy(desc(orderBook.price))
+      .limit(depth);
+
+    // Get sell orders (asks) - lowest prices first
+    const asksRaw = await db.select({
+      price: orderBook.price,
+      quantity: orderBook.quantity,
+    })
+      .from(orderBook)
+      .where(
+        and(
+          eq(orderBook.guildId, guildId),
+          eq(orderBook.symbol, symbol),
+          eq(orderBook.side, 'sell')
+        )
+      )
+      .orderBy(asc(orderBook.price))
+      .limit(depth);
+
+    // Convert string prices to numbers
+    const bids = bidsRaw.map(b => ({ price: Number(b.price), quantity: b.quantity }));
+    const asks = asksRaw.map(a => ({ price: Number(a.price), quantity: a.quantity }));
+
+    return { bids, asks };
+  }
+
+  async clearOrderBookLevel(guildId: string, symbol: string, side: 'buy' | 'sell', price: number): Promise<void> {
+    await db.delete(orderBook)
+      .where(
+        and(
+          eq(orderBook.guildId, guildId),
+          eq(orderBook.symbol, symbol),
+          eq(orderBook.side, side),
+          eq(orderBook.price, price.toFixed(2))
+        )
+      );
+  }
+
+  async updateMarketDepth(guildId: string, symbol: string): Promise<void> {
+    const book = await this.getOrderBook(guildId, symbol, 20);
+    
+    const bidPrices = book.bids.map(b => ({ price: b.price, quantity: b.quantity }));
+    const askPrices = book.asks.map(a => ({ price: a.price, quantity: a.quantity }));
+    
+    const bestBid = bidPrices[0]?.price || null;
+    const bestAsk = askPrices[0]?.price || null;
+    const spread = (bestBid && bestAsk) ? (bestAsk - bestBid) : null;
+
+    await db.insert(marketDepth)
+      .values({
+        guildId,
+        symbol,
+        bidPrices,
+        askPrices,
+        spread: spread !== null ? spread.toFixed(2) : null,
+        lastUpdated: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: [marketDepth.guildId, marketDepth.symbol],
+        set: {
+          bidPrices,
+          askPrices,
+          spread: spread !== null ? spread.toFixed(2) : null,
+          lastUpdated: new Date(),
+        }
+      });
+  }
+
+  async getMarketDepth(guildId: string, symbol: string): Promise<MarketDepth | undefined> {
+    const [depth] = await db.select()
+      .from(marketDepth)
+      .where(
+        and(
+          eq(marketDepth.guildId, guildId),
+          eq(marketDepth.symbol, symbol)
+        )
+      );
+    return depth || undefined;
+  }
+
+  async getBestBidAsk(guildId: string, symbol: string): Promise<{ 
+    bestBid: number | null, 
+    bestAsk: number | null, 
+    spread: number | null 
+  }> {
+    const [highestBid] = await db.select()
+      .from(orderBook)
+      .where(
+        and(
+          eq(orderBook.guildId, guildId),
+          eq(orderBook.symbol, symbol),
+          eq(orderBook.side, 'buy')
+        )
+      )
+      .orderBy(desc(orderBook.price))
+      .limit(1);
+
+    const [lowestAsk] = await db.select()
+      .from(orderBook)
+      .where(
+        and(
+          eq(orderBook.guildId, guildId),
+          eq(orderBook.symbol, symbol),
+          eq(orderBook.side, 'sell')
+        )
+      )
+      .orderBy(asc(orderBook.price))
+      .limit(1);
+
+    const bestBid = highestBid?.price ? Number(highestBid.price) : null;
+    const bestAsk = lowestAsk?.price ? Number(lowestAsk.price) : null;
+    const spread = (bestBid && bestAsk) ? (bestAsk - bestBid) : null;
+
+    return { bestBid, bestAsk, spread };
+  }
+
+  // Public Account methods
+  async createPublicAccount(account: InsertPublicAccount): Promise<PublicAccount> {
+    const [newAccount] = await db.insert(publicAccounts).values(account).returning();
+    return newAccount;
+  }
+
+  async getPublicAccountByNumber(guildId: string, accountNumber: string): Promise<PublicAccount | undefined> {
+    const [account] = await db.select()
+      .from(publicAccounts)
+      .where(
+        and(
+          eq(publicAccounts.guildId, guildId),
+          eq(publicAccounts.accountNumber, accountNumber)
+        )
+      );
+    return account || undefined;
+  }
+
+  async getPublicAccountByName(guildId: string, accountName: string): Promise<PublicAccount | undefined> {
+    const [account] = await db.select()
+      .from(publicAccounts)
+      .where(
+        and(
+          eq(publicAccounts.guildId, guildId),
+          eq(publicAccounts.accountName, accountName)
+        )
+      );
+    return account || undefined;
+  }
+
+  async getPublicAccountsByGuild(guildId: string): Promise<PublicAccount[]> {
+    return await db.select()
+      .from(publicAccounts)
+      .where(eq(publicAccounts.guildId, guildId));
+  }
+
+  async updatePublicAccountBalance(id: string, balance: number): Promise<void> {
+    await db.update(publicAccounts)
+      .set({ balance: balance.toString() })
+      .where(eq(publicAccounts.id, id));
+  }
+
+  async setTreasuryAccount(guildId: string, accountNumber: string): Promise<void> {
+    // 먼저 모든 계좌의 isTreasury를 false로 설정
+    await db.update(publicAccounts)
+      .set({ isTreasury: false })
+      .where(eq(publicAccounts.guildId, guildId));
+
+    // 선택된 계좌를 국고로 설정
+    await db.update(publicAccounts)
+      .set({ isTreasury: true })
+      .where(
+        and(
+          eq(publicAccounts.guildId, guildId),
+          eq(publicAccounts.accountNumber, accountNumber)
+        )
+      );
+  }
+
+  async getTreasuryAccount(guildId: string): Promise<PublicAccount | undefined> {
+    const [account] = await db.select()
+      .from(publicAccounts)
+      .where(
+        and(
+          eq(publicAccounts.guildId, guildId),
+          eq(publicAccounts.isTreasury, true)
+        )
+      );
+    return account || undefined;
+  }
+
+  // Roblox Map API methods
+  async createMapApi(api: InsertRobloxMapApi): Promise<RobloxMapApi> {
+    const [newApi] = await db.insert(robloxMapApis).values(api).returning();
+    return newApi;
+  }
+
+  async getMapApiByName(guildId: string, mapName: string): Promise<RobloxMapApi | undefined> {
+    const [api] = await db.select()
+      .from(robloxMapApis)
+      .where(
+        and(
+          eq(robloxMapApis.guildId, guildId),
+          eq(robloxMapApis.mapName, mapName)
+        )
+      );
+    return api || undefined;
+  }
+
+  async getMapApisByGuild(guildId: string): Promise<RobloxMapApi[]> {
+    return await db.select()
+      .from(robloxMapApis)
+      .where(eq(robloxMapApis.guildId, guildId));
+  }
+
+  async updateMapApiToken(id: string, token: string): Promise<void> {
+    await db.update(robloxMapApis)
+      .set({ token })
+      .where(eq(robloxMapApis.id, id));
+  }
+
+  async updateMapApiEnabled(id: string, enabled: boolean): Promise<void> {
+    await db.update(robloxMapApis)
+      .set({ enabled })
+      .where(eq(robloxMapApis.id, id));
+  }
+
+  async deleteMapApi(id: string): Promise<void> {
+    await db.delete(robloxMapApis)
+      .where(eq(robloxMapApis.id, id));
+  }
+
+  async getMapApiByToken(token: string): Promise<RobloxMapApi | undefined> {
+    const [api] = await db.select()
+      .from(robloxMapApis)
+      .where(eq(robloxMapApis.token, token));
+    return api || undefined;
   }
 }
 

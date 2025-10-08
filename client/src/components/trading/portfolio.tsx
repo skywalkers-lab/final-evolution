@@ -163,60 +163,60 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
   const holdings = (portfolio as any)?.holdings || [];
 
   return (
-    <div className="discord-bg-darker rounded-xl border border-discord-dark">
-      <div className="p-6 border-b border-discord-dark">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <h3 className="text-lg font-semibold text-white">내 포트폴리오</h3>
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="p-1.5 border-b border-discord-dark flex-shrink-0">
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center space-x-1.5">
+            <h3 className="text-[10px] font-semibold text-white">포트폴리오</h3>
             {(accountData as any)?.account ? (
-              <div className="text-sm bg-discord-dark px-3 py-1 rounded-full" data-testid="text-account-number">
-                <span className="text-gray-400">계좌번호: </span>
-                <span className="text-white font-mono">{(accountData as any).account.uniqueCode}</span>
+              <div className="text-[9px] bg-discord-dark px-1 py-0.5 rounded" data-testid="text-account-number">
+                <span className="text-gray-400">계좌: </span>
+                <span className="text-white font-mono text-[8px]">{(accountData as any).account.uniqueCode}</span>
               </div>
             ) : (
-              <div className="text-sm bg-red-900/20 text-red-400 px-3 py-1 rounded-full border border-red-800" data-testid="text-no-account">
+              <div className="text-[9px] bg-red-900/20 text-red-400 px-1 py-0.5 rounded border border-red-800" data-testid="text-no-account">
                 계좌없음
               </div>
             )}
           </div>
-          <div className="flex items-center space-x-4">
-            {(accountData as any)?.account ? (
-              <>
-                <div className="text-sm text-gray-400">
-                  <span>총 평가액: </span>
-                  <span className="text-white font-medium" data-testid="text-portfolio-value">
-                    {formatKoreanCurrency(totalValue)}
-                  </span>
-                </div>
-                <div className="text-sm" data-testid="text-portfolio-change">
-                  {formatProfitLoss(profitLoss, (profitLoss / Math.max(totalValue - profitLoss, 1)) * 100)}
-                </div>
-              </>
-            ) : (
-              <div className="text-sm text-gray-400" data-testid="text-no-portfolio">
-                계좌를 개설해주세요
+        </div>
+        <div className="flex items-center justify-between text-[10px]">
+          {(accountData as any)?.account ? (
+            <>
+              <div className="text-gray-400">
+                <span className="text-[9px]">평가: </span>
+                <span className="text-white font-medium text-[10px]" data-testid="text-portfolio-value">
+                  {formatKoreanCurrency(totalValue)}
+                </span>
               </div>
-            )}
-          </div>
+              <div className="text-[10px]" data-testid="text-portfolio-change">
+                {formatProfitLoss(profitLoss, (profitLoss / Math.max(totalValue - profitLoss, 1)) * 100)}
+              </div>
+            </>
+          ) : (
+            <div className="text-[9px] text-gray-400" data-testid="text-no-portfolio">
+              계좌를 개설해주세요
+            </div>
+          )}
         </div>
       </div>
       
-      <div className="p-6">
+      <div className="flex-1 overflow-auto p-1.5 min-h-0">
         {holdings.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed">
               <thead>
-                <tr className="text-left text-sm text-gray-400">
-                  <th className="pb-3 font-medium">종목명</th>
-                  <th className="pb-3 text-right font-medium">보유량</th>
-                  <th className="pb-3 text-right font-medium">평균단가</th>
-                  <th className="pb-3 text-right font-medium">현재가</th>
-                  <th className="pb-3 text-right font-medium">평가액</th>
-                  <th className="pb-3 text-center font-medium">손익률</th>
-                  <th className="pb-3 text-center font-medium">액션</th>
+                <tr className="text-left text-[9px] text-gray-400">
+                  <th className="pb-0.5 font-medium w-20">종목</th>
+                  <th className="pb-0.5 text-right font-medium w-14">보유</th>
+                  <th className="pb-0.5 text-right font-medium w-16">평단</th>
+                  <th className="pb-0.5 text-right font-medium w-16">현재</th>
+                  <th className="pb-0.5 text-right font-medium w-20">평가</th>
+                  <th className="pb-0.5 text-center font-medium w-16">손익</th>
+                  <th className="pb-0.5 text-center font-medium w-16"></th>
                 </tr>
               </thead>
-              <tbody className="text-sm">
+              <tbody className="text-[9px]">
                 {holdings.map((holding: any, index: number) => {
                   const currentValue = holding.currentPrice * holding.shares;
                   const originalValue = holding.avgPrice * holding.shares;
@@ -224,10 +224,10 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
                   const profitPercent = ((currentValue - originalValue) / originalValue) * 100;
                   
                   return (
-                    <tr key={holding.symbol} className="border-t border-discord-dark" data-testid={`row-holding-${index}`}>
-                      <td className="py-4">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 rounded-full overflow-hidden bg-discord-dark border border-discord-light flex items-center justify-center">
+                    <tr key={holding.symbol} className="border-t border-discord-dark/50" data-testid={`row-holding-${index}`}>
+                      <td className="py-1">
+                        <div className="flex items-center space-x-1">
+                          <div className="w-4 h-4 rounded-full overflow-hidden bg-discord-dark border border-discord-light flex items-center justify-center flex-shrink-0">
                             {holding.logoUrl ? (
                               <img 
                                 src={holding.logoUrl} 
@@ -242,54 +242,51 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
                                 }}
                               />
                             ) : null}
-                            <div className={`w-full h-full bg-discord-blue rounded-full flex items-center justify-center text-xs font-bold text-white ${holding.logoUrl ? 'hidden' : ''}`}>
+                            <div className={`w-full h-full bg-discord-blue rounded-full flex items-center justify-center text-[8px] font-bold text-white ${holding.logoUrl ? 'hidden' : ''}`}>
                               {holding.symbol.substring(0, 2)}
                             </div>
                           </div>
-                          <div>
-                            <p className="text-white font-medium" data-testid={`text-holding-symbol-${index}`}>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-white font-medium truncate text-[9px]" data-testid={`text-holding-symbol-${index}`}>
                               {holding.symbol}
-                            </p>
-                            <p className="text-gray-400 text-xs" data-testid={`text-holding-name-${index}`}>
-                              {holding.name || holding.symbol}
                             </p>
                           </div>
                         </div>
                       </td>
-                      <td className="py-4 text-white text-right font-mono" data-testid={`text-holding-shares-${index}`}>
-                        {holding.shares.toLocaleString()}주
+                      <td className="py-1 text-white text-right font-mono" data-testid={`text-holding-shares-${index}`}>
+                        {holding.shares.toLocaleString()}
                       </td>
-                      <td className="py-4 text-green-400 font-semibold text-right font-mono" data-testid={`text-holding-avg-price-${index}`}>
+                      <td className="py-1 text-green-400 font-semibold text-right font-mono" data-testid={`text-holding-avg-price-${index}`}>
                         {formatKoreanCurrency(Number(holding.avgPrice))}
                       </td>
-                      <td className="py-4 text-white text-right font-mono" data-testid={`text-holding-current-price-${index}`}>
+                      <td className="py-1 text-white text-right font-mono" data-testid={`text-holding-current-price-${index}`}>
                         {formatKoreanCurrency(Number(holding.currentPrice))}
                       </td>
-                      <td className="py-4 text-white font-medium text-right font-mono" data-testid={`text-holding-market-value-${index}`}>
+                      <td className="py-1 text-white font-medium text-right font-mono" data-testid={`text-holding-market-value-${index}`}>
                         {formatKoreanCurrency(currentValue)}
                       </td>
-                      <td className="py-4 text-center" data-testid={`text-holding-profit-loss-${index}`}>
+                      <td className="py-1 text-center" data-testid={`text-holding-profit-loss-${index}`}>
                         {formatProfitLoss(profitAmount, profitPercent)}
                       </td>
-                      <td className="py-4">
-                        <div className="flex space-x-1 justify-center">
+                      <td className="py-1">
+                        <div className="flex gap-0.5 justify-center">
                           <Button 
                             size="sm"
-                            className="bg-discord-blue hover:bg-blue-600 text-white px-3 py-1 text-xs disabled:opacity-50"
+                            className="bg-discord-blue hover:bg-blue-600 text-white px-1 py-0.5 text-[8px] disabled:opacity-50 h-4 leading-none"
                             data-testid={`button-buy-more-${index}`}
                             disabled={isTrading === `${holding.symbol}-buy`}
                             onClick={() => executeTrade(holding.symbol, 'buy', holding.currentPrice)}
                           >
-                            {isTrading === `${holding.symbol}-buy` ? '매수중...' : '매수'}
+                            {isTrading === `${holding.symbol}-buy` ? '...' : '매수'}
                           </Button>
                           <Button 
                             size="sm"
-                            className="bg-discord-red hover:bg-red-600 text-white px-3 py-1 text-xs disabled:opacity-50"
+                            className="bg-discord-red hover:bg-red-600 text-white px-1 py-0.5 text-[8px] disabled:opacity-50 h-4 leading-none"
                             data-testid={`button-sell-holding-${index}`}
                             disabled={isTrading === `${holding.symbol}-sell` || holding.shares <= 0}
                             onClick={() => executeTrade(holding.symbol, 'sell', holding.currentPrice)}
                           >
-                            {isTrading === `${holding.symbol}-sell` ? '매도중...' : '매도'}
+                            {isTrading === `${holding.symbol}-sell` ? '...' : '매도'}
                           </Button>
                         </div>
                       </td>
@@ -300,8 +297,8 @@ export default function Portfolio({ guildId, userId }: PortfolioProps) {
             </table>
           </div>
         ) : (
-          <div className="text-center text-gray-400 py-8">
-            보유 중인 주식이 없습니다
+          <div className="text-center text-gray-400 py-4 text-[9px]">
+            보유 주식 없음
           </div>
         )}
       </div>

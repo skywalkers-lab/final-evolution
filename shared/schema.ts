@@ -17,6 +17,9 @@ export const auctionItemTypeEnum = pgEnum('auction_item_type', ['text', 'stock']
 export const stockTransactionTypeEnum = pgEnum('stock_transaction_type', ['buy', 'sell']);
 export const escrowStatusEnum = pgEnum('escrow_status', ['held', 'released', 'captured']);
 export const limitOrderStatusEnum = pgEnum('limit_order_status', ['pending', 'executed', 'cancelled', 'expired']);
+export const marketSessionEnum = pgEnum('market_session', ['pre_market', 'regular', 'after_hours', 'closed']);
+export const orderTypeEnum = pgEnum('order_type', ['market', 'limit', 'stop_loss', 'stop_limit']);
+export const timeInForceEnum = pgEnum('time_in_force', ['day', 'gtc', 'ioc', 'fok']); // GTC: Good Till Cancelled, IOC: Immediate or Cancel, FOK: Fill or Kill
 
 // Users table
 export const users = pgTable("users", {
@@ -71,6 +74,7 @@ export const accounts = pgTable("accounts", {
   userId: varchar("user_id").notNull().references(() => users.id),
   uniqueCode: varchar("unique_code").notNull(),
   balance: decimal("balance", { precision: 15, scale: 2 }).default("1000000"), // Default 1M won
+  password: text("password"), // 계좌 비밀번호 (해시됨)
   frozen: boolean("frozen").default(false),
   tradingSuspended: boolean("trading_suspended").default(false),
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
@@ -247,6 +251,38 @@ export const auditLogs = pgTable("audit_logs", {
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
 });
 
+// Public Accounts (공용계좌)
+export const publicAccounts = pgTable("public_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  guildId: varchar("guild_id").notNull(),
+  accountName: text("account_name").notNull(), // 공용계좌 이름
+  accountNumber: varchar("account_number").notNull(), // 계좌번호
+  password: text("password").notNull(), // 공용계좌 비밀번호 (해시됨)
+  balance: decimal("balance", { precision: 15, scale: 2 }).default("0"),
+  isTreasury: boolean("is_treasury").default(false), // 국고 계좌 여부
+  createdBy: varchar("created_by").notNull(), // Discord user ID
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+}, (table) => ({
+  // 길드별 계좌번호 유니크
+  uniqueGuildAccountNumber: unique('unique_guild_account_number').on(table.guildId, table.accountNumber),
+  // 길드별 계좌 이름 유니크
+  uniqueGuildAccountName: unique('unique_guild_account_name').on(table.guildId, table.accountName)
+}));
+
+// Roblox Map APIs (로블록스 맵 API 관리)
+export const robloxMapApis = pgTable("roblox_map_apis", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  guildId: varchar("guild_id").notNull(),
+  mapName: text("map_name").notNull(), // 맵 이름
+  token: text("token").notNull(), // API 토큰
+  enabled: boolean("enabled").default(true), // 활성화 상태
+  createdBy: varchar("created_by").notNull(), // Discord user ID
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+}, (table) => ({
+  // 길드별 맵 이름 유니크
+  uniqueGuildMapName: unique('unique_guild_map_name').on(table.guildId, table.mapName)
+}));
+
 // Limit Orders table
 export const limitOrders = pgTable("limit_orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -265,6 +301,98 @@ export const limitOrders = pgTable("limit_orders", {
   executedPrice: decimal("executed_price", { precision: 15, scale: 2 }),
   executedShares: integer("executed_shares"),
 });
+
+// Roblox account linking status enum
+export const robloxLinkStatusEnum = pgEnum('roblox_link_status', ['pending', 'verified', 'expired']);
+
+// Roblox Links table (for linking Discord users to Roblox accounts)
+export const robloxLinks = pgTable("roblox_links", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  discordUserId: varchar("discord_user_id").notNull().unique(), // One Roblox account per Discord user
+  robloxUserId: varchar("roblox_user_id").unique(), // Roblox user ID (verified)
+  robloxUsername: text("roblox_username"), // Roblox username (for display)
+  verificationCode: varchar("verification_code", { length: 8 }).notNull(), // 8-digit code for verification
+  status: robloxLinkStatusEnum("status").default("pending").notNull(),
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+  verifiedAt: timestamp("verified_at"),
+  expiresAt: timestamp("expires_at").notNull(), // Verification code expires after 10 minutes
+});
+
+// Order Book (호가창) - 매수/매도 호가 저장
+export const orderBook = pgTable("order_book", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  guildId: varchar("guild_id").notNull(),
+  symbol: varchar("symbol").notNull(),
+  side: stockTransactionTypeEnum("side").notNull(), // 'buy' or 'sell'
+  price: decimal("price", { precision: 15, scale: 2 }).notNull(),
+  quantity: integer("quantity").notNull(), // 해당 가격의 총 수량
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
+}, (table) => ({
+  // 각 종목의 매수/매도별 가격당 하나의 레코드만 존재
+  uniqueSymbolSidePrice: unique('unique_symbol_side_price').on(table.guildId, table.symbol, table.side, table.price)
+}));
+
+// Market Depth Snapshot (시장 깊이 스냅샷) - 성능 최적화용
+export const marketDepth = pgTable("market_depth", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  guildId: varchar("guild_id").notNull(),
+  symbol: varchar("symbol").notNull(),
+  bidPrices: jsonb("bid_prices").notNull(), // [{price, quantity}, ...] 매수 호가
+  askPrices: jsonb("ask_prices").notNull(), // [{price, quantity}, ...] 매도 호가
+  spread: decimal("spread", { precision: 15, scale: 2 }), // 매수/매도 스프레드
+  lastUpdated: timestamp("last_updated").default(sql`now()`).notNull(),
+}, (table) => ({
+  uniqueGuildSymbol: unique('unique_market_depth_guild_symbol').on(table.guildId, table.symbol)
+}));
+
+// Market Status (시장 상태) - 장 시작/종료 시간 관리
+export const marketStatus = pgTable("market_status", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  guildId: varchar("guild_id").notNull().unique(),
+  status: marketSessionEnum("status").notNull().default('closed'),
+  preMarketStart: varchar("pre_market_start").notNull().default("08:00"), // 장전 시간외 시작 (HH:MM)
+  preMarketEnd: varchar("pre_market_end").notNull().default("09:00"), // 장전 시간외 종료
+  regularStart: varchar("regular_start").notNull().default("09:00"), // 정규장 시작
+  regularEnd: varchar("regular_end").notNull().default("15:30"), // 정규장 종료
+  afterHoursStart: varchar("after_hours_start").notNull().default("15:40"), // 장후 시간외 시작
+  afterHoursEnd: varchar("after_hours_end").notNull().default("16:00"), // 장후 시간외 종료
+  circuitBreakerActive: boolean("circuit_breaker_active").default(false), // 서킷브레이커 발동 여부
+  circuitBreakerLevel: integer("circuit_breaker_level").default(0), // 0: 없음, 1: 사이드카, 2: 서킷브레이커 1단계, 3: 2단계
+  viActive: boolean("vi_active").default(true), // 변동성완화장치(VI) 활성화 여부
+  viThreshold: decimal("vi_threshold", { precision: 5, scale: 2 }).default("10.00"), // VI 발동 기준 (±10%)
+  dailyPriceLimit: decimal("daily_price_limit", { precision: 5, scale: 2 }).default("30.00"), // 일일 가격제한폭 (±30%)
+  lastUpdated: timestamp("last_updated").default(sql`now()`).notNull(),
+});
+
+// Trade Executions (체결 내역) - 실시간 체결 정보
+export const tradeExecutions = pgTable("trade_executions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  guildId: varchar("guild_id").notNull(),
+  symbol: varchar("symbol").notNull(),
+  price: decimal("price", { precision: 15, scale: 2 }).notNull(),
+  quantity: integer("quantity").notNull(),
+  buyerId: varchar("buyer_id").references(() => users.id),
+  sellerId: varchar("seller_id").references(() => users.id),
+  isBuyerMarketOrder: boolean("is_buyer_market_order").default(false),
+  isSellerMarketOrder: boolean("is_seller_market_order").default(false),
+  executedAt: timestamp("executed_at").default(sql`now()`).notNull(),
+});
+
+// Stock Market Index (시장 지수) - KOSPI/KOSDAQ 같은 종합 지수
+export const marketIndex = pgTable("market_index", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  guildId: varchar("guild_id").notNull(),
+  name: varchar("name").notNull(), // 'KOSPI', 'KOSDAQ', 'GUILD_INDEX' 등
+  value: decimal("value", { precision: 15, scale: 4 }).notNull(), // 지수 값 (소수점 4자리)
+  change: decimal("change", { precision: 15, scale: 4 }).default("0"), // 전일 대비 변동
+  changePercent: decimal("change_percent", { precision: 10, scale: 4 }).default("0"), // 변동률
+  totalVolume: integer("total_volume").default(0), // 총 거래량
+  totalValue: decimal("total_value", { precision: 20, scale: 2 }).default("0"), // 총 거래대금
+  updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
+}, (table) => ({
+  uniqueGuildName: unique('unique_market_index_guild_name').on(table.guildId, table.name)
+}));
 
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
@@ -320,6 +448,14 @@ export const insertTaxCollectionSchema = createInsertSchema(taxCollections).omit
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
 export const insertGuildAdminSchema = createInsertSchema(guildAdmins).omit({ id: true, grantedAt: true });
 export const insertLimitOrderSchema = createInsertSchema(limitOrders).omit({ id: true, createdAt: true });
+export const insertRobloxLinkSchema = createInsertSchema(robloxLinks).omit({ id: true, createdAt: true });
+export const insertOrderBookSchema = createInsertSchema(orderBook).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertMarketDepthSchema = createInsertSchema(marketDepth).omit({ id: true, lastUpdated: true });
+export const insertMarketStatusSchema = createInsertSchema(marketStatus).omit({ id: true, lastUpdated: true });
+export const insertTradeExecutionSchema = createInsertSchema(tradeExecutions).omit({ id: true, executedAt: true });
+export const insertMarketIndexSchema = createInsertSchema(marketIndex).omit({ id: true, updatedAt: true });
+export const insertPublicAccountSchema = createInsertSchema(publicAccounts).omit({ id: true, createdAt: true });
+export const insertRobloxMapApiSchema = createInsertSchema(robloxMapApis).omit({ id: true, createdAt: true });
 
 // Types
 export type User = typeof users.$inferSelect;
@@ -356,3 +492,19 @@ export type GuildAdmin = typeof guildAdmins.$inferSelect;
 export type InsertGuildAdmin = z.infer<typeof insertGuildAdminSchema>;
 export type LimitOrder = typeof limitOrders.$inferSelect;
 export type InsertLimitOrder = z.infer<typeof insertLimitOrderSchema>;
+export type RobloxLink = typeof robloxLinks.$inferSelect;
+export type InsertRobloxLink = z.infer<typeof insertRobloxLinkSchema>;
+export type OrderBook = typeof orderBook.$inferSelect;
+export type InsertOrderBook = z.infer<typeof insertOrderBookSchema>;
+export type MarketDepth = typeof marketDepth.$inferSelect;
+export type InsertMarketDepth = z.infer<typeof insertMarketDepthSchema>;
+export type MarketStatus = typeof marketStatus.$inferSelect;
+export type InsertMarketStatus = z.infer<typeof insertMarketStatusSchema>;
+export type TradeExecution = typeof tradeExecutions.$inferSelect;
+export type InsertTradeExecution = z.infer<typeof insertTradeExecutionSchema>;
+export type MarketIndex = typeof marketIndex.$inferSelect;
+export type InsertMarketIndex = z.infer<typeof insertMarketIndexSchema>;
+export type PublicAccount = typeof publicAccounts.$inferSelect;
+export type InsertPublicAccount = z.infer<typeof insertPublicAccountSchema>;
+export type RobloxMapApi = typeof robloxMapApis.$inferSelect;
+export type InsertRobloxMapApi = z.infer<typeof insertRobloxMapApiSchema>;

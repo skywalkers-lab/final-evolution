@@ -191,6 +191,39 @@
   animation: pulse-discord 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* Stock price flash animations */
+@keyframes flash-red {
+  0% {
+    background-color: rgba(220, 38, 38, 0.15);
+  }
+  50% {
+    background-color: rgba(220, 38, 38, 0.25);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes flash-blue {
+  0% {
+    background-color: rgba(37, 99, 235, 0.15);
+  }
+  50% {
+    background-color: rgba(37, 99, 235, 0.25);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.animate-flash-red {
+  animation: flash-red 0.5s ease-in-out;
+}
+
+.animate-flash-blue {
+  animation: flash-blue 0.5s ease-in-out;
+}
+
 /* Status indicators */
 .status-active {
   color: var(--discord-green);
@@ -202,4 +235,55 @@
 
 .status-delisted {
   color: var(--discord-red);
+}
+
+/* Resizable panel styles */
+[data-panel-resize-handle-id] {
+  position: relative;
+}
+
+[data-panel-resize-handle-id]::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 3px;
+  height: 40px;
+  background: linear-gradient(to bottom, 
+    transparent, 
+    rgba(100, 116, 139, 0.5) 20%, 
+    rgba(100, 116, 139, 0.8) 50%,
+    rgba(100, 116, 139, 0.5) 80%,
+    transparent
+  );
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+[data-panel-resize-handle-id]:hover::before,
+[data-panel-resize-handle-id]:active::before {
+  opacity: 1;
+}
+
+[data-panel-resize-handle-id]:hover {
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+[data-panel-resize-handle-id]:active {
+  background-color: rgba(59, 130, 246, 0.2);
+}
+
+/* Vertical resize handle styles */
+[data-panel-resize-handle-id][data-panel-group-direction="vertical"]::before {
+  width: 40px;
+  height: 3px;
+  background: linear-gradient(to right, 
+    transparent, 
+    rgba(100, 116, 139, 0.5) 20%, 
+    rgba(100, 116, 139, 0.8) 50%,
+    rgba(100, 116, 139, 0.5) 80%,
+    transparent
+  );
 }

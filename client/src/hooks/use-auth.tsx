@@ -7,7 +7,6 @@ interface User {
   username: string;
   discriminator: string;
   avatar: string | null;
-  selectedGuildId?: string;
 }
 
 interface Guild {
@@ -22,6 +21,7 @@ interface AuthContextType {
   user: User | null;
   guilds: Guild[];
   selectedGuildId: string | null;
+  isAdmin: boolean;
   login: () => void;
   logout: () => void;
   selectGuild: (guildId: string) => void;
@@ -34,6 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [selectedGuildId, setSelectedGuildId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [, setLocation] = useLocation();
 
@@ -114,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user, 
       guilds, 
       selectedGuildId, 
+      isAdmin,
       login, 
       logout, 
       selectGuild, 

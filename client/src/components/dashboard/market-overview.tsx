@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useWebSocket } from "@/hooks/use-websocket";
+import { useQuery } from "@tanstack/react-query";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { formatKoreanCurrency } from "@/utils/formatCurrency";
+import { convertToDirectImageUrl, handleImageError } from "@/utils/imageUrl";
 
 interface MarketOverviewProps {
   stocks: any[];

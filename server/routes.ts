@@ -11,7 +11,22 @@ import { TaxScheduler } from "./services/tax-scheduler";
 import { NewsAnalyzer } from "./services/news-analyzer";
 import { WebSocketManager } from "./services/websocket-manager";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { generalLimiter, strictLimiter, tradingLimiter, apiLimiter } from "./middleware/rateLimiter";
 import "./types";
+
+// Express 세션 타입 확장
+declare module 'express-session' {
+  interface SessionData {
+    authenticatedGuilds?: {
+      [guildId: string]: {
+        accountId: string;
+        authenticatedAt: string;
+        passwordHash: string;
+      }
+    };
+    adminGuilds?: string[];
+  }
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -55,6 +70,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { DiscordBot } = await import("./services/discord-bot");
       const discordBot = new DiscordBot(storage, wsManager, tradingEngine);
+      
+      // Discord Bot을 Trading Engine에 연결 (서킷브레이커 알림용)
+      tradingEngine.setDiscordBot(discordBot);
+      
       await discordBot.start();
       (global as any).discordBot = discordBot;
       console.log("🎉 Discord bot initialized successfully!");
@@ -91,15 +110,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
+  // Roblox game server authentication middleware
+  const requireRobloxGameAuth = (req: any, res: any, next: any) => {
+    const gameKey = req.headers['x-game-key'];
+    const expectedKey = process.env.ROBLOX_GAME_API_KEY;
+    
+    if (!expectedKey || expectedKey === 'your_secure_game_api_key_here_change_in_production') {
+      return res.status(500).json({ 
+        message: "Server configuration error: ROBLOX_GAME_API_KEY not properly configured" 
+      });
+    }
+    
+    if (!gameKey || gameKey !== expectedKey) {
+      console.log('❌ Roblox game auth failed:', { 
+        provided: gameKey ? 'present' : 'missing',
+        match: gameKey === expectedKey 
+      });
+      return res.status(403).json({ message: "Invalid game API key" });
+    }
+    
+    next();
+  };
+
+  // Apply general rate limiting to all /api routes
+  app.use('/api', generalLimiter);
+
+  // Web client API key middleware (for rate limiting sensitive endpoints)
+  const requireWebClientKey = (req: any, res: any, next: any) => {
+    const clientKey = req.headers['x-client-key'];
+    const expectedKey = process.env.WEB_CLIENT_API_KEY;
+    
+    // If no key is configured, allow access (backward compatibility)
+    if (!expectedKey || expectedKey === 'your_secure_web_client_key_here_change_in_production') {
+      return next();
+    }
+    
+    if (!clientKey || clientKey !== expectedKey) {
+      return res.status(403).json({ message: "Invalid client API key" });
+    }
+    
+    next();
+  };
+
   // Discord OAuth routes
   app.get("/auth/discord", (req, res) => {
     const clientId = process.env.DISCORD_CLIENT_ID;
-    // Use the actual host from the request to ensure correct redirect URI
-    const host = req.get('host');
-    const redirectUri = `https://${host}/auth/discord/callback`;
+    let host = req.get('host');
+    
+    // GitHub Codespaces 환경 감지
+    const codespaceUrl = req.get('x-forwarded-host');
+    if (codespaceUrl && codespaceUrl.includes('app.github.dev')) {
+      host = codespaceUrl;
+    }
+    
+    // 프로덕션 환경에서는 https 사용, 로컬에서는 http 사용
+    const protocol = process.env.NODE_ENV === 'production' || host?.includes('railway.app') || host?.includes('app.github.dev') ? 'https' : 'http';
+    const redirectUri = `${protocol}://${host}/auth/discord/callback`;
     const scopes = "identify guilds";
     
-    console.log('Discord OAuth redirect URI:', redirectUri);
+    console.log('🔐 Discord OAuth redirect URI:', redirectUri);
+    console.log('🌍 Environment:', process.env.NODE_ENV);
+    console.log('🌐 Host:', host);
+    console.log('🔗 X-Forwarded-Host:', codespaceUrl);
     
     const authUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}`;
     
@@ -107,18 +179,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/auth/discord/callback", async (req, res) => {
+    console.log('🔵 Discord OAuth callback received:', {
+      query: req.query,
+      queryKeys: Object.keys(req.query),
+      code: req.query.code ? 'present' : 'missing',
+      error: req.query.error || 'none',
+      error_description: req.query.error_description || 'none',
+      host: req.get('host'),
+      'x-forwarded-host': req.get('x-forwarded-host'),
+      fullUrl: req.url,
+      originalUrl: req.originalUrl
+    });
+    
+    // Discord에서 에러를 반환한 경우
+    if (req.query.error) {
+      console.log('❌ Discord OAuth error:', req.query.error, req.query.error_description);
+      return res.status(400).send(`Discord OAuth error: ${req.query.error} - ${req.query.error_description || 'No description'}`);
+    }
+    
+    // 간단한 응답으로 테스트
+    if (!req.query.code) {
+      console.log('❌ No code provided in callback');
+      return res.status(400).send('No authorization code provided. Please check Discord Developer Portal redirect URI settings.');
+    }
+    
     try {
       const { code } = req.query;
       
       if (!code) {
+        console.log('❌ No code provided in callback');
         return res.redirect("/?error=no_code");
       }
 
       const clientId = process.env.DISCORD_CLIENT_ID;
       const clientSecret = process.env.DISCORD_CLIENT_SECRET;
-      // Use the actual host from the request to ensure correct redirect URI
-      const host = req.get('host');
-      const redirectUri = `https://${host}/auth/discord/callback`;
+      let host = req.get('host');
+      
+      // GitHub Codespaces 환경 감지
+      const codespaceUrl = req.get('x-forwarded-host');
+      if (codespaceUrl && codespaceUrl.includes('app.github.dev')) {
+        host = codespaceUrl;
+      }
+      
+      // 프로덕션 환경에서는 https 사용, 로컬에서는 http 사용
+      const protocol = process.env.NODE_ENV === 'production' || host?.includes('railway.app') || host?.includes('app.github.dev') ? 'https' : 'http';
+      const redirectUri = `${protocol}://${host}/auth/discord/callback`;
+
+      console.log('🔄 Exchanging code for token:', {
+        clientId: clientId ? 'present' : 'missing',
+        clientSecret: clientSecret ? 'present' : 'missing',
+        redirectUri,
+        host,
+        codespaceUrl
+      });
 
       // Exchange code for token
       const tokenResponse = await axios.post('https://discord.com/api/oauth2/token', {
@@ -134,6 +247,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const { access_token } = tokenResponse.data;
+      console.log('✅ Successfully got access token');
 
       // Get user info
       const userResponse = await axios.get('https://discord.com/api/users/@me', {
@@ -143,6 +257,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const discordUser = userResponse.data;
+      console.log('✅ Got Discord user info:', {
+        id: discordUser.id,
+        username: discordUser.username,
+        discriminator: discordUser.discriminator
+      });
 
       // Create/update user in database
       let user = await storage.getUserByDiscordId(discordUser.id);
@@ -166,10 +285,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })).toString('base64');
 
       // Set session cookie and redirect
-      res.cookie('session_token', sessionToken, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 }); // 7 days
+      // 환경에 따라 secure, sameSite 옵션을 명확히 지정
+      const isProd = process.env.NODE_ENV === 'production' || host?.includes('railway.app') || host?.includes('app.github.dev');
+      res.cookie('session_token', sessionToken, {
+        httpOnly: true,
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        sameSite: isProd ? 'none' : 'lax',
+        secure: isProd
+      });
+      console.log('🍪 Session cookie set, redirecting to home page');
       res.redirect('/');
     } catch (error) {
-      console.error('Discord OAuth error:', error);
+      console.error('❌ Discord OAuth error:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('Axios error details:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data
+        });
+      }
       res.redirect('/?error=auth_failed');
     }
   });
@@ -225,7 +359,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userGuilds = guildsResponse.data;
       
       // Filter to only include guilds where bot is present
-      const botGuildIds = (global as any).discordBot ? (global as any).discordBot.getBotGuildIds() : [];
+      const botGuildIds = (global as any).botGuildIds || [];
       console.log('User guilds:', userGuilds.map((g: any) => ({ id: g.id, name: g.name })));
       console.log('Bot guild IDs:', botGuildIds);
       
@@ -246,7 +380,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Debug endpoint to check bot guilds
   app.get("/api/debug/bot-guilds", (req, res) => {
-    const botGuildIds = (global as any).discordBot ? (global as any).discordBot.getBotGuildIds() : [];
+    const botGuildIds = (global as any).botGuildIds || [];
     res.json({
       botGuildIds,
       botConnected: !!(global as any).discordBot,
@@ -288,8 +422,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin auth routes (guild password)
-  app.post("/api/auth/admin-login", async (req, res) => {
+  // Admin auth routes (guild password) - with strict rate limiting
+  app.post("/api/auth/admin-login", strictLimiter, async (req, res) => {
     try {
       const { guildId, password } = req.body;
       
@@ -363,35 +497,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { guildId } = req.params;
       console.log(`Web client account request for guild: ${guildId}`);
       
-      // Get all accounts for this guild and use the most recent one (like portfolio logic)
-      const accounts = await storage.getAccountsByGuild(guildId);
-      console.log(`Found ${accounts.length} accounts for guild ${guildId}:`, accounts.map(acc => ({ 
-        id: acc.id, 
-        uniqueCode: acc.uniqueCode, 
-        balance: acc.balance,
-        userId: acc.userId 
-      })));
+      // 인증된 사용자인지 확인
+      if (!req.isAuthenticated()) {
+        console.log('Web client account response: not authenticated');
+        return res.status(401).json({ error: 'Authentication required' });
+      }
       
-      if (accounts.length === 0) {
-        console.log('Web client account response: no account found');
+      const user = req.user as any;
+      console.log(`Authenticated user: ${user.id} (discordId: ${user.discordId})`);
+      
+      // 해당 사용자의 계정을 찾기
+      const account = await storage.getAccountByUser(guildId, user.id);
+      
+      if (!account) {
+        console.log('Web client account response: no account found for authenticated user');
         return res.json({ account: null });
       }
       
-      // Find the Discord user account first (prefer user with Discord ID 'ad895e98-3deb-4220-a8d4-fbdcebfccd3a')
-      let account = accounts.find(acc => acc.userId === 'ad895e98-3deb-4220-a8d4-fbdcebfccd3a');
+      console.log(`Web client account response:`, {
+        id: account.id,
+        uniqueCode: account.uniqueCode,
+        balance: account.balance
+      });
       
-      // If not found, try to find a user with the correct Discord balance
-      if (!account) {
-        account = accounts.find(acc => acc.balance === '739690.00');
-      }
-      
-      // If still not found, use the most recently created account as fallback
-      if (!account) {
-        account = accounts[accounts.length - 1];
-      }
-      
-      console.log('Web client account response:', { balance: account.balance });
-      res.json({ account });
+      res.json({
+        account: {
+          id: account.id,
+          uniqueCode: account.uniqueCode,
+          balance: account.balance
+        }
+      });
     } catch (error) {
       console.error('Web client account error:', error);
       res.status(500).json({ message: "Failed to get web client account" });
@@ -412,6 +547,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Circuit breaker status
+  app.get("/api/web-client/guilds/:guildId/circuit-breakers", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const breakers = tradingEngine.getCircuitBreakers(guildId);
+      res.json(breakers);
+    } catch (error) {
+      console.error('Circuit breakers error:', error);
+      res.json([]);
+    }
+  });
+
   // Web client candlestick data
   app.get("/api/web-client/guilds/:guildId/stocks/:symbol/candlestick/:timeframe", async (req, res) => {
     try {
@@ -427,37 +574,248 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Web client order book (호가창)
+  app.get("/api/web-client/guilds/:guildId/stocks/:symbol/orderbook", async (req, res) => {
+    try {
+      const { guildId, symbol } = req.params;
+      const depth = parseInt(req.query.depth as string) || 10;
+      console.log(`Web client order book request: ${guildId}/${symbol} (depth: ${depth})`);
+      
+      const orderBook = await storage.getOrderBook(guildId, symbol, depth);
+      const bestBidAsk = await storage.getBestBidAsk(guildId, symbol);
+      
+      res.json({
+        bids: orderBook.bids,
+        asks: orderBook.asks,
+        bestBid: bestBidAsk.bestBid,
+        bestAsk: bestBidAsk.bestAsk,
+        spread: bestBidAsk.spread,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Web client order book error:', error);
+      res.status(500).json({ message: "Failed to get order book" });
+    }
+  });
+
+  // Web client market depth
+  app.get("/api/web-client/guilds/:guildId/stocks/:symbol/depth", async (req, res) => {
+    try {
+      const { guildId, symbol } = req.params;
+      console.log(`Web client market depth request: ${guildId}/${symbol}`);
+      
+      const depth = await storage.getMarketDepth(guildId, symbol);
+      
+      if (!depth) {
+        // If no market depth exists, generate from order book
+        await storage.updateMarketDepth(guildId, symbol);
+        const newDepth = await storage.getMarketDepth(guildId, symbol);
+        return res.json(newDepth || { bidPrices: [], askPrices: [], spread: null });
+      }
+      
+      res.json(depth);
+    } catch (error) {
+      console.error('Web client market depth error:', error);
+      res.status(500).json({ message: "Failed to get market depth" });
+    }
+  });
+
+  // Web client 실시간 시세 (Real-time Quote)
+  app.get("/api/web-client/guilds/:guildId/stocks/:symbol/quote", async (req, res) => {
+    try {
+      const { guildId, symbol } = req.params;
+      console.log(`Web client quote request: ${guildId}/${symbol}`);
+      
+      const stock = await storage.getStockBySymbol(guildId, symbol);
+      if (!stock) {
+        return res.status(404).json({ message: "Stock not found" });
+      }
+
+      // 캔들스틱 데이터로부터 오늘의 시가/고가/저가 계산
+      const todayCandlestick = await storage.getCandlestickData(guildId, symbol, '1d', 1);
+      const recentCandlestick = await storage.getCandlestickData(guildId, symbol, '1h', 24);
+      
+      const currentPrice = Number(stock.price);
+      let openPrice = currentPrice;
+      let highPrice = currentPrice;
+      let lowPrice = currentPrice;
+      
+      if (todayCandlestick.length > 0) {
+        openPrice = Number(todayCandlestick[0].open);
+        highPrice = Number(todayCandlestick[0].high);
+        lowPrice = Number(todayCandlestick[0].low);
+      } else if (recentCandlestick.length > 0) {
+        // 최근 24시간 데이터로 대체
+        openPrice = Number(recentCandlestick[0].open);
+        highPrice = Math.max(...recentCandlestick.map(c => Number(c.high)));
+        lowPrice = Math.min(...recentCandlestick.map(c => Number(c.low)));
+      }
+
+      // 거래량 계산 (최근 거래 내역 기반) - type 필터 제거
+      const transactions = await storage.getCombinedTransactionHistoryForAdmin(guildId, { 
+        limit: 100
+      });
+      const todayTransactions = transactions.filter((t: any) => {
+        const transDate = new Date(t.createdAt);
+        const today = new Date();
+        // 주식 관련 거래만 필터링
+        const isStockTransaction = t.type === 'stock_purchase' || t.type === 'stock_sale';
+        return transDate.toDateString() === today.toDateString() && isStockTransaction && t.symbol === symbol;
+      });
+      
+      const volume = todayTransactions.reduce((sum: number, t: any) => 
+        sum + (t.shares || 0), 0
+      );
+      const volumeAmount = todayTransactions.reduce((sum: number, t: any) => 
+        sum + (t.shares || 0) * (t.price || 0), 0
+      );
+
+      // 52주 고저가 (임시: 현재가 기준 ±30%)
+      const high52Week = currentPrice * 1.3;
+      const low52Week = currentPrice * 0.7;
+
+      // 이전 종가 (어제 종가 - 임시: 현재가 기준)
+      const previousClose = openPrice || currentPrice;
+      const change = currentPrice - previousClose;
+      const changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0;
+
+      // 상하한가 (±30%)
+      const highLimit = previousClose * 1.3;
+      const lowLimit = previousClose * 0.7;
+
+      // 시가총액
+      const outstandingShares = stock.totalShares || 1000000;
+      const marketCap = currentPrice * outstandingShares;
+
+      const quote = {
+        symbol: stock.symbol,
+        name: stock.name,
+        currentPrice,
+        openPrice,
+        highPrice,
+        lowPrice,
+        previousClose,
+        change,
+        changePercent,
+        volume,
+        volumeAmount,
+        highLimit,
+        lowLimit,
+        high52Week,
+        low52Week,
+        marketCap,
+        outstandingShares,
+        updatedAt: new Date().toISOString()
+      };
+
+      res.json(quote);
+    } catch (error) {
+      console.error('Web client quote error:', error);
+      res.status(500).json({ message: "Failed to get quote" });
+    }
+  });
+
+  // Web client 체결 내역 (Trade Executions)
+  app.get("/api/web-client/guilds/:guildId/stocks/:symbol/executions", async (req, res) => {
+    try {
+      const { guildId, symbol } = req.params;
+      const limit = parseInt(req.query.limit as string) || 50;
+      console.log(`Web client executions request: ${guildId}/${symbol}`);
+      
+      // 최근 거래 내역 가져오기 - type 필터 제거
+      const transactions = await storage.getCombinedTransactionHistoryForAdmin(guildId, { 
+        limit
+      });
+
+      // 해당 종목의 주식 거래만 필터링
+      const executions = transactions
+        .filter((t: any) => {
+          const isStockTransaction = t.type === 'stock_purchase' || t.type === 'stock_sale';
+          return isStockTransaction && t.symbol === symbol && t.shares && t.price;
+        })
+        .map((t: any, index: number, array: any[]) => {
+          const prevPrice = index < array.length - 1 ? array[index + 1].price : t.price;
+          return {
+            id: t.id,
+            price: Number(t.price),
+            quantity: t.shares,
+            type: t.type === 'stock_purchase' ? 'buy' : 'sell',
+            timestamp: t.createdAt,
+            change: Number(t.price) - Number(prevPrice)
+          };
+        });
+
+      res.json(executions);
+    } catch (error) {
+      console.error('Web client executions error:', error);
+      res.status(500).json({ message: "Failed to get executions" });
+    }
+  });
+
+  // Web client 기술적 지표 (Technical Indicators)
+  app.get("/api/web-client/guilds/:guildId/stocks/:symbol/indicators", async (req, res) => {
+    try {
+      const { guildId, symbol } = req.params;
+      const { timeframe = '1h' } = req.query;
+      console.log(`Web client indicators request: ${guildId}/${symbol} (${timeframe})`);
+      
+      // 캔들스틱 데이터 가져오기 (최대 200개)
+      const candlestickData = await storage.getCandlestickData(guildId, symbol, timeframe as string, 200);
+      
+      if (candlestickData.length === 0) {
+        return res.json({
+          sma5: [],
+          sma20: [],
+          sma60: [],
+          sma120: [],
+          ema12: [],
+          ema26: [],
+          rsi: [],
+          macd: { macd: [], signal: [], histogram: [] },
+          bollingerBands: { upper: [], middle: [], lower: [] },
+          stochastic: { k: [], d: [] },
+          atr: []
+        });
+      }
+
+      // 기술적 지표 계산
+      const { calculateAllIndicators } = await import('./utils/technical-indicators');
+      const formattedData = candlestickData.map(c => ({
+        open: Number(c.open),
+        high: Number(c.high),
+        low: Number(c.low),
+        close: Number(c.close),
+        volume: Number(c.volume || 0),
+        timestamp: new Date(c.timestamp)
+      }));
+
+      const indicators = calculateAllIndicators(formattedData);
+      res.json(indicators);
+    } catch (error) {
+      console.error('Web client indicators error:', error);
+      res.status(500).json({ message: "Failed to calculate indicators" });
+    }
+  });
+
   app.get("/api/web-client/guilds/:guildId/portfolio", async (req, res) => {
     try {
       const { guildId } = req.params;
       console.log(`Web client portfolio request for guild: ${guildId}`);
       
-      // Get all accounts for this guild to show the most recent one
-      const accounts = await storage.getAccountsByGuild(guildId);
-      let account = null;
-      let user = null;
-      
-      if (accounts.length > 0) {
-        // Find the Discord user account first (prefer user with Discord ID 'ad895e98-3deb-4220-a8d4-fbdcebfccd3a')
-        let foundAccount = accounts.find(acc => acc.userId === 'ad895e98-3deb-4220-a8d4-fbdcebfccd3a');
-        
-        // If not found, try to find a user with the correct Discord balance
-        if (!foundAccount) {
-          foundAccount = accounts.find(acc => acc.balance === '739690.00');
-        }
-        
-        // If still not found, use the most recent account as fallback
-        if (!foundAccount) {
-          foundAccount = accounts[accounts.length - 1];
-        }
-        
-        account = foundAccount;
-        user = await storage.getUser(account.userId);
+      // 인증된 사용자인지 확인
+      if (!req.isAuthenticated()) {
+        console.log('Web client portfolio response: not authenticated');
+        return res.status(401).json({ error: 'Authentication required' });
       }
       
-      // If no accounts exist, return empty portfolio
+      const user = req.user as any;
+      console.log(`Authenticated user portfolio: ${user.id} (discordId: ${user.discordId})`);
+      
+      // 해당 사용자의 계정을 찾기
+      const account = await storage.getAccountByUser(guildId, user.id);
+      
       if (!account) {
-        console.log('Web client portfolio response: no account found, returning empty');
+        console.log('Web client portfolio response: no account found for authenticated user');
         return res.json({
           holdings: [],
           account: null,
@@ -630,7 +988,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Trading routes
-  app.post("/api/guilds/:guildId/trades", requireAuth, async (req, res) => {
+  app.post("/api/guilds/:guildId/trades", requireAuth, tradingLimiter, async (req, res) => {
     try {
       const { guildId } = req.params;
       const { userId, symbol, type, shares, price } = req.body;
@@ -642,8 +1000,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Web client trading route (no auth required)
-  app.post("/api/web-client/guilds/:guildId/trades", async (req, res) => {
+  // Web client trading route (no auth required) - with trading rate limiting
+  app.post("/api/web-client/guilds/:guildId/trades", tradingLimiter, async (req, res) => {
     try {
       const { guildId } = req.params;
       const { symbol, type, shares, price } = req.body;
@@ -726,7 +1084,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             userId: user.id,
             uniqueCode: Math.floor(1000 + Math.random() * 9000).toString(),
             balance: '1000000.00', // 1M won starting balance for demo
-            password: '1234' // Default password for web-client accounts
+            // password will be set separately after account creation
           });
         }
         
@@ -771,7 +1129,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/guilds/:guildId/limit-orders", requireAuth, async (req, res) => {
+  app.post("/api/guilds/:guildId/limit-orders", requireAuth, tradingLimiter, async (req, res) => {
     try {
       const { guildId } = req.params;
       const { symbol, type, shares, targetPrice, expiresAt } = req.body;
@@ -830,7 +1188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/web-client/guilds/:guildId/limit-orders", async (req, res) => {
+  app.post("/api/web-client/guilds/:guildId/limit-orders", tradingLimiter, async (req, res) => {
     try {
       const { guildId } = req.params;
       const { symbol, type, shares, targetPrice, expiresAt } = req.body;
@@ -910,7 +1268,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Web client API - Guild overview
   // Account password authentication for web dashboard
-  app.post("/api/web-client/guilds/:guildId/auth", async (req, res) => {
+  app.post("/api/web-client/guilds/:guildId/auth", strictLimiter, async (req, res) => {
     try {
       const { guildId } = req.params;
       const { password } = req.body;
@@ -931,7 +1289,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if any account has matching password
       let authenticatedAccount = null;
       for (const account of accounts) {
-        if (account.password === password) {
+        if (account.password && account.password === password) {
           authenticatedAccount = account;
           break;
         }
@@ -941,11 +1299,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "비밀번호가 올바르지 않습니다." });
       }
       
-      // Store authentication in session with password hash for validation
-      const session = req.session as any;
-      if (session) {
-        session.authenticatedGuilds = session.authenticatedGuilds || {};
-        session.authenticatedGuilds[guildId] = {
+      // Store authentication in session
+      if (req.session) {
+        req.session.authenticatedGuilds = req.session.authenticatedGuilds || {};
+        req.session.authenticatedGuilds[guildId] = {
           accountId: authenticatedAccount.id,
           authenticatedAt: new Date().toISOString(),
           passwordHash: password // Store current password for validation
@@ -1035,8 +1392,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Web client specific trade endpoint
-  app.post("/api/web-client/guilds/:guildId/trades", async (req, res) => {
+  // Web client specific trade endpoint - with trading rate limiting
+  app.post("/api/web-client/guilds/:guildId/trades", tradingLimiter, async (req, res) => {
     try {
       const { guildId } = req.params;
       const { symbol, type, shares, price } = req.body;
@@ -1155,7 +1512,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Transfer money by account number
-  app.post("/api/guilds/:guildId/transfer", requireAuth, async (req, res) => {
+  app.post("/api/guilds/:guildId/transfer", requireAuth, tradingLimiter, async (req, res) => {
     try {
       const { guildId } = req.params;
       const { accountNumber, amount, memo } = req.body;
@@ -1389,6 +1746,343 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(settings);
     } catch (error) {
       res.status(500).json({ message: "Failed to update settings" });
+    }
+  });
+
+  // ==================== ROBLOX INTEGRATION API ====================
+
+  // Generate verification code for linking Roblox account
+  app.post("/api/roblox/link/request", apiLimiter, async (req, res) => {
+    try {
+      const { discordUserId } = req.body;
+      
+      if (!discordUserId) {
+        return res.status(400).json({ message: "Discord user ID is required" });
+      }
+
+      // Generate 8-digit verification code
+      const verificationCode = Math.floor(10000000 + Math.random() * 90000000).toString();
+      
+      const link = await storage.createRobloxLinkRequest(discordUserId, verificationCode);
+      
+      console.log(`🔗 Roblox link request created for Discord user ${discordUserId}: ${verificationCode}`);
+      
+      res.json({
+        verificationCode,
+        expiresAt: link.expiresAt,
+        message: "Enter this code in the Roblox game to verify your account"
+      });
+    } catch (error: any) {
+      console.error('Roblox link request error:', error);
+      res.status(500).json({ message: "Failed to create link request" });
+    }
+  });
+
+  // Verify Roblox account with code (called from Roblox game server)
+  app.post("/api/roblox/link/verify", requireRobloxGameAuth, apiLimiter, async (req, res) => {
+    try {
+      const { verificationCode, robloxUserId, robloxUsername } = req.body;
+      
+      if (!verificationCode || !robloxUserId || !robloxUsername) {
+        return res.status(400).json({ 
+          message: "Verification code, Roblox user ID, and username are required" 
+        });
+      }
+
+      // Find pending link by verification code
+      const link = await storage.getRobloxLinkByVerificationCode(verificationCode);
+      
+      if (!link) {
+        return res.status(404).json({ 
+          message: "Invalid or expired verification code" 
+        });
+      }
+
+      // Check if code is expired
+      if (new Date() > new Date(link.expiresAt)) {
+        await storage.expireRobloxLinks();
+        return res.status(400).json({ 
+          message: "Verification code has expired. Please request a new one." 
+        });
+      }
+
+      // Check if this Roblox account is already linked to another Discord account
+      const existingLink = await storage.getRobloxLinkByRobloxId(robloxUserId);
+      if (existingLink && existingLink.discordUserId !== link.discordUserId) {
+        return res.status(400).json({ 
+          message: "This Roblox account is already linked to another Discord account" 
+        });
+      }
+
+      // Verify the link
+      const verifiedLink = await storage.verifyRobloxLink(
+        link.discordUserId, 
+        robloxUserId, 
+        robloxUsername
+      );
+
+      console.log(`✅ Roblox account verified: ${robloxUsername} (${robloxUserId}) → Discord ${link.discordUserId}`);
+
+      res.json({
+        success: true,
+        discordUserId: verifiedLink.discordUserId,
+        robloxUserId: verifiedLink.robloxUserId,
+        robloxUsername: verifiedLink.robloxUsername,
+        verifiedAt: verifiedLink.verifiedAt
+      });
+    } catch (error: any) {
+      console.error('Roblox link verification error:', error);
+      res.status(500).json({ message: "Failed to verify link" });
+    }
+  });
+
+  // Get link status for a Discord user
+  app.get("/api/roblox/link/status/:discordUserId", async (req, res) => {
+    try {
+      const { discordUserId } = req.params;
+      
+      const link = await storage.getRobloxLinkByDiscordId(discordUserId);
+      
+      if (!link) {
+        return res.json({ linked: false });
+      }
+
+      res.json({
+        linked: link.status === 'verified',
+        status: link.status,
+        robloxUserId: link.robloxUserId,
+        robloxUsername: link.robloxUsername,
+        verifiedAt: link.verifiedAt
+      });
+    } catch (error) {
+      console.error('Roblox link status error:', error);
+      res.status(500).json({ message: "Failed to get link status" });
+    }
+  });
+
+  // Unlink Roblox account
+  app.delete("/api/roblox/link/:discordUserId", async (req, res) => {
+    try {
+      const { discordUserId } = req.params;
+      
+      await storage.deleteRobloxLink(discordUserId);
+      
+      console.log(`🔓 Roblox link deleted for Discord user ${discordUserId}`);
+      
+      res.json({ success: true, message: "Roblox account unlinked" });
+    } catch (error) {
+      console.error('Roblox unlink error:', error);
+      res.status(500).json({ message: "Failed to unlink account" });
+    }
+  });
+
+  // Get balance for a Roblox user (called from Roblox game server)
+  app.get("/api/roblox/economy/balance/:robloxUserId", requireRobloxGameAuth, async (req, res) => {
+    try {
+      const { robloxUserId } = req.params;
+      const { guildId } = req.query;
+      
+      if (!guildId) {
+        return res.status(400).json({ message: "Guild ID is required" });
+      }
+
+      // Find linked Discord account
+      const link = await storage.getRobloxLinkByRobloxId(robloxUserId);
+      
+      if (!link || link.status !== 'verified') {
+        return res.status(404).json({ 
+          message: "Roblox account not linked to any Discord account" 
+        });
+      }
+
+      // Get Discord user
+      const user = await storage.getUserByDiscordId(link.discordUserId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Get account balance
+      const account = await storage.getAccountByUser(guildId as string, user.id);
+      
+      if (!account) {
+        return res.status(404).json({ 
+          message: "No account found for this user in the specified guild" 
+        });
+      }
+
+      res.json({
+        robloxUserId,
+        discordUserId: link.discordUserId,
+        balance: account.balance,
+        frozen: account.frozen,
+        tradingSuspended: account.tradingSuspended
+      });
+    } catch (error) {
+      console.error('Roblox balance fetch error:', error);
+      res.status(500).json({ message: "Failed to fetch balance" });
+    }
+  });
+
+  // Adjust balance for a Roblox user (called from Roblox game server)
+  app.post("/api/roblox/economy/adjust", requireRobloxGameAuth, apiLimiter, async (req, res) => {
+    try {
+      const { robloxUserId, guildId, amount, memo } = req.body;
+      
+      if (!robloxUserId || !guildId || amount === undefined) {
+        return res.status(400).json({ 
+          message: "Roblox user ID, guild ID, and amount are required" 
+        });
+      }
+
+      // Validate amount
+      const adjustAmount = Number(amount);
+      if (isNaN(adjustAmount)) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+
+      // Find linked Discord account
+      const link = await storage.getRobloxLinkByRobloxId(robloxUserId);
+      
+      if (!link || link.status !== 'verified') {
+        return res.status(404).json({ 
+          message: "Roblox account not linked" 
+        });
+      }
+
+      // Get Discord user
+      const user = await storage.getUserByDiscordId(link.discordUserId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Get account
+      const account = await storage.getAccountByUser(guildId, user.id);
+      
+      if (!account) {
+        return res.status(404).json({ 
+          message: "No account found for this user in the specified guild" 
+        });
+      }
+
+      if (account.frozen) {
+        return res.status(403).json({ message: "Account is frozen" });
+      }
+
+      // Check balance for withdrawals
+      if (adjustAmount < 0) {
+        const currentBalance = Number(account.balance);
+        if (currentBalance + adjustAmount < 0) {
+          return res.status(400).json({ message: "Insufficient balance" });
+        }
+      }
+
+      // Update balance
+      await storage.updateBalance(account.id, adjustAmount);
+
+      // Create transaction record
+      await storage.addTransaction({
+        guildId,
+        actorId: user.id,
+        fromUserId: adjustAmount < 0 ? user.id : undefined,
+        toUserId: adjustAmount > 0 ? user.id : undefined,
+        type: adjustAmount > 0 ? 'admin_deposit' : 'admin_withdraw',
+        amount: Math.abs(adjustAmount).toString(),
+        memo: memo || `Roblox game: ${adjustAmount > 0 ? 'deposit' : 'withdrawal'}`
+      });
+
+      // Get updated account
+      const updatedAccount = await storage.getAccount(account.id);
+
+      console.log(`💰 Roblox economy adjustment: ${robloxUserId} ${adjustAmount > 0 ? '+' : ''}${adjustAmount} (${memo || 'no memo'})`);
+
+      // Broadcast balance update via WebSocket
+      wsManager.broadcast('balance_updated', {
+        guildId,
+        userId: user.id,
+        balance: updatedAccount!.balance,
+        change: adjustAmount
+      });
+
+      res.json({
+        success: true,
+        robloxUserId,
+        discordUserId: link.discordUserId,
+        newBalance: updatedAccount!.balance,
+        adjustment: adjustAmount
+      });
+    } catch (error: any) {
+      console.error('Roblox balance adjustment error:', error);
+      res.status(500).json({ message: error.message || "Failed to adjust balance" });
+    }
+  });
+
+  // Get portfolio for a Roblox user (called from Roblox game server)
+  app.get("/api/roblox/economy/portfolio/:robloxUserId", requireRobloxGameAuth, async (req, res) => {
+    try {
+      const { robloxUserId } = req.params;
+      const { guildId } = req.query;
+      
+      if (!guildId) {
+        return res.status(400).json({ message: "Guild ID is required" });
+      }
+
+      // Find linked Discord account
+      const link = await storage.getRobloxLinkByRobloxId(robloxUserId);
+      
+      if (!link || link.status !== 'verified') {
+        return res.status(404).json({ 
+          message: "Roblox account not linked" 
+        });
+      }
+
+      // Get Discord user
+      const user = await storage.getUserByDiscordId(link.discordUserId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Get account and holdings
+      const account = await storage.getAccountByUser(guildId as string, user.id);
+      const holdings = await storage.getHoldingsByUser(guildId as string, user.id);
+
+      // Enrich holdings with current prices
+      const enrichedHoldings = [];
+      let stocksValue = 0;
+
+      for (const holding of holdings || []) {
+        if (holding.shares <= 0) continue;
+
+        const stock = await storage.getStockBySymbol(guildId as string, holding.symbol);
+        const currentPrice = stock ? Number(stock.price) : 0;
+        
+        enrichedHoldings.push({
+          symbol: holding.symbol,
+          name: stock?.name || holding.symbol,
+          shares: holding.shares,
+          avgPrice: holding.avgPrice,
+          currentPrice,
+          totalValue: holding.shares * currentPrice,
+          profitLoss: (currentPrice - Number(holding.avgPrice)) * holding.shares
+        });
+
+        stocksValue += holding.shares * currentPrice;
+      }
+
+      const totalValue = (account ? Number(account.balance) : 0) + stocksValue;
+
+      res.json({
+        robloxUserId,
+        discordUserId: link.discordUserId,
+        balance: account?.balance || '0',
+        holdings: enrichedHoldings,
+        totalValue
+      });
+    } catch (error) {
+      console.error('Roblox portfolio fetch error:', error);
+      res.status(500).json({ message: "Failed to fetch portfolio" });
     }
   });
 

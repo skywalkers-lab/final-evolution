@@ -9,6 +9,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { formatKoreanCurrency } from "@/utils/formatCurrency";
 import { useAuth } from "@/hooks/use-auth";
 import { useWebSocket } from "@/hooks/use-websocket";
+import { convertToDirectImageUrl, handleImageError } from "@/utils/imageUrl";
 
 interface TradingPanelProps {
   selectedStock: string;
@@ -230,16 +231,10 @@ export default function TradingPanel({ selectedStock, guildId, stocks }: Trading
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-discord-darker border border-discord-light flex items-center justify-center">
                     {selectedStockData.logoUrl ? (
                       <img 
-                        src={selectedStockData.logoUrl} 
+                        src={convertToDirectImageUrl(selectedStockData.logoUrl) || selectedStockData.logoUrl} 
                         alt={`${selectedStockData.symbol} 로고`}
                         className="w-full h-full object-cover"
-                        onError={(e) => {
-                          // 로고 로드 실패 시 fallback
-                          const target = e.target as HTMLImageElement;
-                          target.style.display = 'none';
-                          const nextElement = target.nextElementSibling as HTMLElement;
-                          if (nextElement) nextElement.style.display = 'flex';
-                        }}
+                        onError={handleImageError}
                       />
                     ) : null}
                     <div className={`w-full h-full bg-discord-blue rounded-full flex items-center justify-center text-sm font-bold text-white ${selectedStockData.logoUrl ? 'hidden' : ''}`}>

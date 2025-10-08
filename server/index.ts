@@ -1,15 +1,66 @@
+import dotenv from "dotenv";
 import express, { type Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
+import session from "express-session";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { DiscordBot } from "./services/discord-bot";
 import { WebSocketManager } from "./services/websocket-manager";
 import { storage } from "./storage";
+import cors from "cors";
+
+// Load environment variables from .env file
+dotenv.config({ path: "./server/.env" });
 
 const app = express();
+
+// Trust proxy for Codespaces environment
+app.set('trust proxy', true);
+
+// CORS 설정
+app.use(cors({
+  origin: true, // 개발 환경에서는 모든 도메인 허용
+  credentials: true
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+
+// Express session 설정
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'fallback-secret-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: false, // HTTPS에서는 true로 설정
+    maxAge: 24 * 60 * 60 * 1000 // 24시간
+  }
+}));
+
+// 세션 기반 인증 미들웨어
+app.use((req: any, res, next) => {
+  try {
+    const sessionToken = req.cookies.session_token;
+    if (sessionToken) {
+      const sessionData = JSON.parse(Buffer.from(sessionToken, 'base64').toString());
+      // userId를 id로도 매핑하여 일관성 유지
+      req.user = {
+        ...sessionData,
+        id: sessionData.userId // DB user.id와 호환성을 위해
+      };
+      req.isAuthenticated = () => true;
+      console.log('✅ Auth middleware: User authenticated - userId:', sessionData.userId, 'discordId:', sessionData.discordId);
+    } else {
+      req.isAuthenticated = () => false;
+      console.log('❌ Auth middleware: No session token');
+    }
+  } catch (error) {
+    req.isAuthenticated = () => false;
+    console.log('⚠️ Auth middleware error:', error);
+  }
+  next();
+});
 
 app.use((req, res, next) => {
   const start = Date.now();

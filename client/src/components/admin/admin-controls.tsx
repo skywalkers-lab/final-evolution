@@ -12,7 +12,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function AdminControls() {
-  const { user } = useAuth();
+  const { user, selectedGuildId, isAdmin } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -50,19 +50,19 @@ export default function AdminControls() {
   });
 
   const { data: stocks } = useQuery({
-    queryKey: ['/api/guilds', user?.guildId, 'stocks'],
-    enabled: !!user?.guildId,
+    queryKey: ['/api/guilds', selectedGuildId, 'stocks'],
+    enabled: !!selectedGuildId,
   });
 
   const { data: settings } = useQuery({
-    queryKey: ['/api/guilds', user?.guildId, 'settings'],
-    enabled: !!user?.guildId,
+    queryKey: ['/api/guilds', selectedGuildId, 'settings'],
+    enabled: !!selectedGuildId,
   });
 
   // Stock creation mutation
   const createStockMutation = useMutation({
     mutationFn: async (stockData: any) => {
-      return await apiRequest('POST', `/api/guilds/${user!.guildId}/stocks`, stockData);
+      return await apiRequest('POST', `/api/guilds/${selectedGuildId}/stocks`, stockData);
     },
     onSuccess: () => {
       toast({
@@ -70,7 +70,7 @@ export default function AdminControls() {
         description: "새로운 주식이 생성되었습니다.",
       });
       setNewStock({ symbol: '', name: '', price: '', totalShares: '1000000' });
-      queryClient.invalidateQueries({ queryKey: ['/api/guilds', user?.guildId, 'stocks'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/guilds', selectedGuildId, 'stocks'] });
     },
     onError: (error: any) => {
       toast({
@@ -84,7 +84,7 @@ export default function AdminControls() {
   // Price adjustment mutation
   const adjustPriceMutation = useMutation({
     mutationFn: async (data: any) => {
-      const stock = stocks.find((s: any) => s.symbol === data.symbol);
+      const stock = (stocks as any[])?.find((s: any) => s.symbol === data.symbol);
       if (!stock) throw new Error('종목을 찾을 수 없습니다');
       
       return await apiRequest('PATCH', `/api/stocks/${stock.id}`, {
@@ -97,7 +97,7 @@ export default function AdminControls() {
         description: "주식 가격이 조정되었습니다.",
       });
       setPriceAdjustment({ symbol: '', newPrice: '', changePercent: [0] });
-      queryClient.invalidateQueries({ queryKey: ['/api/guilds', user?.guildId, 'stocks'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/guilds', selectedGuildId, 'stocks'] });
     },
     onError: (error: any) => {
       toast({
@@ -111,7 +111,7 @@ export default function AdminControls() {
   // News analysis mutation
   const analyzeNewsMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await apiRequest('POST', `/api/guilds/${user!.guildId}/news/analyze`, data);
+      return await apiRequest('POST', `/api/guilds/${selectedGuildId}/news/analyze`, data);
     },
     onSuccess: () => {
       toast({
@@ -119,7 +119,7 @@ export default function AdminControls() {
         description: "뉴스 분석이 완료되고 주가에 반영되었습니다.",
       });
       setNewsAnalysis({ title: '', content: '', symbol: '' });
-      queryClient.invalidateQueries({ queryKey: ['/api/guilds', user?.guildId, 'stocks'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/guilds', selectedGuildId, 'stocks'] });
     },
     onError: (error: any) => {
       toast({
@@ -134,7 +134,7 @@ export default function AdminControls() {
   const createAuctionMutation = useMutation({
     mutationFn: async (data: any) => {
       const endTime = new Date(Date.now() + parseInt(data.duration) * 60 * 1000);
-      return await apiRequest('POST', `/api/guilds/${user!.guildId}/auctions`, {
+      return await apiRequest('POST', `/api/guilds/${selectedGuildId}/auctions`, {
         ...data,
         endsAt: endTime.toISOString(),
         startPrice: parseFloat(data.startPrice),
@@ -157,7 +157,7 @@ export default function AdminControls() {
         minIncrement: '',
         extendSeconds: '300'
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/guilds', user?.guildId, 'auctions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/guilds', selectedGuildId, 'auctions'] });
     },
     onError: (error: any) => {
       toast({
@@ -245,7 +245,7 @@ export default function AdminControls() {
   };
 
   const applyPriceChangePercent = () => {
-    const selectedStock = stocks?.find((s: any) => s.symbol === priceAdjustment.symbol);
+    const selectedStock = (stocks as any[])?.find((s: any) => s.symbol === priceAdjustment.symbol);
     if (selectedStock) {
       const currentPrice = Number(selectedStock.price);
       const changePercent = priceAdjustment.changePercent[0];
@@ -254,7 +254,7 @@ export default function AdminControls() {
     }
   };
 
-  if (!user?.isAdmin) {
+  if (!isAdmin) {
     return (
       <div className="text-center text-gray-400 py-8">
         관리자 권한이 필요합니다.
@@ -340,7 +340,7 @@ export default function AdminControls() {
                     <SelectValue placeholder="종목 선택" />
                   </SelectTrigger>
                   <SelectContent className="bg-discord-dark border-discord-dark">
-                    {stocks?.map((stock: any) => (
+                    {(stocks as any[])?.map((stock: any) => (
                       <SelectItem key={stock.symbol} value={stock.symbol} className="text-white hover:bg-discord-darker">
                         {stock.symbol} - {stock.name}
                       </SelectItem>
@@ -435,7 +435,7 @@ export default function AdminControls() {
               </SelectTrigger>
               <SelectContent className="bg-discord-dark border-discord-dark">
                 <SelectItem value="" className="text-white hover:bg-discord-darker">전체 종목</SelectItem>
-                {stocks?.map((stock: any) => (
+                {(stocks as any[])?.map((stock: any) => (
                   <SelectItem key={stock.symbol} value={stock.symbol} className="text-white hover:bg-discord-darker">
                     {stock.symbol} - {stock.name}
                   </SelectItem>
